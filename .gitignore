@@ -1,0 +1,62 @@
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+infrastructure/terraform/*.tfplan
+infrastructure/terraform/.terraform.lock.hcl
+*.tfvars
+!infrastructure/terraform/environments/*.tfvars.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+target/
+node_modules/
+vendor/
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Java/Kotlin
+*.class
+*.jar
+*.war
+
+# Logs
+*.log
+logs/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Coverage
+coverage/
+*.lcov
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,256 @@
+ADR-001
+
+**Cloud Architecture Design**
+
+Agriculture Commodity Exchange Platform
+
+| **Status** | ACCEPTED |
+| --- | --- |
+| **Task ID** | T001 |
+| **Phase** | 0 — Foundation & Infrastructure |
+| **Agent type** | Architect |
+| **Author** | Architecture Agent |
+| **Date** | Week 1, Day 1–3 |
+| **Reviewer** | Lead Architect (human sign-off required) |
+| **Supersedes** | None — initial design |
+
+# **1. Context**
+
+The Agriculture Commodity Exchange (ACE) requires a cloud infrastructure foundation capable of supporting real-time order matching, settlement processing, warehouse receipt management, and regulatory reporting. The platform must meet financial exchange-grade reliability, latency, and security requirements while remaining cost-efficient for a Mongolian market context.
+
+**Key constraints driving this decision:**
+
+- Sub-50ms order matching latency at peak load (10,000 orders/sec)
+
+- 99.99% uptime SLA — exchange downtime is a regulatory and reputational risk
+
+- Data residency: trade and participant data must remain in the Asia-Pacific region
+
+- Regulatory requirement for immutable audit logs with 7-year retention
+
+- Budget constraint: infrastructure costs must remain under $12,000/month at launch scale
+
+# **2. Decision**
+
+We adopt AWS as the primary cloud provider with a dual-region active/passive architecture. The primary region is ap-northeast-1 (Tokyo) for lowest latency to Mongolian users via direct peering. The disaster recovery region is ap-southeast-1 (Singapore) with warm standby. All services are deployed on Amazon EKS with Istio service mesh.
+
+| **KEY** | Primary: AWS ap-northeast-1 (Tokyo) — Active. DR: AWS ap-southeast-1 (Singapore) — Warm standby. RTO = 15 min, RPO = 1 min. |
+| --- | --- |
+
+# **3. Region topology**
+
+## **3.1 Primary region — ap-northeast-1 (Tokyo)**
+
+Three Availability Zones are used (ap-northeast-1a, 1b, 1c) to ensure all services survive a single AZ failure without degradation.
+
+| **Component** | **Configuration** | **AZ distribution** |
+| --- | --- | --- |
+| VPC CIDR | 10.0.0.0/16 | Regional |
+| Public subnets | 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24 | 1a, 1b, 1c |
+| Private app subnets | 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24 | 1a, 1b, 1c |
+| Private data subnets | 10.0.21.0/24, 10.0.22.0/24, 10.0.23.0/24 | 1a, 1b, 1c |
+| NAT Gateways | One per AZ (3 total) | 1a, 1b, 1c |
+| Internet Gateway | 1 per VPC | Regional |
+
+## **3.2 DR region — ap-southeast-1 (Singapore)**
+
+Warm standby configuration: database replicas are live and continuously updated. Application tier runs at minimum replica count (1 pod per service). Promotion to active takes approximately 10–15 minutes.
+
+| **Component** | **DR configuration** |
+| --- | --- |
+| VPC CIDR | 10.1.0.0/16 (non-overlapping with primary) |
+| EKS cluster | Warm standby — 1 replica per critical service |
+| RDS PostgreSQL | Read replica — promoted on failover via Route 53 DNS flip |
+| TimescaleDB | Continuous streaming replication from primary |
+| ElastiCache Redis | Global Datastore replication — automatic failover |
+| S3 buckets | Cross-region replication enabled (CRR) with 15-min SLA |
+| Route 53 | Health-check based failover routing with 30-sec TTL |
+
+# **4. Subnet architecture**
+
+A three-tier subnet model is used in each AZ. The separation prevents lateral movement in a security incident and allows fine-grained security group control.
+
+| **Tier** | **Purpose** | **Services hosted** | **Internet access** |
+| --- | --- | --- | --- |
+| Public | Load balancers, NAT Gateways, bastion | ALB, NLB, NAT GW | Direct (IGW) |
+| Private — App | Application workloads, EKS nodes | EKS node groups, internal services | Via NAT GW |
+| Private — Data | Stateful data stores | RDS, ElastiCache, MSK (Kafka) | None |
+
+| **SECURITY** | Data-tier subnets have no route to the internet. All database access is via private endpoint from the app tier only. No public IPs are assigned to data-tier resources. |
+| --- | --- |
+
+# **5. EKS cluster design**
+
+## **5.1 Node group configuration**
+
+| **Node group** | **Instance type** | **Count (min/max)** | **Purpose** |
+| --- | --- | --- | --- |
+| System | m5.large | 3 / 3 | Istio, CoreDNS, Cluster Autoscaler |
+| Exchange-core | c5.2xlarge (CPU-optimised) | 3 / 12 | Matching engine, CLOB, clearing engine |
+| App-general | m5.xlarge | 3 / 20 | API services, auth, market data, reporting |
+| Data-processing | r5.xlarge (memory-optimised) | 2 / 8 | Analytics, batch settlement, index computation |
+| Spot-burst | m5.xlarge (Spot) | 0 / 10 | Frontend serving, read-heavy APIs during peak |
+
+## **5.2 Networking ****&**** service mesh**
+
+- Istio service mesh with mTLS enforced between all services
+
+- Karpenter for node autoscaling — faster than Cluster Autoscaler for burst scenarios
+
+- AWS Load Balancer Controller for ALB/NLB provisioning from Kubernetes Ingress/Service
+
+- CoreDNS with NodeLocal DNSCache to reduce DNS latency for service discovery
+
+- VPC CNI plugin — pods receive VPC IPs, no overlay network overhead
+
+# **6. Database layer**
+
+| **Store** | **Technology** | **Config** | **Purpose** |
+| --- | --- | --- | --- |
+| Primary OLTP | Amazon RDS PostgreSQL 15 | db.r6g.2xlarge, Multi-AZ, 1TB gp3 | Accounts, orders, participants, compliance |
+| Tick data | TimescaleDB on EC2 (self-managed) | r6i.4xlarge, 4TB NVMe, 3-node cluster | Order book snapshots, OHLCV, market data |
+| Cache / sessions | Amazon ElastiCache Redis 7 (Cluster Mode) | cache.r6g.xlarge, 6 shards, 2 replicas each | Order state cache, session tokens, rate limit counters |
+| Message bus | Amazon MSK (Kafka 3.5) | kafka.m5.xlarge, 3 brokers, 6 partitions/topic | Inter-service events: trades, fills, margin calls |
+| Object store | Amazon S3 | Standard + Intelligent-Tiering lifecycle | Audit logs, reports, warehouse receipt documents |
+| Search | Amazon OpenSearch 2.x | r6g.large.search, 3 nodes | Full-text member search, compliance query interface |
+
+# **7. Security controls**
+
+## **7.1 Network security**
+
+- All inter-AZ traffic stays within AWS backbone — no public internet traversal
+
+- WAF on all public ALBs — OWASP Top 10 ruleset + rate limiting
+
+- AWS Shield Standard enabled on all resources; Shield Advanced on ALBs
+
+- VPC Flow Logs → CloudWatch Logs → S3 archive (90-day retention)
+
+- PrivateLink endpoints for all AWS services consumed by private subnets (S3, ECR, STS, SSM)
+
+## **7.2 Identity ****&**** access**
+
+- IAM Roles for Service Accounts (IRSA) — no long-lived credentials in pods
+
+- AWS Secrets Manager for all application secrets — rotation every 30 days
+
+- KMS Customer Managed Keys (CMK) for RDS, S3, MSK encryption at rest
+
+- Multi-factor authentication enforced for all AWS console access
+
+- CloudTrail enabled in all regions — immutable trail to S3 with SNS alerting
+
+# **8. Disaster recovery plan**
+
+| **TARGETS** | Recovery Time Objective (RTO): 15 minutes. Recovery Point Objective (RPO): 1 minute. |
+| --- | --- |
+
+**Failure scenarios and responses:**
+
+| **Failure scenario** | **Detection mechanism** | **Recovery action** | **Expected RTO** |
+| --- | --- | --- | --- |
+| Single AZ failure | ELB health checks + CloudWatch alarms | EKS reschedules pods to healthy AZs automatically | < 2 min |
+| Primary region degradation | Route 53 health checks fail on 3 consecutive checks | Automated Route 53 failover to Singapore; RDS read replica promoted | 10–15 min |
+| RDS primary failure | RDS Multi-AZ automated failover | Standby promoted; DNS CNAME updated automatically by AWS | 1–2 min |
+| MSK broker failure | Kafka consumer lag alarm | Kafka rebalance across remaining brokers | < 30 sec |
+| Full region loss | Manual declaration after 15 min of primary unavailability | DR region promoted to active; DNS TTL 30 sec for fast propagation | < 15 min |
+
+# **9. Cost estimate (launch scale)**
+
+Estimates based on AWS ap-northeast-1 on-demand pricing. Commitments (Savings Plans, Reserved Instances) can reduce by 35–45% after 6 months of stable usage.
+
+| **Service** | **Monthly cost (USD)** | **Notes** |
+| --- | --- | --- |
+| EKS cluster + EC2 nodes (on-demand) | $3,800 | 3 node groups, avg 9 nodes at launch |
+| RDS PostgreSQL Multi-AZ | $1,200 | db.r6g.2xlarge, 1TB storage |
+| TimescaleDB EC2 (r6i.4xlarge) | $850 | Single instance at launch, scale to cluster |
+| ElastiCache Redis cluster | $680 | 6 shards x cache.r6g.xlarge |
+| Amazon MSK (Kafka) | $540 | 3 brokers, kafka.m5.xlarge |
+| S3 + data transfer | $240 | Estimated 5TB/month + cross-region replication |
+| CloudFront CDN | $120 | Static asset delivery for web terminal |
+| DR region (Singapore standby) | $1,400 | Reduced spec warm standby |
+| Monitoring, logging, misc | $380 | CloudWatch, OpenSearch, Shield, WAF |
+| TOTAL | $9,210 / month | At launch scale — headroom to $12,000 cap |
+
+# **10. Alternatives considered**
+
+| **Option** | **Description** | **Reason rejected** |
+| --- | --- | --- |
+| GCP ap-northeast1 (Tokyo) | Google Cloud alternative with Autopilot GKE | Lower MSK/Kafka equivalent maturity; team has stronger AWS expertise |
+| Azure East Asia (Hong Kong) | Azure AKS with managed Kafka (Event Hubs) | Event Hubs is not Kafka-compatible at protocol level; adds migration risk |
+| Single-region with multi-AZ only | AWS ap-northeast-1, 3 AZs, no DR region | Does not meet 15-min RTO for full region loss; unacceptable for regulated exchange |
+| Self-managed bare metal / colo | On-premises servers in Mongolia datacenter | 12–18 month lead time; unacceptable for 18-week delivery plan; no managed services |
+| Active/Active multi-region | Both Tokyo and Singapore serving live traffic | Order book state synchronisation across regions introduces complexity and potential split-brain; deferred to v2 |
+
+# **11. Consequences**
+
+## **11.1 Positive**
+
+- Managed EKS and RDS eliminate OS patching and cluster management overhead for agents
+
+- Multi-AZ deployment provides automatic healing from the most common failure class
+
+- IRSA eliminates long-lived credential risk — no IAM keys in code or container images
+
+- TimescaleDB on EC2 gives full control over tick data query performance tuning
+
+- Cost is within the $12,000/month cap with 23% headroom at launch scale
+
+## **11.2 Risks ****&**** mitigations**
+
+- TimescaleDB self-managed on EC2 requires manual patching — mitigated by automated SSM Patch Manager and weekly maintenance windows
+
+- Tokyo region pricing is ~15% higher than Oregon — accepted given latency requirement; revisit after Savings Plan commitment
+
+- Istio adds ~2ms per-hop overhead — acceptable for all services except matching engine; matching engine uses direct pod-to-pod communication bypassing Istio sidecar
+
+# **12. Implementation notes for builder agents**
+
+| **NOTE** | This section is for the T002 (Terraform IaC) and T003 (EKS cluster) agents. Read before writing any infrastructure code. |
+| --- | --- |
+
+## **12.1 Terraform module structure**
+
+- Root module: /infrastructure/terraform/
+
+- modules/vpc/ — VPC, subnets, NAT GWs, IGW, route tables
+
+- modules/eks/ — EKS cluster, node groups, IRSA roles
+
+- modules/rds/ — RDS instance, parameter groups, subnet groups
+
+- modules/elasticache/ — Redis cluster, subnet groups
+
+- modules/msk/ — Kafka cluster, security groups, topic config
+
+- modules/s3/ — Buckets, CRR, lifecycle policies, KMS
+
+- modules/iam/ — Roles, policies, IRSA bindings
+
+- Workspaces: dev, staging, prod — all use same module set with tfvars per environment
+
+- State backend: S3 + DynamoDB lock table in eu-west-1 (out-of-band, not in primary region)
+
+## **12.2 Non-negotiable tagging requirements**
+
+Every AWS resource must carry the following tags — enforced via AWS Config rule:
+
+| **Tag key** | **Required value** |
+| --- | --- |
+| Project | ace-platform |
+| Environment | dev │ staging │ prod |
+| Phase | ph0 │ ph1 │ ... │ ph8 |
+| TaskID | T001 │ T002 │ ... (originating task) |
+| ManagedBy | terraform |
+| CostCenter | engineering |
+
+# **Sign-off**
+
+| **Role** | **Name** | **Signature** | **Date** |
+| --- | --- | --- | --- |
+| Architecture Agent | Arch-001 | Agent-generated | Week 1, Day 3 |
+| Lead Architect (human) | _________________ | _________________ | _________________ |
+| CTO / Project Sponsor | _________________ | _________________ | _________________ |
+
+| **NEXT** | Once signed off, hand this document to T002 (Terraform IaC agent) and T004 (DB schema agent) as primary input. Both agents should use Section 3, 5, and 6 as their constraints. |
+| --- | --- |

@@ -1,0 +1,57 @@
+# Environment-specific Terraform variables
+# Copy to <env>.tfvars and fill in values
+# NEVER commit actual tfvars with secrets — only .example files
+
+# --- General ---
+project_name    = "ace-platform"
+environment     = "dev"       # dev | staging | prod
+aws_region      = "ap-northeast-1"
+dr_region       = "ap-southeast-1"
+
+# --- VPC ---
+vpc_cidr        = "10.0.0.0/16"
+
+# --- EKS ---
+eks_cluster_version = "1.28"
+eks_node_groups = {
+  system = {
+    instance_type = "m5.large"
+    min_size      = 2
+    max_size      = 3
+    desired_size  = 2
+  }
+  exchange-core = {
+    instance_type = "c5.2xlarge"
+    min_size      = 2
+    max_size      = 6
+    desired_size  = 2
+  }
+  app-general = {
+    instance_type = "m5.xlarge"
+    min_size      = 2
+    max_size      = 10
+    desired_size  = 2
+  }
+}
+
+# --- RDS ---
+rds_instance_class     = "db.r6g.large"
+rds_allocated_storage  = 100
+rds_multi_az           = false    # true for staging/prod
+
+# --- MSK ---
+msk_instance_type    = "kafka.m5.large"
+msk_broker_count     = 3
+
+# --- Redis ---
+redis_node_type       = "cache.r6g.large"
+redis_num_shards      = 3
+redis_replicas_per_shard = 1
+
+# --- Tags ---
+tags = {
+  Project     = "ace-platform"
+  Environment = "dev"
+  ManagedBy   = "terraform"
+  CostCenter  = "engineering"
+}

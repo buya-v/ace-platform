@@ -1,0 +1,177 @@
+{
+  "feature": "ACE Platform — Agriculture Commodity Exchange",
+  "created_at": "2026-03-27T00:00:00Z",
+  "last_updated": "2026-03-27T00:00:00Z",
+  "phases": [
+    { "id": 0, "name": "Foundation & Infrastructure", "weeks": "1–2" },
+    { "id": 1, "name": "Exchange Engine", "weeks": "2–6" },
+    { "id": 2, "name": "Market Participants", "weeks": "3–6" },
+    { "id": 3, "name": "Physical Commodity Layer", "weeks": "5–8" },
+    { "id": 4, "name": "Financial Infrastructure", "weeks": "6–10" },
+    { "id": 5, "name": "Compliance & Regulation", "weeks": "8–11" },
+    { "id": 6, "name": "Market Data & Analytics", "weeks": "9–12" },
+    { "id": 7, "name": "Frontend Interfaces", "weeks": "10–15" },
+    { "id": 8, "name": "Integrations & Launch", "weeks": "14–18" }
+  ],
+  "critical_path": "Ph0 → Ph1 → Ph4 → Ph5",
+  "parallel_streams": {
+    "B": "Ph2 → Ph3 → Ph6",
+    "C": "Ph7 → Ph8"
+  },
+  "highest_risk_seam": "T027→T028→T029 (clearing engine → SPAN margin → daily settlement)",
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Cloud Architecture Design",
+      "description": "Design AWS dual-region active/passive architecture. Primary: ap-northeast-1 (Tokyo), DR: ap-southeast-1 (Singapore). EKS + Istio, RDS PostgreSQL, TimescaleDB, Redis, Kafka. ADR document + Terraform variable definitions.",
+      "agent_role": "architect",
+      "phase": 0,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 180,
+      "status": "done",
+      "worktree_branch": "feature/T001-cloud-architecture",
+      "deliverables": [
+        "docs/adr/T001_ADR-001_Cloud_Architecture.docx",
+        "docs/T001_OnPrem_Infrastructure_Budget.xlsx"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Terraform IaC Modules",
+      "description": "Create Terraform modules for VPC (3-tier subnets), EKS (5 node groups), RDS (PostgreSQL 15), MSK (Kafka 3.5), security groups. S3+DynamoDB state backend. Workspaces: dev/staging/prod.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": ["T001"],
+      "blockedBy": ["T001"],
+      "estimate_minutes": 240,
+      "status": "done",
+      "worktree_branch": "feature/T002-terraform-iac"
+    },
+    {
+      "id": "T003",
+      "title": "EKS Cluster + Istio Service Mesh",
+      "description": "Deploy EKS cluster per ADR-001 spec. Install Istio with mTLS enforcement. Configure Karpenter autoscaler, NodeLocal DNSCache, VPC CNI plugin. Validate 5 node groups come up healthy.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": ["T002"],
+      "blockedBy": ["T002"],
+      "estimate_minutes": 180,
+      "status": "pending",
+      "worktree_branch": "feature/T003-eks-istio"
+    },
+    {
+      "id": "T004",
+      "title": "Core Database Schema",
+      "description": "Create Flyway migrations V1–V5: reference, participants, exchange, clearing, compliance, warehouse, auth, market_data schemas. Append-only trades table, SHA-256 audit hash chain, TimescaleDB hypertables. Seed 14 commodities, 7 delivery locations, 2025–2026 trading calendar.",
+      "agent_role": "architect",
+      "phase": 0,
+      "dependencies": ["T001"],
+      "blockedBy": ["T001"],
+      "estimate_minutes": 300,
+      "status": "done",
+      "worktree_branch": "feature/T004-db-schema"
+    },
+    {
+      "id": "T005",
+      "title": "Auth & IAM Service",
+      "description": "Build authentication/authorization microservice. JWT + OAuth2 PKCE + RBAC. Integrate with IRSA for AWS service access. User/API-key/session management against auth schema from T004.",
+      "agent_role": "builder",
+      "phase": 0,
+      "dependencies": ["T004"],
+      "blockedBy": ["T004"],
+      "estimate_minutes": 240,
+      "status": "pending",
+      "worktree_branch": "feature/T005-auth-iam"
+    },
+    {
+      "id": "T006",
+      "title": "CI/CD Pipeline",
+      "description": "Set up GitHub Actions workflows: build, test, lint, security scan, container image push, Terraform plan/apply. Branch protection rules. Deployment to dev/staging/prod EKS clusters.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": ["T002"],
+      "blockedBy": ["T002"],
+      "estimate_minutes": 180,
+      "status": "pending",
+      "worktree_branch": "feature/T006-cicd"
+    },
+    {
+      "id": "T007",
+      "title": "Exchange Engine Architecture Spec",
+      "description": "Design the CLOB (Central Limit Order Book) architecture, order matching algorithms (price-time priority), price discovery mechanism, trade ledger design. Produce spec doc + API contracts for builder agents.",
+      "agent_role": "architect",
+      "phase": 1,
+      "dependencies": ["T004"],
+      "blockedBy": ["T004"],
+      "estimate_minutes": 240,
+      "status": "pending",
+      "worktree_branch": "feature/T007-exchange-arch-spec",
+      "notes": "CRITICAL PATH"
+    },
+    {
+      "id": "T008",
+      "title": "Order Matching Engine",
+      "description": "Implement the core matching engine in Go. Price-time priority CLOB. Sub-50ms latency target at 10,000 orders/sec. Direct pod-to-pod comms (bypass Istio sidecar). Append-only trade writes.",
+      "agent_role": "builder",
+      "phase": 1,
+      "dependencies": ["T007"],
+      "blockedBy": ["T007"],
+      "estimate_minutes": 480,
+      "status": "pending",
+      "worktree_branch": "feature/T008-matching-engine",
+      "notes": "HIGH RISK — performance critical"
+    },
+    {
+      "id": "T015",
+      "title": "KYC/AML Architecture Spec",
+      "description": "Design KYC/AML workflows: participant onboarding, document verification, watchlist screening, risk scoring. API contracts for builder agents.",
+      "agent_role": "architect",
+      "phase": 2,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 180,
+      "status": "pending",
+      "worktree_branch": "feature/T015-kyc-aml-spec"
+    },
+    {
+      "id": "T027",
+      "title": "Clearing Engine",
+      "description": "Build clearing engine for trade novation, position management, and netting. Part of highest-risk seam (T027→T028→T029).",
+      "agent_role": "builder",
+      "phase": 4,
+      "dependencies": ["T007", "T008"],
+      "blockedBy": ["T008"],
+      "estimate_minutes": 480,
+      "status": "pending",
+      "worktree_branch": "feature/T027-clearing-engine",
+      "notes": "HIGHEST-RISK SEAM start"
+    },
+    {
+      "id": "T028",
+      "title": "SPAN Margin Calculation",
+      "description": "Implement SPAN-style margin model for commodity futures. Real-time margin calculation, margin call generation.",
+      "agent_role": "builder",
+      "phase": 4,
+      "dependencies": ["T027"],
+      "blockedBy": ["T027"],
+      "estimate_minutes": 360,
+      "status": "pending",
+      "worktree_branch": "feature/T028-span-margin",
+      "notes": "HIGHEST-RISK SEAM middle"
+    },
+    {
+      "id": "T029",
+      "title": "Daily Settlement",
+      "description": "Implement daily mark-to-market settlement cycle. Position valuation, P&L calculation, settlement instruction generation, payment gateway integration.",
+      "agent_role": "builder",
+      "phase": 4,
+      "dependencies": ["T028"],
+      "blockedBy": ["T028"],
+      "estimate_minutes": 360,
+      "status": "pending",
+      "worktree_branch": "feature/T029-daily-settlement",
+      "notes": "HIGHEST-RISK SEAM end"
+    }
+  ]
+}
