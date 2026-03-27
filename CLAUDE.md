@@ -213,6 +213,41 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** A task finishing in <5% of its estimate is a strong signal that prerequisites were missing entirely, not that the task was difficult. This is qualitatively different from a task that runs for 80% of its estimate and then fails (which would indicate a real implementation problem).
 - **Action:** Orchestrator should detect "instant rejection" (completion in <10% of estimate) and treat it as a prerequisite failure, not a task failure. Instead of re-queuing the same task, it should flag the missing prerequisite and ask the Planner to insert a new dependency task.
 
+### Pattern: AI agent estimates need 10-20x reduction from human estimates (2026-03-27)
+- **Context:** Phase 1-2 pipeline run — 10 tasks with timing data. Estimates ranged 180-480 minutes. Actual completion times ranged 5-21 minutes.
+- **Finding:** Every completed task finished in <5% of its estimate. T008 (Matching Engine, est 480m) took 21 min. T027 (Clearing Engine, est 480m) took 8.5 min. T006 (CI/CD, est 180m) took 5 min. Spec tasks (T007, T015) took 8-10 min against 180-240m estimates. The estimates appear calibrated for human developers, not AI agents working in isolated worktrees.
+- **Action:** Planner should use estimates of 10-30 minutes for AI agent tasks, not human-scale estimates. Reserve 180+ minute estimates only for tasks requiring external system interaction (cloud provisioning, CI pipeline runs). Use actual timing from this run as calibration: spec tasks ~10 min, service implementation ~15-20 min, infrastructure/CI ~5-10 min.
+
+### Pattern: Zero-dependency Go module per service is the winning architecture pattern (2026-03-27)
+- **Context:** Four exchange-core services (matching-engine, clearing-engine, margin-engine, settlement-engine) were each built as independent Go modules with zero external dependencies.
+- **Finding:** All four built cleanly, passed all 165 tests, and achieved ~43% average coverage. The zero-dep approach eliminated version conflicts, simplified builds, and made each service independently testable. The identical `Decimal(18,4)` type was copied into each module — duplication but zero coupling.
+- **Action:** Continue the zero-dep Go module pattern for new services. Accept Decimal type duplication across services rather than introducing a shared library (the coupling cost outweighs the DRY benefit at this stage). When a shared types library becomes warranted (5+ services duplicating), extract `pkg/types/decimal.go` as an internal module.
+
+### Pattern: Port allocation convention — document to prevent collisions (2026-03-27)
+- **Context:** Four services independently chose non-colliding port pairs: matching-engine (50051/8081), clearing-engine (50052/8082), margin-engine (50053/8083), settlement-engine (50054/8084).
+- **Finding:** The pattern emerged naturally from handoff cross-references (each service noted the previous service's ports). Format is `gRPC: 5005x / health HTTP: 808x` where x increments per service.
+- **Action:** Planner should assign port numbers in task descriptions for new services. Next available: 50055/8085. Maintain this table: matching=50051, clearing=50052, margin=50053, settlement=50054, auth=50055(suggested), compliance=50056(suggested), gateway=8080(HTTP), market-data=50057(suggested), warehouse=50058(suggested).
+
+### Pattern: Spec-first then implement produces clean code with fewer review issues (2026-03-27)
+- **Context:** T007 (Exchange Spec) → T008 (Matching Engine) pipeline. T015 (KYC/AML Spec) produced clean artifacts. Both spec tasks were APPROVED with zero required fixes.
+- **Finding:** T008 implementation referenced T007's spec directly (protobuf contracts, SQL migration, matching algorithm pseudocode) and was APPROVED with zero required fixes and only non-blocking suggestions. By contrast, T003 (no spec, direct implementation of EKS+Istio) was REJECTED with 3 correctness bugs. Specs create a verifiable contract that downstream workers can implement against.
+- **Action:** For any service with business logic (not pure infrastructure), Planner should create a spec task before the implementation task. Spec task produces: architecture doc, protobuf/API contracts, SQL migration. Implementation task consumes these as inputs.
+
+### Pattern: Code review catches real bugs in infrastructure code — keep reviews mandatory (2026-03-27)
+- **Context:** T003 (EKS+Istio) was REJECTED by the reviewer. T008 (Matching Engine) was APPROVED but with 4 non-blocking suggestions including an overflow risk.
+- **Finding:** T003 review caught: (1) duplicate YAML key silently dropping `holdApplicationUntilProxyStarts: true` — a startup reliability bug, (2) wrong DestinationRule host pattern (`*.local` vs `*.svc.cluster.local`) — an mTLS routing bug, (3) variable type mismatch for node groups. These are subtle bugs that YAML/Terraform linting alone wouldn't catch. The reviewer agent is providing genuine value.
+- **Action:** Never skip reviews for cost/speed reasons. For infrastructure code specifically, add a suggestion to include YAML lint and Terraform validate in the worker's pre-handoff checks so the reviewer can focus on semantic correctness rather than syntactic issues.
+
+### Pattern: Rework pipeline works — T005 rejected then approved on second pass (2026-03-27)
+- **Context:** T005 (Auth Service) was rejected in the first pass (~8.5 min, instant-fail pattern) then re-run and approved with a thorough review (JWT, PKCE, RBAC, bcrypt, parameterized SQL — all passing).
+- **Finding:** The second run produced a complete, production-quality auth service with zero required fixes. The reviewer noted only non-blocking suggestions (PKCE refresh token gap, S256-only restriction, rate limiting). This confirms the rework loop works when the prerequisite issue (missing scaffolding) is resolved.
+- **Action:** When re-queuing a previously rejected task, inject both the original rejection reason AND any new context (e.g., scaffolding now exists, upstream handoffs available) into the worker's prompt. The worker should not need to rediscover what went wrong.
+
+### Pattern: Integration test run correctly distinguished SKIP vs PASS vs real PASS (2026-03-27)
+- **Context:** Three integration runs: run-074658 (PASS with 0 tests — incorrect), run-075008 (SKIP — correct per learned pattern), run-080509 (PASS with 165 tests — genuinely correct).
+- **Finding:** The third integration run validated 4 services (matching, clearing, margin, settlement) with 165 passing tests and ~43% average coverage. Coverage ranged from 23.7% (novation) to 89.3% (orderbook). The core matching logic (orderbook) has the highest coverage, which is appropriate for a financial system.
+- **Action:** Set a coverage floor of 60% for business-critical packages (orderbook, position, novation, pnl) and 30% for infrastructure packages (server, config, store). The current ~43% average is acceptable for phase 1-2 but should increase as services mature.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
