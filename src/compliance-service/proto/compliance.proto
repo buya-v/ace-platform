@@ -1,0 +1,484 @@
+syntax = "proto3";
+
+package ace.compliance.v1;
+
+option go_package = "github.com/ace-platform/compliance-service/proto/compliance/v1;compliancev1";
+
+import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ParticipantType {
+  PARTICIPANT_TYPE_UNSPECIFIED = 0;
+  PARTICIPANT_TYPE_INDIVIDUAL = 1;
+  PARTICIPANT_TYPE_CORPORATE = 2;
+  PARTICIPANT_TYPE_COOPERATIVE = 3;
+  PARTICIPANT_TYPE_BROKER = 4;
+  PARTICIPANT_TYPE_INSTITUTIONAL = 5;
+}
+
+enum KYCStatus {
+  KYC_STATUS_UNSPECIFIED = 0;
+  KYC_STATUS_APPLICATION_SUBMITTED = 1;
+  KYC_STATUS_DOCUMENTS_PENDING = 2;
+  KYC_STATUS_DOCUMENTS_UPLOADED = 3;
+  KYC_STATUS_VERIFICATION_IN_PROGRESS = 4;
+  KYC_STATUS_SCREENING_IN_PROGRESS = 5;
+  KYC_STATUS_RISK_SCORING = 6;
+  KYC_STATUS_MANUAL_REVIEW = 7;
+  KYC_STATUS_APPROVED = 8;
+  KYC_STATUS_REJECTED = 9;
+  KYC_STATUS_SUSPENDED = 10;
+  KYC_STATUS_EXPIRED = 11;
+}
+
+enum DocumentType {
+  DOCUMENT_TYPE_UNSPECIFIED = 0;
+  DOCUMENT_TYPE_NATIONAL_ID = 1;
+  DOCUMENT_TYPE_PASSPORT = 2;
+  DOCUMENT_TYPE_PROOF_OF_ADDRESS = 3;
+  DOCUMENT_TYPE_COMPANY_REGISTRATION = 4;
+  DOCUMENT_TYPE_BENEFICIAL_OWNERSHIP = 5;
+  DOCUMENT_TYPE_FINANCIAL_STATEMENTS = 6;
+  DOCUMENT_TYPE_BROKER_LICENSE = 7;
+  DOCUMENT_TYPE_BOARD_RESOLUTION = 8;
+  DOCUMENT_TYPE_TAX_REGISTRATION = 9;
+  DOCUMENT_TYPE_COOPERATIVE_MEMBERSHIP = 10;
+}
+
+enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_UPLOADED = 1;
+  DOCUMENT_STATUS_VALIDATING = 2;
+  DOCUMENT_STATUS_VERIFIED = 3;
+  DOCUMENT_STATUS_REJECTED = 4;
+  DOCUMENT_STATUS_EXPIRED = 5;
+  DOCUMENT_STATUS_NEEDS_REVIEW = 6;
+}
+
+enum MatchType {
+  MATCH_TYPE_UNSPECIFIED = 0;
+  MATCH_TYPE_EXACT_ID = 1;
+  MATCH_TYPE_EXACT_NAME = 2;
+  MATCH_TYPE_FUZZY_NAME = 3;
+  MATCH_TYPE_PHONETIC = 4;
+}
+
+enum ScreeningOutcome {
+  SCREENING_OUTCOME_UNSPECIFIED = 0;
+  SCREENING_OUTCOME_CLEAR = 1;
+  SCREENING_OUTCOME_MATCH_FOUND = 2;
+  SCREENING_OUTCOME_ERROR = 3;
+}
+
+enum RiskTier {
+  RISK_TIER_UNSPECIFIED = 0;
+  RISK_TIER_LOW = 1;
+  RISK_TIER_MEDIUM = 2;
+  RISK_TIER_HIGH = 3;
+  RISK_TIER_PROHIBITED = 4;
+}
+
+enum AlertStatus {
+  ALERT_STATUS_UNSPECIFIED = 0;
+  ALERT_STATUS_OPEN = 1;
+  ALERT_STATUS_UNDER_REVIEW = 2;
+  ALERT_STATUS_RESOLVED_FALSE_POSITIVE = 3;
+  ALERT_STATUS_RESOLVED_CONFIRMED = 4;
+  ALERT_STATUS_SAR_FILED = 5;
+}
+
+enum ComplianceCheckResult {
+  COMPLIANCE_CHECK_UNSPECIFIED = 0;
+  COMPLIANCE_CHECK_APPROVED = 1;
+  COMPLIANCE_CHECK_SUSPENDED = 2;
+  COMPLIANCE_CHECK_EXPIRED = 3;
+  COMPLIANCE_CHECK_NOT_FOUND = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding Service
+// ---------------------------------------------------------------------------
+
+service OnboardingService {
+  // Submit a new participant application.
+  rpc SubmitApplication(SubmitApplicationRequest) returns (KYCApplication);
+
+  // Get an application by ID.
+  rpc GetApplication(GetApplicationRequest) returns (KYCApplication);
+
+  // List applications with filters.
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+
+  // Upload a verification document for an application.
+  rpc UploadDocument(UploadDocumentRequest) returns (Document);
+
+  // List documents for an application.
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+
+  // Approve an application (compliance officer action).
+  rpc ApproveApplication(ApproveApplicationRequest) returns (KYCApplication);
+
+  // Reject an application (compliance officer action).
+  rpc RejectApplication(RejectApplicationRequest) returns (KYCApplication);
+}
+
+// ---------------------------------------------------------------------------
+// Screening Service
+// ---------------------------------------------------------------------------
+
+service ScreeningService {
+  // Run watchlist screening for a participant.
+  rpc ScreenParticipant(ScreenParticipantRequest) returns (ScreeningResult);
+
+  // Get a screening result by ID.
+  rpc GetScreeningResult(GetScreeningResultRequest) returns (ScreeningResult);
+
+  // Run batch screening (e.g., daily delta re-screening).
+  rpc BatchScreen(BatchScreenRequest) returns (BatchScreenResponse);
+
+  // Resolve a screening match (compliance officer disposition).
+  rpc ResolveMatch(ResolveMatchRequest) returns (ScreeningMatch);
+
+  // Get the current risk score for a participant.
+  rpc GetRiskScore(GetRiskScoreRequest) returns (RiskScore);
+
+  // Trigger a risk score recalculation.
+  rpc RecalculateRiskScore(RecalculateRiskScoreRequest) returns (RiskScore);
+}
+
+// ---------------------------------------------------------------------------
+// Compliance Admin Service
+// ---------------------------------------------------------------------------
+
+service ComplianceAdminService {
+  // Check if a participant is cleared to trade (used by exchange engine).
+  rpc CheckParticipantStatus(CheckParticipantStatusRequest) returns (CheckParticipantStatusResponse);
+
+  // List monitoring alerts with filters.
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+
+  // Resolve a monitoring alert.
+  rpc ResolveAlert(ResolveAlertRequest) returns (MonitoringAlert);
+
+  // Get the audit trail for a participant or application.
+  rpc GetAuditTrail(GetAuditTrailRequest) returns (GetAuditTrailResponse);
+
+  // File a Suspicious Activity Report.
+  rpc FileSAR(FileSARRequest) returns (SARFiling);
+
+  // Suspend a participant's trading access.
+  rpc SuspendParticipant(SuspendParticipantRequest) returns (KYCApplication);
+
+  // Reinstate a suspended participant.
+  rpc ReinstateParticipant(ReinstateParticipantRequest) returns (KYCApplication);
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding Messages
+// ---------------------------------------------------------------------------
+
+message SubmitApplicationRequest {
+  string participant_id = 1;          // UUID — references participants.participants
+  ParticipantType participant_type = 2;
+  string legal_name = 3;
+  string trading_name = 4;
+  string nationality = 5;            // ISO 3166-1 alpha-2
+  string registration_number = 6;    // Company/cooperative registration number
+  string tax_id = 7;
+  ContactInfo contact = 8;
+  Address registered_address = 9;
+  string source_of_funds = 10;
+}
+
+message ContactInfo {
+  string email = 1;
+  string phone = 2;                   // E.164 format
+  string contact_person_name = 3;     // for corporate/institutional
+}
+
+message Address {
+  string line1 = 1;
+  string line2 = 2;
+  string city = 3;
+  string province = 4;               // Mongolian aimag
+  string postal_code = 5;
+  string country = 6;                // ISO 3166-1 alpha-2
+}
+
+message GetApplicationRequest {
+  string application_id = 1;         // UUID
+}
+
+message ListApplicationsRequest {
+  KYCStatus status_filter = 1;       // optional — 0 = all
+  ParticipantType type_filter = 2;   // optional — 0 = all
+  uint32 limit = 3;                  // default 50
+  string cursor = 4;
+}
+
+message ListApplicationsResponse {
+  repeated KYCApplication applications = 1;
+  string next_cursor = 2;
+}
+
+message UploadDocumentRequest {
+  string application_id = 1;         // UUID
+  DocumentType document_type = 2;
+  string filename = 3;
+  string content_type = 4;           // MIME type
+  bytes content = 5;                 // document binary (≤ 20MB)
+}
+
+message ListDocumentsRequest {
+  string application_id = 1;         // UUID
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+}
+
+message ApproveApplicationRequest {
+  string application_id = 1;         // UUID
+  string officer_id = 2;             // UUID — compliance officer
+  string notes = 3;
+}
+
+message RejectApplicationRequest {
+  string application_id = 1;         // UUID
+  string officer_id = 2;             // UUID
+  string reason = 3;
+}
+
+message KYCApplication {
+  string application_id = 1;
+  string participant_id = 2;
+  ParticipantType participant_type = 3;
+  KYCStatus status = 4;
+  string legal_name = 5;
+  string trading_name = 6;
+  string nationality = 7;
+  string registration_number = 8;
+  string tax_id = 9;
+  ContactInfo contact = 10;
+  Address registered_address = 11;
+  string source_of_funds = 12;
+  RiskTier risk_tier = 13;
+  string assigned_officer_id = 14;
+  string rejection_reason = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  google.protobuf.Timestamp approved_at = 18;
+  google.protobuf.Timestamp expires_at = 19;
+}
+
+message Document {
+  string document_id = 1;
+  string application_id = 2;
+  DocumentType document_type = 3;
+  DocumentStatus status = 4;
+  string filename = 5;
+  string content_type = 6;
+  string storage_key = 7;            // S3 object key
+  uint64 file_size_bytes = 8;
+  string verification_notes = 9;
+  google.protobuf.Timestamp uploaded_at = 10;
+  google.protobuf.Timestamp verified_at = 11;
+  google.protobuf.Timestamp expires_at = 12;
+}
+
+// ---------------------------------------------------------------------------
+// Screening Messages
+// ---------------------------------------------------------------------------
+
+message ScreenParticipantRequest {
+  string application_id = 1;         // UUID
+  string participant_id = 2;         // UUID
+  bool force_rescreen = 3;           // bypass cache / recent result
+}
+
+message GetScreeningResultRequest {
+  string screening_id = 1;           // UUID
+}
+
+message BatchScreenRequest {
+  repeated string participant_ids = 1;
+  string reason = 2;                 // e.g. "daily_delta", "quarterly_rescreen"
+}
+
+message BatchScreenResponse {
+  uint32 total = 1;
+  uint32 clear = 2;
+  uint32 matches_found = 3;
+  uint32 errors = 4;
+  repeated string screening_ids = 5;
+}
+
+message ResolveMatchRequest {
+  string match_id = 1;               // UUID
+  string officer_id = 2;             // UUID
+  bool is_true_match = 3;
+  string resolution_notes = 4;
+}
+
+message GetRiskScoreRequest {
+  string participant_id = 1;         // UUID
+}
+
+message RecalculateRiskScoreRequest {
+  string participant_id = 1;         // UUID
+  string reason = 2;
+}
+
+message ScreeningResult {
+  string screening_id = 1;
+  string application_id = 2;
+  string participant_id = 3;
+  ScreeningOutcome outcome = 4;
+  repeated ScreeningMatch matches = 5;
+  string provider = 6;
+  string list_versions = 7;          // JSON of list version metadata
+  google.protobuf.Timestamp screened_at = 8;
+}
+
+message ScreeningMatch {
+  string match_id = 1;
+  string screening_id = 2;
+  string matched_name = 3;
+  string matched_entity_id = 4;      // ID in the sanctions list
+  string list_source = 5;            // e.g. "OFAC_SDN", "UN_SANCTIONS"
+  MatchType match_type = 6;
+  string match_score = 7;            // decimal 0.00 – 1.00
+  bool resolved = 8;
+  bool is_true_match = 9;
+  string resolved_by = 10;           // officer UUID
+  string resolution_notes = 11;
+  google.protobuf.Timestamp resolved_at = 12;
+}
+
+message RiskScore {
+  string score_id = 1;
+  string participant_id = 2;
+  uint32 overall_score = 3;          // 0 – 100
+  RiskTier tier = 4;
+  string model_version = 5;
+  RiskFactorBreakdown factors = 6;
+  google.protobuf.Timestamp computed_at = 7;
+  google.protobuf.Timestamp next_review_at = 8;
+}
+
+message RiskFactorBreakdown {
+  uint32 participant_type_score = 1;
+  uint32 country_risk_score = 2;
+  uint32 screening_result_score = 3;
+  uint32 transaction_profile_score = 4;
+  uint32 source_of_funds_score = 5;
+  uint32 document_quality_score = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Compliance Admin Messages
+// ---------------------------------------------------------------------------
+
+message CheckParticipantStatusRequest {
+  string participant_id = 1;         // UUID
+}
+
+message CheckParticipantStatusResponse {
+  string participant_id = 1;
+  ComplianceCheckResult result = 2;
+  RiskTier risk_tier = 3;
+  google.protobuf.Timestamp last_screened_at = 4;
+  google.protobuf.Timestamp kyc_expires_at = 5;
+}
+
+message ListAlertsRequest {
+  AlertStatus status_filter = 1;     // optional — 0 = all
+  string participant_id = 2;         // optional filter
+  uint32 limit = 3;                  // default 50
+  string cursor = 4;
+}
+
+message ListAlertsResponse {
+  repeated MonitoringAlert alerts = 1;
+  string next_cursor = 2;
+}
+
+message ResolveAlertRequest {
+  string alert_id = 1;               // UUID
+  string officer_id = 2;             // UUID
+  AlertStatus resolution = 3;        // must be a resolved status
+  string notes = 4;
+}
+
+message MonitoringAlert {
+  string alert_id = 1;
+  string participant_id = 2;
+  string rule_id = 3;                // e.g. "TXN-001"
+  AlertStatus status = 4;
+  string description = 5;
+  string details = 6;                // JSON with rule-specific context
+  string resolved_by = 7;
+  string resolution_notes = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp resolved_at = 10;
+}
+
+message GetAuditTrailRequest {
+  string participant_id = 1;         // optional — filter by participant
+  string application_id = 2;        // optional — filter by application
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  uint32 limit = 5;                  // default 100
+  string cursor = 6;
+}
+
+message GetAuditTrailResponse {
+  repeated AuditEvent events = 1;
+  string next_cursor = 2;
+}
+
+message AuditEvent {
+  string event_id = 1;
+  string event_type = 2;
+  string actor_id = 3;
+  string participant_id = 4;
+  string application_id = 5;
+  string details = 6;                // JSON
+  string prev_hash = 7;
+  string hash = 8;
+  google.protobuf.Timestamp timestamp = 9;
+}
+
+message FileSARRequest {
+  string participant_id = 1;         // UUID
+  string alert_id = 2;              // UUID — related monitoring alert
+  string officer_id = 3;             // UUID
+  string narrative = 4;              // free-text SAR description
+  string supporting_evidence = 5;    // JSON with transaction IDs, documents, etc.
+}
+
+message SARFiling {
+  string sar_id = 1;
+  string participant_id = 2;
+  string alert_id = 3;
+  string officer_id = 4;
+  string narrative = 5;
+  string reference_number = 6;       // assigned by FIU upon submission
+  google.protobuf.Timestamp filed_at = 7;
+  google.protobuf.Timestamp acknowledged_at = 8;
+}
+
+message SuspendParticipantRequest {
+  string participant_id = 1;         // UUID
+  string officer_id = 2;             // UUID
+  string reason = 3;
+}
+
+message ReinstateParticipantRequest {
+  string participant_id = 1;         // UUID
+  string officer_id = 2;             // UUID
+  string notes = 3;
+}
