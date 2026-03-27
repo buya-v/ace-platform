@@ -193,6 +193,26 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** Without timing data on successful tasks, the PostMortem agent cannot evaluate estimate accuracy, which means the Planner cannot calibrate future estimates.
 - **Action:** Orchestrator must record `started_at` when a worker agent begins and `finished_at` when it completes (for both done and rejected). These fields should be mandatory in `tasks.json` for any non-pending task.
 
+### Pattern: Learning loop is functional — second integration run self-corrected (2026-03-27)
+- **Context:** Phase 0 second integration run (`run-20260327-075008`) followed the first run (`run-20260327-074658`) which incorrectly reported PASS with zero tests.
+- **Finding:** The second run correctly reported `SKIP` instead of `PASS`, citing the learned pattern from the first postmortem. This confirms the PostMortem → CLAUDE.md → Agent read loop is working as designed.
+- **Action:** Continue the pattern of having agents read Learned Patterns before execution. When a pattern corrects agent behavior successfully, note it so we can distinguish validated patterns from untested ones.
+
+### Pattern: Rejected tasks produce no handoff files — workers need a fail-safe output (2026-03-27)
+- **Context:** T003, T005, T006, T007, T015 were all rejected but none produced a `handoff/<task-id>.md` file. Only the completed tasks (T001, T002, T004) have handoff files.
+- **Finding:** Workers that fail early (3-7 min vs 180-300 min estimate) exit without writing any handoff. This means neither the Reviewer, Orchestrator, nor PostMortem agent has any diagnostic data. Combined with the missing review files (Pattern #4 above), rejected tasks are completely opaque.
+- **Action:** Worker agent prompt should mandate writing a handoff file as the FIRST action (with status "in-progress") and updating it on exit regardless of success/failure. The handoff should include: what was attempted, what blocked progress, and what prerequisites were missing. This is separate from the Reviewer's review file.
+
+### Pattern: Parallel scheduling of tasks with shared missing prerequisites wastes all slots (2026-03-27)
+- **Context:** T003 (EKS+Istio), T005 (Auth Service), and T006 (CI/CD) were all started in parallel at `2026-03-27T07:50:08Z`. All three failed within 7 minutes for the same root cause: no application code scaffolding exists.
+- **Finding:** Running 3 agents in parallel when they share the same unmet prerequisite (no `go.mod`, no source files) means 3x the compute cost for zero output. A single "canary" task could have detected the blocker before committing the other two slots.
+- **Action:** When the Orchestrator launches a batch of parallel tasks that share a common dependency (e.g., "compilable source code exists"), run ONE task first as a canary. If it fails within 20% of its estimate, hold the remaining tasks and surface the blocker to the Planner for re-planning.
+
+### Pattern: Rejected task timing reveals instant-fail vs partial-progress — use this signal (2026-03-27)
+- **Context:** All 5 rejected tasks completed in 3-7 minutes against estimates of 180-300 minutes. T003/T005/T006 took ~7 min; T007/T015 took ~3 min.
+- **Finding:** A task finishing in <5% of its estimate is a strong signal that prerequisites were missing entirely, not that the task was difficult. This is qualitatively different from a task that runs for 80% of its estimate and then fails (which would indicate a real implementation problem).
+- **Action:** Orchestrator should detect "instant rejection" (completion in <10% of estimate) and treat it as a prerequisite failure, not a task failure. Instead of re-queuing the same task, it should flag the missing prerequisite and ask the Planner to insert a new dependency task.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
