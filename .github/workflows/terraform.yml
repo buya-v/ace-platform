@@ -1,0 +1,210 @@
+name: Terraform Plan / Apply
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infrastructure/terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infrastructure/terraform/**"
+
+env:
+  TF_VERSION: "1.7.0"
+  AWS_REGION: ap-northeast-1
+  WORKING_DIR: infrastructure/terraform
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt check
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform validate
+
+  terraform-plan:
+    name: Plan — ${{ matrix.environment }}
+    needs: terraform-validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select ${{ matrix.environment }} || terraform workspace new ${{ matrix.environment }}
+
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform plan \
+            -var-file="environments/${{ matrix.environment }}.tfvars" \
+            -out=tfplan-${{ matrix.environment }} \
+            -no-color 2>&1 | tee plan-output.txt
+        continue-on-error: true
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan-output.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n... (truncated)' : plan;
+            const body = `### Terraform Plan — \`${{ matrix.environment }}\`
+            \`\`\`
+            ${truncated}
+            \`\`\`
+            *Triggered by @${{ github.actor }} in commit ${{ github.sha }}*`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const marker = `### Terraform Plan — \`${{ matrix.environment }}\``;
+            const existing = comments.find(c => c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
+
+      - name: Check plan status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  terraform-apply-dev:
+    name: Apply — dev
+    needs: terraform-validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init & apply
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select dev || terraform workspace new dev
+          terraform apply \
+            -var-file="environments/dev.tfvars" \
+            -auto-approve
+
+  terraform-apply-staging:
+    name: Apply — staging
+    needs: terraform-apply-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init & apply
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select staging || terraform workspace new staging
+          terraform apply \
+            -var-file="environments/staging.tfvars" \
+            -auto-approve
+
+  terraform-apply-prod:
+    name: Apply — prod
+    needs: terraform-apply-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init & apply
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select prod || terraform workspace new prod
+          terraform apply \
+            -var-file="environments/prod.tfvars" \
+            -auto-approve

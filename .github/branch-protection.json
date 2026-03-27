@@ -1,0 +1,43 @@
+{
+  "description": "Branch protection rules for ACE Platform. Apply via GitHub API or UI Settings > Branches.",
+  "rules": {
+    "main": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": [
+          "CI Gate",
+          "Security Gate",
+          "Validate"
+        ]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews": true,
+        "require_code_owner_reviews": true
+      },
+      "restrictions": null,
+      "required_linear_history": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    },
+    "develop": {
+      "required_status_checks": {
+        "strict": false,
+        "contexts": [
+          "CI Gate"
+        ]
+      },
+      "enforce_admins": false,
+      "required_pull_request_reviews": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews": false,
+        "require_code_owner_reviews": false
+      },
+      "restrictions": null,
+      "required_linear_history": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    }
+  }
+}

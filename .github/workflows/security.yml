@@ -1,0 +1,152 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  trivy-fs:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs-results.sarif
+
+  trivy-config:
+    name: Trivy IaC Config Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy config scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: infrastructure/
+          format: sarif
+          output: trivy-config-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy config scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-config-results.sarif
+
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Scan each service that has a go.mod
+          EXIT_CODE=0
+          for dir in src/*/; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "::group::Scanning $(basename $dir)"
+              govulncheck ./... -C "$dir" || EXIT_CODE=1
+              echo "::endgroup::"
+            fi
+          done
+          exit $EXIT_CODE
+
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-gate:
+    name: Security Gate
+    if: always()
+    needs: [codeql, trivy-fs, trivy-config, dependency-audit, secret-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          FAILED=false
+          for result in \
+            "${{ needs.codeql.result }}" \
+            "${{ needs.trivy-fs.result }}" \
+            "${{ needs.trivy-config.result }}" \
+            "${{ needs.dependency-audit.result }}" \
+            "${{ needs.secret-scan.result }}"; do
+            if [[ "$result" == "failure" ]]; then
+              FAILED=true
+            fi
+          done
+          if $FAILED; then
+            echo "::error::One or more security scans failed"
+            exit 1
+          fi
+          echo "All security scans passed"

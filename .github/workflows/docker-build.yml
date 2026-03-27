@@ -1,0 +1,117 @@
+name: Docker Build & Push
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build (blank = all changed)"
+        required: false
+        type: string
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
+  IMAGE_PREFIX: ace-platform
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect-services:
+    name: Detect services to build
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has_services: ${{ steps.detect.outputs.has_services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect services
+        id: detect
+        run: |
+          SERVICES=()
+
+          if [ -n "${{ inputs.service }}" ]; then
+            SERVICES=("\"${{ inputs.service }}\"")
+          else
+            for dir in src/*/; do
+              svc=$(basename "$dir")
+              if [ -f "$dir/Dockerfile" ]; then
+                if git diff --name-only HEAD~1 HEAD | grep -q "^src/${svc}/"; then
+                  SERVICES+=("\"${svc}\"")
+                fi
+              fi
+            done
+          fi
+
+          if [ ${#SERVICES[@]} -eq 0 ]; then
+            echo "services=[]" >> "$GITHUB_OUTPUT"
+            echo "has_services=false" >> "$GITHUB_OUTPUT"
+          else
+            JSON=$(IFS=,; echo "[${SERVICES[*]}]")
+            echo "services=${JSON}" >> "$GITHUB_OUTPUT"
+            echo "has_services=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-push:
+    name: Build & Push — ${{ matrix.service }}
+    needs: detect-services
+    if: needs.detect-services.outputs.has_services == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-services.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: src/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.sha }}
+            SERVICE=${{ matrix.service }}
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
