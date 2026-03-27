@@ -163,7 +163,35 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 
 <!-- LEARNED PATTERNS START — do not remove this comment -->
 
-*(No patterns yet — this section grows automatically as features complete.)*
+### Pattern: Design-first tasks succeed; implementation tasks need code scaffolding (2026-03-27)
+- **Context:** Phase 0 foundation run — 12 tasks planned, 3 completed (T001, T002, T004), 5 rejected (T003, T005, T006, T007, T015), 4 still pending.
+- **Finding:** All 3 completed tasks produced documents or declarative artifacts (ADR, Terraform modules, SQL migrations). All 5 rejected tasks required either a running environment (T003 EKS/Istio, T006 CI/CD) or application code implementation (T005 Auth, T007 Exchange spec, T015 KYC spec). Rejected tasks had no review files (`*-review.md`), so rejection reasons are undocumented — a process gap.
+- **Action:** Planner should ensure that implementation tasks (agent_role: builder) are not scheduled until the language-level scaffolding exists (go.mod, main.go, basic project structure). Add an explicit "project init" task per service before any builder task. Architect spec tasks (T007, T015) should depend on project init too, so specs can reference real package paths.
+
+### Pattern: Pre-provision downstream dependencies in infrastructure tasks (2026-03-27)
+- **Context:** T002 (Terraform) pre-created the IRSA OIDC provider and Karpenter role for T003 to consume.
+- **Finding:** This forward-provisioning pattern meant T003 had clear inputs. T002's handoff explicitly listed what T003 should use. This is the right model even though T003 was ultimately rejected for other reasons.
+- **Action:** Infrastructure tasks should always pre-provision IAM roles, secrets, and config that downstream tasks need, and list them explicitly in the handoff file under "Suggested Follow-ups."
+
+### Pattern: Handoff cross-references are high-value — enforce them (2026-03-27)
+- **Context:** T001, T002, and T004 handoffs all included specific "Suggested Follow-ups" naming downstream task IDs and which sections/outputs to reference.
+- **Finding:** These cross-references (e.g., "T005 should use the `auth` schema", "T003 needs OIDC provider ARN from eks module output") create a dependency contract that downstream agents can act on without re-reading all upstream code.
+- **Action:** Worker agent prompt should require a "Suggested Follow-ups" section in every handoff file, with at minimum: downstream task IDs, specific artifacts/outputs they should consume, and any constraints they must respect.
+
+### Pattern: Reviewer must always produce a review file — even for rejections (2026-03-27)
+- **Context:** 5 tasks were rejected (T003, T005, T006, T007, T015) but zero `handoff/*-review.md` files exist.
+- **Finding:** Without review files, the PostMortem agent cannot root-cause rejections, and the Orchestrator cannot inject reviewer notes when re-queuing. The learning loop is broken for rejected tasks.
+- **Action:** Orchestrator must enforce that every status transition to "rejected" is accompanied by a `handoff/<task-id>-review.md` file. If a task is rejected without a review file, flag it as a process violation before re-queuing.
+
+### Pattern: Integration tests are vacuous without application code — gate on code existence (2026-03-27)
+- **Context:** Integration test run `run-20260327-074658` passed with 0 tests, 0 failures, N/A coverage. All 7 services had only stub Dockerfiles.
+- **Finding:** A green integration run with no tests gives false confidence. The integration agent correctly noted this but the result was still "PASS."
+- **Action:** Integration test agent should report `SKIP` (not `PASS`) when no buildable source code or test files are found. Planner should not schedule integration runs until at least one service has compilable code and tests.
+
+### Pattern: Estimate data is unusable without start/finish timestamps on completed tasks (2026-03-27)
+- **Context:** T001, T002, T004 are marked "done" but have no `started_at` or `finished_at` fields. Only rejected tasks have timestamps, and those are all identical (instant rejection).
+- **Finding:** Without timing data on successful tasks, the PostMortem agent cannot evaluate estimate accuracy, which means the Planner cannot calibrate future estimates.
+- **Action:** Orchestrator must record `started_at` when a worker agent begins and `finished_at` when it completes (for both done and rejected). These fields should be mandatory in `tasks.json` for any non-pending task.
 
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
@@ -179,6 +207,10 @@ project-root/
     task-<id>.md
     task-<id>-review.md
     integration-<run>.md
+  pipeline/              ← AI pipeline orchestrator
+    run.sh               ← main entry point (./pipeline/run.sh "requirement")
+    lib/                 ← shell libraries (state, context, worktree, log)
+    prompts/             ← agent role prompt templates
   src/                   ← application code
   tests/                 ← test suite
 ```
