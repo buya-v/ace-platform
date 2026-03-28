@@ -1,12 +1,13 @@
-# ACE Platform — Market Data Service (Java/Kotlin)
-# Build: docker build -t ace-market-data-service ./src/market-data-service
+FROM golang:1.22-alpine AS builder
 
-FROM eclipse-temurin:21-jdk AS builder
-WORKDIR /app
+WORKDIR /build
+COPY go.mod ./
 COPY . .
-RUN ./gradlew bootJar --no-daemon
+RUN CGO_ENABLED=0 GOOS=linux go build -o market-data-service ./cmd/market-data-service
 
-FROM eclipse-temurin:21-jre
-COPY --from=builder /app/build/libs/*.jar /app.jar
-EXPOSE 8080 50051
-CMD ["java", "-jar", "/app.jar"]
+FROM alpine:3.19
+RUN adduser -D -u 1000 appuser
+COPY --from=builder /build/market-data-service /usr/local/bin/market-data-service
+USER appuser
+EXPOSE 50057 8087
+ENTRYPOINT ["market-data-service"]

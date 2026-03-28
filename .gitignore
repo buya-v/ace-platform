@@ -56,6 +56,9 @@ htmlcov/
 # Docker
 docker-compose.override.yml
 
+# Pipeline worktrees
+.worktrees/
+
 # Python
 __pycache__/
 *.pyc

@@ -1,277 +1,347 @@
-###############################################################################
-# ACE Platform — Local Development Environment
-#
-# Usage:
-#   docker compose up -d              # Start infrastructure services
-#   docker compose ps                 # Check service status
-#   docker compose logs -f ace-postgres  # Follow logs for a service
-#   docker compose down               # Stop all services
-#   docker compose down -v            # Stop and destroy volumes
-###############################################################################
+version: "3.9"
+
+x-common-env: &common-env
+  KAFKA_BROKERS: kafka:9092
+  BIND_ADDRESS: "0.0.0.0"
+
+x-healthcheck-http: &healthcheck-http
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 15s
 
 services:
+  # ─── Infrastructure ───────────────────────────────────────────────
 
-  # ── Infrastructure ───────────────────────────────────────────────────
-
-  ace-postgres:
-    image: postgres:15
+  postgres:
+    image: timescale/timescaledb:latest-pg15
     container_name: ace-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ace_admin}
+      POSTGRES_USER: ${POSTGRES_USER:-ace}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ace_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-ace_platform}
+      POSTGRES_DB: ${POSTGRES_DB:-ace}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ace-pg-data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ace_admin} -d ${POSTGRES_DB:-ace_platform}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ace}"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 10
+      start_period: 10s
     networks:
-      - ace-net
+      - ace-network
 
-  ace-redis:
+  redis:
     image: redis:7-alpine
     container_name: ace-redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - ace-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
-      - ace-net
+      - ace-network
 
-  ace-kafka:
-    image: apache/kafka:3.7.0
-    container_name: ace-kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: ace-zookeeper
     environment:
-      # KRaft mode (built-in, no Zookeeper)
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@ace-kafka:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      # Listeners
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://ace-kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      # Performance
-      KAFKA_NUM_PARTITIONS: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      # Cluster ID for KRaft
-      CLUSTER_ID: "ace-local-dev-cluster-001"
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "${KAFKA_PORT:-9094}:9094"
-    volumes:
-      - ace-kafka-data:/tmp/kraft-combined-logs
+      - "${ZOOKEEPER_PORT:-2181}:2181"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ace-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ace-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 10
       start_period: 30s
     networks:
-      - ace-net
+      - ace-network
 
-  ace-kafka-init:
-    image: apache/kafka:3.7.0
-    container_name: ace-kafka-init
+  # ─── Exchange Core (engines) ───────────────────────────────────────
+
+  matching-engine:
+    build:
+      context: ./src/matching-engine
+      dockerfile: Dockerfile
+    container_name: ace-matching-engine
     depends_on:
-      ace-kafka:
+      postgres:
         condition: service_healthy
-    volumes:
-      - ./infrastructure/docker/kafka/create-topics.sh:/create-topics.sh:ro
-    entrypoint: ["/bin/bash", "/create-topics.sh"]
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50051"
+      HEALTH_PORT: "8081"
+      INSTRUMENTS: ${INSTRUMENTS:-WHT-HRW-2026M07-UB}
+    ports:
+      - "50051:50051"
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/healthz"]
+      <<: *healthcheck-http
     networks:
-      - ace-net
+      - ace-network
 
-  # ── Application Services ─────────────────────────────────────────────
-  # Uncomment as each service gets implemented.
+  clearing-engine:
+    build:
+      context: ./src/clearing-engine
+      dockerfile: Dockerfile
+    container_name: ace-clearing-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50052"
+      HEALTH_PORT: "8082"
+      MATCHING_ENGINE_ADDR: matching-engine:50051
+    ports:
+      - "50052:50052"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-matching-engine:
-  #   build:
-  #     context: ./src/matching-engine
-  #     dockerfile: Dockerfile
-  #   container_name: ace-matching-engine
-  #   ports:
-  #     - "50051:50051"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_exchange_svc
-  #     DB_PASSWORD: ${EXCHANGE_SVC_PASSWORD:-exchange_dev_pass}
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #     REDIS_URL: redis://ace-redis:6379
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-kafka:
-  #       condition: service_healthy
-  #     ace-redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  margin-engine:
+    build:
+      context: ./src/margin-engine
+      dockerfile: Dockerfile
+    container_name: ace-margin-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      clearing-engine:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50053"
+      HEALTH_PORT: "8083"
+      CLEARING_ENGINE_ADDR: clearing-engine:50052
+    ports:
+      - "50053:50053"
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-auth-service:
-  #   build:
-  #     context: ./src/auth-service
-  #     dockerfile: Dockerfile
-  #   container_name: ace-auth-service
-  #   ports:
-  #     - "8081:8080"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_auth_svc
-  #     DB_PASSWORD: ${AUTH_SVC_PASSWORD:-auth_dev_pass}
-  #     REDIS_URL: redis://ace-redis:6379
-  #     JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  settlement-engine:
+    build:
+      context: ./src/settlement-engine
+      dockerfile: Dockerfile
+    container_name: ace-settlement-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      clearing-engine:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50054"
+      HEALTH_PORT: "8084"
+      CLEARING_ENGINE_ADDR: clearing-engine:50052
+    ports:
+      - "50054:50054"
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-clearing-service:
-  #   build:
-  #     context: ./src/clearing-service
-  #     dockerfile: Dockerfile
-  #   container_name: ace-clearing-service
-  #   ports:
-  #     - "8082:8080"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_clearing_svc
-  #     DB_PASSWORD: ${CLEARING_SVC_PASSWORD:-clearing_dev_pass}
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #     REDIS_URL: redis://ace-redis:6379
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-kafka:
-  #       condition: service_healthy
-  #     ace-redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  # ─── Supporting Services ───────────────────────────────────────────
 
-  # ace-compliance-service:
-  #   build:
-  #     context: ./src/compliance-service
-  #     dockerfile: Dockerfile
-  #   container_name: ace-compliance-service
-  #   ports:
-  #     - "8083:8080"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_compliance_svc
-  #     DB_PASSWORD: ${COMPLIANCE_SVC_PASSWORD:-compliance_dev_pass}
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-kafka:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  auth-service:
+    build:
+      context: ./src/auth-service
+      dockerfile: Dockerfile
+    container_name: ace-auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50055"
+      HEALTH_PORT: "8085"
+      AUTH_JWT_SIGNING_KEY: ${AUTH_JWT_SIGNING_KEY:-ace-dev-jwt-signing-key-change-in-production}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-ace}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-ace_dev_password}
+      DB_NAME: ${POSTGRES_DB:-ace}
+      DB_SSL_MODE: disable
+    ports:
+      - "50055:50055"
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-warehouse-service:
-  #   build:
-  #     context: ./src/warehouse-service
-  #     dockerfile: Dockerfile
-  #   container_name: ace-warehouse-service
-  #   ports:
-  #     - "8084:8080"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_warehouse_svc
-  #     DB_PASSWORD: ${WAREHOUSE_SVC_PASSWORD:-warehouse_dev_pass}
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-kafka:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  compliance-service:
+    build:
+      context: ./src/compliance-service
+      dockerfile: Dockerfile
+    container_name: ace-compliance-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50056"
+      HEALTH_PORT: "8086"
+    ports:
+      - "50056:50056"
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-market-data-service:
-  #   build:
-  #     context: ./src/market-data-service
-  #     dockerfile: Dockerfile
-  #   container_name: ace-market-data-service
-  #   ports:
-  #     - "8085:8080"
-  #     - "50052:50051"
-  #   environment:
-  #     DB_HOST: ace-postgres
-  #     DB_PORT: 5432
-  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
-  #     DB_USER: ace_analytics_ro
-  #     DB_PASSWORD: ${ANALYTICS_SVC_PASSWORD:-analytics_dev_pass}
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #     REDIS_URL: redis://ace-redis:6379
-  #   depends_on:
-  #     ace-postgres:
-  #       condition: service_healthy
-  #     ace-kafka:
-  #       condition: service_healthy
-  #     ace-redis:
-  #       condition: service_healthy
-  #   networks:
-  #     - ace-net
+  market-data-service:
+    build:
+      context: ./src/market-data-service
+      dockerfile: Dockerfile
+    container_name: ace-market-data-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50057"
+      HEALTH_PORT: "8087"
+      INSTRUMENTS: ${INSTRUMENTS:-WHT-HRW-2026M07-UB}
+    ports:
+      - "50057:50057"
+      - "8087:8087"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-  # ace-gateway:
-  #   build:
-  #     context: ./src/gateway
-  #     dockerfile: Dockerfile
-  #   container_name: ace-gateway
-  #   ports:
-  #     - "8080:8080"
-  #     - "9878:9878"
-  #   environment:
-  #     AUTH_SERVICE_URL: http://ace-auth-service:8080
-  #     MATCHING_ENGINE_URL: ace-matching-engine:50051
-  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
-  #   depends_on:
-  #     ace-auth-service:
-  #       condition: service_started
-  #     ace-matching-engine:
-  #       condition: service_started
-  #   networks:
-  #     - ace-net
+  warehouse-service:
+    build:
+      context: ./src/warehouse-service
+      dockerfile: Dockerfile
+    container_name: ace-warehouse-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50058"
+      HEALTH_PORT: "8088"
+    ports:
+      - "50058:50058"
+      - "8088:8088"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8088/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
-# ── Networks & Volumes ──────────────────────────────────────────────
+  # ─── API Gateway ───────────────────────────────────────────────────
 
-networks:
-  ace-net:
-    name: ace-net
-    driver: bridge
+  gateway:
+    build:
+      context: ./src/gateway
+      dockerfile: Dockerfile
+    container_name: ace-gateway
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+      clearing-engine:
+        condition: service_healthy
+      margin-engine:
+        condition: service_healthy
+      settlement-engine:
+        condition: service_healthy
+      compliance-service:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      HTTP_PORT: "8080"
+      HEALTH_PORT: "8090"
+      JWT_SECRET: ${AUTH_JWT_SIGNING_KEY:-ace-dev-jwt-signing-key-change-in-production}
+      MATCHING_ENGINE_ADDR: matching-engine:50051
+      CLEARING_ENGINE_ADDR: clearing-engine:50052
+      MARGIN_ENGINE_ADDR: margin-engine:50053
+      SETTLEMENT_ENGINE_ADDR: settlement-engine:50054
+      AUTH_SERVICE_ADDR: auth-service:50055
+      COMPLIANCE_SERVICE_ADDR: compliance-service:50056
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
 
 volumes:
-  ace-pg-data:
-    name: ace-pg-data
-  ace-redis-data:
-    name: ace-redis-data
-  ace-kafka-data:
-    name: ace-kafka-data
+  pgdata:
+    driver: local
+  kafkadata:
+    driver: local
+
+networks:
+  ace-network:
+    driver: bridge

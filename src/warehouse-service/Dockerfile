@@ -1,12 +1,13 @@
-# ACE Platform — Warehouse Service (Java/Kotlin)
-# Build: docker build -t ace-warehouse-service ./src/warehouse-service
+FROM golang:1.22-alpine AS builder
 
-FROM eclipse-temurin:21-jdk AS builder
-WORKDIR /app
+WORKDIR /build
+COPY go.mod ./
 COPY . .
-RUN ./gradlew bootJar --no-daemon
+RUN CGO_ENABLED=0 GOOS=linux go build -o warehouse-service ./cmd/warehouse-service
 
-FROM eclipse-temurin:21-jre
-COPY --from=builder /app/build/libs/*.jar /app.jar
-EXPOSE 8080
-CMD ["java", "-jar", "/app.jar"]
+FROM alpine:3.19
+RUN adduser -D -u 1000 appuser
+COPY --from=builder /build/warehouse-service /usr/local/bin/warehouse-service
+USER appuser
+EXPOSE 50058 8088
+ENTRYPOINT ["warehouse-service"]
