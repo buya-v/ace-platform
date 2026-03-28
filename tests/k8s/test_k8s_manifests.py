@@ -359,12 +359,13 @@ class TestSecrets(unittest.TestCase):
 class TestNamespaces(unittest.TestCase):
     """Validate namespace definitions."""
 
-    def test_namespace_yaml_exists(self):
+    def test_no_duplicate_namespace_file(self):
+        """namespace.yaml should not exist — namespaces.yaml is the single source."""
         path = os.path.join(BASE_DIR, "namespace.yaml")
-        self.assertTrue(os.path.isfile(path))
+        self.assertFalse(os.path.isfile(path), "Duplicate namespace.yaml should be removed")
 
     def test_required_namespaces(self):
-        docs = load_yaml(os.path.join(BASE_DIR, "namespace.yaml"))
+        docs = load_yaml(os.path.join(BASE_DIR, "namespaces.yaml"))
         ns_names = [d["metadata"]["name"] for d in docs]
         for ns in ["ace-exchange", "ace-services", "ace-infra"]:
             self.assertIn(ns, ns_names, f"Missing namespace: {ns}")
@@ -423,6 +424,95 @@ class TestLabels(unittest.TestCase):
                     v,
                     f"{svc}: selector label {k}={v} not in template",
                 )
+
+
+class TestCrossResourceValidation(unittest.TestCase):
+    """Validate cross-resource references: every configMapRef/secretRef has a
+    matching resource in the same namespace."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Build maps of available ConfigMaps and Secrets by (name, namespace)."""
+        cls.configmaps = set()
+        cls.secrets = set()
+
+        # Parse service-discovery-configmap.yaml
+        for doc in load_yaml(os.path.join(BASE_DIR, "service-discovery-configmap.yaml")):
+            if doc and doc.get("kind") == "ConfigMap":
+                cls.configmaps.add(
+                    (doc["metadata"]["name"], doc["metadata"]["namespace"])
+                )
+
+        # Parse secrets.yaml
+        for doc in load_yaml(os.path.join(BASE_DIR, "secrets.yaml")):
+            if doc and doc.get("kind") == "Secret":
+                cls.secrets.add(
+                    (doc["metadata"]["name"], doc["metadata"]["namespace"])
+                )
+
+    def test_configmap_refs_resolvable(self):
+        """Every configMapRef in a deployment must have a ConfigMap in the same namespace."""
+        for svc in list(GRPC_SERVICES.keys()) + ["gateway"]:
+            docs = load_yaml(os.path.join(BASE_DIR, svc, "deployment.yaml"))
+            dep = docs[0]
+            ns = dep["metadata"]["namespace"]
+            containers = dep["spec"]["template"]["spec"]["containers"]
+            for container in containers:
+                for entry in container.get("envFrom", []):
+                    if "configMapRef" in entry:
+                        cm_name = entry["configMapRef"]["name"]
+                        self.assertIn(
+                            (cm_name, ns),
+                            self.configmaps,
+                            f"{svc}: configMapRef '{cm_name}' not found in namespace '{ns}'",
+                        )
+
+    def test_secret_refs_resolvable(self):
+        """Every non-optional secretRef in a deployment must have a Secret in the same namespace."""
+        for svc in list(GRPC_SERVICES.keys()) + ["gateway"]:
+            docs = load_yaml(os.path.join(BASE_DIR, svc, "deployment.yaml"))
+            dep = docs[0]
+            ns = dep["metadata"]["namespace"]
+            containers = dep["spec"]["template"]["spec"]["containers"]
+            for container in containers:
+                for entry in container.get("envFrom", []):
+                    if "secretRef" in entry:
+                        secret_name = entry["secretRef"]["name"]
+                        optional = entry["secretRef"].get("optional", False)
+                        if not optional:
+                            self.assertIn(
+                                (secret_name, ns),
+                                self.secrets,
+                                f"{svc}: secretRef '{secret_name}' not found in namespace '{ns}'",
+                            )
+
+    def test_jwt_secret_in_ace_exchange(self):
+        """ace-exchange namespace must have ace-jwt-signing-key for engine JWT validation."""
+        self.assertIn(
+            ("ace-jwt-signing-key", "ace-exchange"),
+            self.secrets,
+            "ace-jwt-signing-key missing from ace-exchange namespace",
+        )
+
+    def test_service_discovery_configmap_per_namespace(self):
+        """service-discovery ConfigMap must exist in both ace-exchange and ace-services."""
+        for ns in ["ace-exchange", "ace-services"]:
+            self.assertIn(
+                ("service-discovery", ns),
+                self.configmaps,
+                f"service-discovery ConfigMap missing from {ns}",
+            )
+
+    def test_no_duplicate_namespace_definitions(self):
+        """No namespace should be defined more than once across namespace files."""
+        ns_file = os.path.join(BASE_DIR, "namespaces.yaml")
+        docs = load_yaml(ns_file)
+        ns_names = [d["metadata"]["name"] for d in docs if d]
+        duplicates = [n for n in ns_names if ns_names.count(n) > 1]
+        self.assertEqual(
+            len(duplicates), 0,
+            f"Duplicate namespace definitions: {set(duplicates)}",
+        )
 
 
 if __name__ == "__main__":
