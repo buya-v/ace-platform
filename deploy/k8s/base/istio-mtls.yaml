@@ -1,0 +1,41 @@
+# Mesh-wide STRICT mTLS — all services must use mTLS for peer communication
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+# Destination rule enforcing mTLS for all mesh traffic
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: mesh-mtls
+  namespace: istio-system
+spec:
+  host: "*.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# Per-namespace PeerAuthentication for exchange namespace (highest security)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: ace-exchange
+spec:
+  mtls:
+    mode: STRICT
+---
+# Per-namespace PeerAuthentication for services namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: ace-services
+spec:
+  mtls:
+    mode: STRICT

@@ -1,0 +1,26 @@
+# Istio Ingress Gateway values
+# Installed via: helm install istio-ingress istio/gateway -n istio-ingress -f values-gateway.yaml
+
+service:
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+
+nodeSelector:
+  ace-platform/node-role: system

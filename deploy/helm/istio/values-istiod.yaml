@@ -1,0 +1,57 @@
+# Istiod (control plane) values
+# Installed via: helm install istiod istio/istiod -n istio-system -f values-istiod.yaml
+
+global:
+  istioNamespace: istio-system
+  proxy:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    # Enable access logging for observability
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+
+meshConfig:
+  # Enforce mTLS across the entire mesh
+  defaultConfig:
+    holdApplicationUntilProxyStarts: true
+    tracing:
+      sampling: 100.0
+  # STRICT mTLS — no plaintext allowed between mesh services
+  meshMTLS:
+    minProtocolVersion: TLSV1_3
+
+  # Enable tracing
+  enableTracing: true
+
+  # Outbound traffic policy — REGISTRY_ONLY for security
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+
+pilot:
+  autoscaleEnabled: true
+  autoscaleMin: 2
+  autoscaleMax: 5
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+  # Tolerate system node taint
+  tolerations:
+    - key: "ace-platform/node-role"
+      operator: "Equal"
+      value: "system"
+      effect: "NoSchedule"
+  nodeSelector:
+    ace-platform/node-role: system
+
+# Sidecar injector configuration
+sidecarInjectorWebhook:
+  enableNamespacesByDefault: false
