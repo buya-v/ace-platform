@@ -1,0 +1,441 @@
+syntax = "proto3";
+
+package ace.warehouse.v1;
+
+option go_package = "ace-platform/src/warehouse-service/proto/warehousepb";
+
+import "google/protobuf/timestamp.proto";
+
+// WarehouseService manages electronic warehouse receipts (eWR)
+// and physical commodity inventory for the ACE platform.
+service WarehouseService {
+    // Receipt lifecycle
+    rpc IssueReceipt(IssueReceiptRequest) returns (IssueReceiptResponse);
+    rpc TransferReceipt(TransferReceiptRequest) returns (TransferReceiptResponse);
+    rpc CancelReceipt(CancelReceiptRequest) returns (CancelReceiptResponse);
+    rpc GetReceipt(GetReceiptRequest) returns (GetReceiptResponse);
+    rpc ListReceipts(ListReceiptsRequest) returns (ListReceiptsResponse);
+
+    // Delivery
+    rpc InitiateDelivery(InitiateDeliveryRequest) returns (InitiateDeliveryResponse);
+    rpc CompleteDelivery(CompleteDeliveryRequest) returns (CompleteDeliveryResponse);
+    rpc GetDelivery(GetDeliveryRequest) returns (GetDeliveryResponse);
+    rpc ListDeliveries(ListDeliveriesRequest) returns (ListDeliveriesResponse);
+
+    // Inventory
+    rpc GetInventory(GetInventoryRequest) returns (GetInventoryResponse);
+    rpc GetFacilityCapacity(GetFacilityCapacityRequest) returns (GetFacilityCapacityResponse);
+
+    // Collateralization
+    rpc PledgeReceipt(PledgeReceiptRequest) returns (PledgeReceiptResponse);
+    rpc ReleaseReceipt(ReleaseReceiptRequest) returns (ReleaseReceiptResponse);
+
+    // Facility management
+    rpc RegisterFacility(RegisterFacilityRequest) returns (RegisterFacilityResponse);
+    rpc UpdateFacility(UpdateFacilityRequest) returns (UpdateFacilityResponse);
+    rpc GetFacility(GetFacilityRequest) returns (GetFacilityResponse);
+    rpc ListFacilities(ListFacilitiesRequest) returns (ListFacilitiesResponse);
+
+    // Inspection
+    rpc ScheduleInspection(ScheduleInspectionRequest) returns (ScheduleInspectionResponse);
+    rpc RecordInspectionResult(RecordInspectionResultRequest) returns (RecordInspectionResultResponse);
+    rpc GetInspection(GetInspectionRequest) returns (GetInspectionResponse);
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum ReceiptStatus {
+    RECEIPT_STATUS_UNSPECIFIED = 0;
+    RECEIPT_STATUS_ACTIVE = 1;
+    RECEIPT_STATUS_PLEDGED = 2;
+    RECEIPT_STATUS_DELIVERY_PENDING = 3;
+    RECEIPT_STATUS_DELIVERED = 4;
+    RECEIPT_STATUS_CANCELLED = 5;
+}
+
+enum FacilityStatus {
+    FACILITY_STATUS_UNSPECIFIED = 0;
+    FACILITY_STATUS_ACTIVE = 1;
+    FACILITY_STATUS_SUSPENDED = 2;
+    FACILITY_STATUS_DECOMMISSIONED = 3;
+}
+
+enum DeliveryType {
+    DELIVERY_TYPE_UNSPECIFIED = 0;
+    DELIVERY_TYPE_PHYSICAL = 1;
+    DELIVERY_TYPE_CASH_SETTLEMENT = 2;
+}
+
+enum DeliveryStatus {
+    DELIVERY_STATUS_UNSPECIFIED = 0;
+    DELIVERY_STATUS_PENDING = 1;
+    DELIVERY_STATUS_IN_PROGRESS = 2;
+    DELIVERY_STATUS_COMPLETED = 3;
+    DELIVERY_STATUS_FAILED = 4;
+    DELIVERY_STATUS_CANCELLED = 5;
+}
+
+enum InspectionType {
+    INSPECTION_TYPE_UNSPECIFIED = 0;
+    INSPECTION_TYPE_INITIAL = 1;
+    INSPECTION_TYPE_RE_INSPECTION = 2;
+    INSPECTION_TYPE_PERIODIC = 3;
+}
+
+enum InspectionStatus {
+    INSPECTION_STATUS_UNSPECIFIED = 0;
+    INSPECTION_STATUS_SCHEDULED = 1;
+    INSPECTION_STATUS_IN_PROGRESS = 2;
+    INSPECTION_STATUS_PASSED = 3;
+    INSPECTION_STATUS_FAILED = 4;
+}
+
+// ─── Core Messages ──────────────────────────────────────────────────────────
+
+message Receipt {
+    string receipt_id = 1;
+    string receipt_number = 2;
+    string facility_id = 3;
+    string holder_id = 4;
+    string commodity_id = 5;
+    string grade = 6;
+    string quantity = 7;           // Decimal as string (e.g., "100.0000")
+    string gross_quantity = 8;
+    string unit = 9;
+    string lot_number = 10;
+    string storage_location = 11;
+    int32 harvest_year = 12;
+    string inspection_id = 13;
+    ReceiptStatus status = 14;
+    string pledged_to = 15;
+    google.protobuf.Timestamp issued_at = 16;
+    google.protobuf.Timestamp expires_at = 17;
+    google.protobuf.Timestamp created_at = 18;
+    google.protobuf.Timestamp updated_at = 19;
+}
+
+message Facility {
+    string facility_id = 1;
+    string facility_code = 2;
+    string name = 3;
+    string operator_id = 4;
+    string license_number = 5;
+    string license_expiry = 6;
+    string address = 7;
+    string latitude = 8;
+    string longitude = 9;
+    string region = 10;
+    string total_capacity = 11;
+    string capacity_unit = 12;
+    repeated string approved_commodity_ids = 13;
+    FacilityStatus status = 14;
+    google.protobuf.Timestamp created_at = 15;
+    google.protobuf.Timestamp updated_at = 16;
+}
+
+message DeliveryInstruction {
+    string delivery_id = 1;
+    string receipt_id = 2;
+    string obligation_id = 3;
+    string seller_id = 4;
+    string buyer_id = 5;
+    DeliveryType delivery_type = 6;
+    string facility_id = 7;
+    string destination_id = 8;
+    string quantity = 9;
+    string scheduled_date = 10;
+    DeliveryStatus status = 11;
+    string failure_reason = 12;
+    google.protobuf.Timestamp completed_at = 13;
+    google.protobuf.Timestamp created_at = 14;
+    google.protobuf.Timestamp updated_at = 15;
+}
+
+message Inspection {
+    string inspection_id = 1;
+    string facility_id = 2;
+    string commodity_id = 3;
+    string lot_number = 4;
+    string inspector_id = 5;
+    InspectionType inspection_type = 6;
+    InspectionStatus status = 7;
+    string scheduled_date = 8;
+    string completed_date = 9;
+    string gross_weight = 10;
+    string net_weight = 11;
+    string moisture_pct = 12;
+    string foreign_matter_pct = 13;
+    string protein_pct = 14;
+    string test_weight = 15;
+    string grade_assigned = 16;
+    string defects = 17;
+    string notes = 18;
+    string certificate_number = 19;
+    google.protobuf.Timestamp created_at = 20;
+    google.protobuf.Timestamp updated_at = 21;
+}
+
+message InventoryItem {
+    string facility_id = 1;
+    string commodity_id = 2;
+    string lot_number = 3;
+    string current_quantity = 4;
+    string unit = 5;
+}
+
+// ─── Request/Response Messages ──────────────────────────────────────────────
+
+// IssueReceipt
+message IssueReceiptRequest {
+    string facility_id = 1;
+    string holder_id = 2;
+    string commodity_id = 3;
+    string grade = 4;
+    string quantity = 5;
+    string gross_quantity = 6;
+    string unit = 7;
+    string lot_number = 8;
+    string storage_location = 9;
+    int32 harvest_year = 10;
+    string inspection_id = 11;
+}
+
+message IssueReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// TransferReceipt
+message TransferReceiptRequest {
+    string receipt_id = 1;
+    string new_holder_id = 2;
+}
+
+message TransferReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// CancelReceipt
+message CancelReceiptRequest {
+    string receipt_id = 1;
+    string reason = 2;
+}
+
+message CancelReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// GetReceipt
+message GetReceiptRequest {
+    string receipt_id = 1;
+}
+
+message GetReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// ListReceipts
+message ListReceiptsRequest {
+    string holder_id = 1;
+    string facility_id = 2;
+    string commodity_id = 3;
+    ReceiptStatus status = 4;
+    int32 page_size = 5;
+    string page_token = 6;
+}
+
+message ListReceiptsResponse {
+    repeated Receipt receipts = 1;
+    string next_page_token = 2;
+}
+
+// InitiateDelivery
+message InitiateDeliveryRequest {
+    string receipt_id = 1;
+    string obligation_id = 2;
+    string buyer_id = 3;
+    DeliveryType delivery_type = 4;
+    string destination_id = 5;
+    string scheduled_date = 6;
+}
+
+message InitiateDeliveryResponse {
+    DeliveryInstruction delivery = 1;
+}
+
+// CompleteDelivery
+message CompleteDeliveryRequest {
+    string delivery_id = 1;
+    bool success = 2;
+    string failure_reason = 3;
+}
+
+message CompleteDeliveryResponse {
+    DeliveryInstruction delivery = 1;
+}
+
+// GetDelivery
+message GetDeliveryRequest {
+    string delivery_id = 1;
+}
+
+message GetDeliveryResponse {
+    DeliveryInstruction delivery = 1;
+}
+
+// ListDeliveries
+message ListDeliveriesRequest {
+    string seller_id = 1;
+    string buyer_id = 2;
+    DeliveryStatus status = 3;
+    int32 page_size = 4;
+    string page_token = 5;
+}
+
+message ListDeliveriesResponse {
+    repeated DeliveryInstruction deliveries = 1;
+    string next_page_token = 2;
+}
+
+// GetInventory
+message GetInventoryRequest {
+    string facility_id = 1;
+    string commodity_id = 2;
+}
+
+message GetInventoryResponse {
+    repeated InventoryItem items = 1;
+    string total_quantity = 2;
+}
+
+// GetFacilityCapacity
+message GetFacilityCapacityRequest {
+    string facility_id = 1;
+}
+
+message GetFacilityCapacityResponse {
+    string total_capacity = 1;
+    string used_capacity = 2;
+    string available_capacity = 3;
+    string capacity_unit = 4;
+}
+
+// PledgeReceipt
+message PledgeReceiptRequest {
+    string receipt_id = 1;
+    string clearing_member_id = 2;
+}
+
+message PledgeReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// ReleaseReceipt
+message ReleaseReceiptRequest {
+    string receipt_id = 1;
+    string clearing_member_id = 2;
+}
+
+message ReleaseReceiptResponse {
+    Receipt receipt = 1;
+}
+
+// RegisterFacility
+message RegisterFacilityRequest {
+    string facility_code = 1;
+    string name = 2;
+    string operator_id = 3;
+    string license_number = 4;
+    string license_expiry = 5;
+    string address = 6;
+    string latitude = 7;
+    string longitude = 8;
+    string region = 9;
+    string total_capacity = 10;
+    string capacity_unit = 11;
+    repeated string approved_commodity_ids = 12;
+}
+
+message RegisterFacilityResponse {
+    Facility facility = 1;
+}
+
+// UpdateFacility
+message UpdateFacilityRequest {
+    string facility_id = 1;
+    string name = 2;
+    string license_number = 3;
+    string license_expiry = 4;
+    string address = 5;
+    string total_capacity = 6;
+    FacilityStatus status = 7;
+    repeated string approved_commodity_ids = 8;
+}
+
+message UpdateFacilityResponse {
+    Facility facility = 1;
+}
+
+// GetFacility
+message GetFacilityRequest {
+    string facility_id = 1;
+}
+
+message GetFacilityResponse {
+    Facility facility = 1;
+}
+
+// ListFacilities
+message ListFacilitiesRequest {
+    string region = 1;
+    FacilityStatus status = 2;
+    int32 page_size = 3;
+    string page_token = 4;
+}
+
+message ListFacilitiesResponse {
+    repeated Facility facilities = 1;
+    string next_page_token = 2;
+}
+
+// ScheduleInspection
+message ScheduleInspectionRequest {
+    string facility_id = 1;
+    string commodity_id = 2;
+    string lot_number = 3;
+    string inspector_id = 4;
+    InspectionType inspection_type = 5;
+    string scheduled_date = 6;
+}
+
+message ScheduleInspectionResponse {
+    Inspection inspection = 1;
+}
+
+// RecordInspectionResult
+message RecordInspectionResultRequest {
+    string inspection_id = 1;
+    string gross_weight = 2;
+    string net_weight = 3;
+    string moisture_pct = 4;
+    string foreign_matter_pct = 5;
+    string protein_pct = 6;
+    string test_weight = 7;
+    string grade_assigned = 8;
+    string defects = 9;
+    string notes = 10;
+    string certificate_number = 11;
+    bool passed = 12;
+}
+
+message RecordInspectionResultResponse {
+    Inspection inspection = 1;
+}
+
+// GetInspection
+message GetInspectionRequest {
+    string inspection_id = 1;
+}
+
+message GetInspectionResponse {
+    Inspection inspection = 1;
+}
