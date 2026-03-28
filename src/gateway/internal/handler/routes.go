@@ -78,4 +78,15 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("POST", "/api/v1/compliance/sar", h.FileSAR)
 	rt.Handle("POST", "/api/v1/compliance/participants/{participant_id}/suspend", h.SuspendParticipant)
 	rt.Handle("POST", "/api/v1/compliance/participants/{participant_id}/reinstate", h.ReinstateParticipant)
+
+	// --- Market Data (market-data-service, public) ---
+	rt.Handle("GET", "/api/v1/market-data/candles/{instrument_id}", h.GetCandles)
+	rt.Handle("GET", "/api/v1/market-data/ticker/{instrument_id}", h.GetTicker)
+	rt.Handle("GET", "/api/v1/market-data/trades/{instrument_id}", h.GetMarketTrades)
+
+	// --- Warehouse (warehouse-service) ---
+	rt.Handle("POST", "/api/v1/warehouse/receipts", h.IssueReceipt)
+	rt.Handle("POST", "/api/v1/warehouse/receipts/{receipt_id}/pledge", h.PledgeReceipt)
+	rt.Handle("POST", "/api/v1/warehouse/deliveries", h.CreateDelivery)
+	rt.Handle("GET", "/api/v1/warehouse/inventory", h.GetInventory)
 }

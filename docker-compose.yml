@@ -323,12 +323,16 @@ services:
       HTTP_PORT: "8080"
       HEALTH_PORT: "8090"
       JWT_SECRET: ${AUTH_JWT_SIGNING_KEY:-ace-dev-jwt-signing-key-change-in-production}
+      JWT_ISSUER: "none"
+      JWT_AUDIENCE: "none"
       MATCHING_ENGINE_ADDR: matching-engine:50051
       CLEARING_ENGINE_ADDR: clearing-engine:50052
       MARGIN_ENGINE_ADDR: margin-engine:50053
       SETTLEMENT_ENGINE_ADDR: settlement-engine:50054
       AUTH_SERVICE_ADDR: auth-service:50055
       COMPLIANCE_SERVICE_ADDR: compliance-service:50056
+      MARKET_DATA_SERVICE_ADDR: market-data-service:50057
+      WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
     ports:
       - "8080:8080"
     healthcheck:

@@ -34,7 +34,9 @@ func main() {
 		"margin-engine":     fmt.Sprintf("http://%s", strings.Replace(cfg.MarginEngineAddr, ":50053", ":8083", 1)),
 		"settlement-engine": fmt.Sprintf("http://%s", strings.Replace(cfg.SettlementEngineAddr, ":50054", ":8084", 1)),
 		"auth-service":      fmt.Sprintf("http://%s", strings.Replace(cfg.AuthServiceAddr, ":50055", ":8085", 1)),
-		"compliance-service":fmt.Sprintf("http://%s", strings.Replace(cfg.ComplianceServiceAddr, ":50056", ":8086", 1)),
+		"compliance-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.ComplianceServiceAddr, ":50056", ":8086", 1)),
+		"market-data-service":  fmt.Sprintf("http://%s", strings.Replace(cfg.MarketDataServiceAddr, ":50057", ":8087", 1)),
+		"warehouse-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.WarehouseServiceAddr, ":50058", ":8088", 1)),
 	})
 
 	// Initialize handler and router
@@ -60,6 +62,7 @@ func main() {
 		},
 		PublicPrefixes: []string{
 			"/api/v1/instruments/",
+			"/api/v1/market-data/",
 			"/api/v1/ws/trades/",
 			"/api/v1/ws/book/",
 		},

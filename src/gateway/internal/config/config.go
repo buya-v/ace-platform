@@ -30,8 +30,10 @@ type Config struct {
 	ClearingEngineAddr  string
 	MarginEngineAddr    string
 	SettlementEngineAddr string
-	AuthServiceAddr     string
+	AuthServiceAddr       string
 	ComplianceServiceAddr string
+	MarketDataServiceAddr string
+	WarehouseServiceAddr  string
 
 	// Rate limiting
 	RateLimitEnabled bool
@@ -63,6 +65,8 @@ func FromEnv() *Config {
 		SettlementEngineAddr:  envStr("SETTLEMENT_ENGINE_ADDR", "localhost:50054"),
 		AuthServiceAddr:       envStr("AUTH_SERVICE_ADDR", "localhost:50055"),
 		ComplianceServiceAddr: envStr("COMPLIANCE_SERVICE_ADDR", "localhost:50056"),
+		MarketDataServiceAddr: envStr("MARKET_DATA_SERVICE_ADDR", "localhost:50057"),
+		WarehouseServiceAddr:  envStr("WAREHOUSE_SERVICE_ADDR", "localhost:50058"),
 
 		RateLimitEnabled: envBool("RATE_LIMIT_ENABLED", true),
 

@@ -130,13 +130,13 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*Claims, error) {
 		return nil, ErrExpiredToken
 	}
 
-	// Validate issuer
-	if v.issuer != "" && claims.Issuer != v.issuer {
+	// Validate issuer (skip if not configured or set to "none")
+	if v.issuer != "" && v.issuer != "none" && claims.Issuer != v.issuer {
 		return nil, ErrInvalidIssuer
 	}
 
-	// Validate audience
-	if v.audience != "" && claims.Audience != v.audience {
+	// Validate audience (skip if not configured or set to "none")
+	if v.audience != "" && v.audience != "none" && claims.Audience != v.audience {
 		return nil, ErrInvalidAudience
 	}
 

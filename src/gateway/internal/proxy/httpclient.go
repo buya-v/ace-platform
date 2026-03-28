@@ -57,12 +57,23 @@ var rpcToHTTP = map[string]string{
 	"ScreeningService/BatchScreen":         "GET /participant-status",
 	"ScreeningService/ResolveMatch":        "GET /participant-status",
 	"ScreeningService/GetRiskScore":        "GET /participant-status",
-	"ComplianceAdmin/ListAlerts":           "GET /participant-status",
-	"ComplianceAdmin/ResolveAlert":         "GET /participant-status",
-	"ComplianceAdmin/GetAuditTrail":        "GET /participant-status",
-	"ComplianceAdmin/FileSAR":             "GET /participant-status",
-	"ComplianceAdmin/SuspendParticipant":  "GET /participant-status",
-	"ComplianceAdmin/ReinstateParticipant":"GET /participant-status",
+	"ComplianceAdminService/ListAlerts":           "GET /participant-status",
+	"ComplianceAdminService/ResolveAlert":         "GET /participant-status",
+	"ComplianceAdminService/GetAuditTrail":        "GET /participant-status",
+	"ComplianceAdminService/FileSAR":              "GET /participant-status",
+	"ComplianceAdminService/SuspendParticipant":   "GET /participant-status",
+	"ComplianceAdminService/ReinstateParticipant": "GET /participant-status",
+
+	// Market data service (port 8087) — healthz only, return stub
+	"MarketDataService/GetCandles": "GET /healthz",
+	"MarketDataService/GetTicker":  "GET /healthz",
+	"MarketDataService/GetTrades":  "GET /healthz",
+
+	// Warehouse service (port 8088) — healthz only, return stub
+	"WarehouseService/IssueReceipt":  "GET /healthz",
+	"WarehouseService/PledgeReceipt": "GET /healthz",
+	"WarehouseService/CreateDelivery":"GET /healthz",
+	"WarehouseService/GetInventory":  "GET /healthz",
 }
 
 // HTTPBackendClient forwards requests to backend services over HTTP.

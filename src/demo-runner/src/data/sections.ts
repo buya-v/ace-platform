@@ -86,7 +86,7 @@ const registration: Section = {
       description: 'Authenticate trader1 and store JWT token',
       method: 'POST',
       url: '/api/v1/auth/login',
-      body: () => ({ username: 'trader1', password: 'Tr@der1Pass!' }),
+      body: () => ({ email: 'trader1@ace.mn', password: 'Tr@der1Pass!' }),
       validateResponse: okValidator,
       extractState: (body) => {
         const b = body as Record<string, unknown>;
@@ -100,7 +100,7 @@ const registration: Section = {
       description: 'Authenticate trader2 and store JWT token',
       method: 'POST',
       url: '/api/v1/auth/login',
-      body: () => ({ username: 'trader2', password: 'Tr@der2Pass!' }),
+      body: () => ({ email: 'trader2@ace.mn', password: 'Tr@der2Pass!' }),
       validateResponse: okValidator,
       extractState: (body) => {
         const b = body as Record<string, unknown>;
@@ -114,7 +114,7 @@ const registration: Section = {
       description: 'Authenticate admin and store JWT token',
       method: 'POST',
       url: '/api/v1/auth/login',
-      body: () => ({ username: 'admin', password: 'Adm1n@Pass!' }),
+      body: () => ({ email: 'admin@ace.mn', password: 'Adm1n@Pass!' }),
       validateResponse: okValidator,
       extractState: (body) => {
         const b = body as Record<string, unknown>;

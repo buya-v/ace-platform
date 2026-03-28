@@ -296,3 +296,35 @@ func (h *Handler) SuspendParticipant(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ReinstateParticipant(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, "compliance-service", "ComplianceAdminService/ReinstateParticipant")
 }
+
+// --- Market Data Endpoints (market-data-service) ---
+
+func (h *Handler) GetCandles(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "market-data-service", "MarketDataService/GetCandles")
+}
+
+func (h *Handler) GetTicker(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "market-data-service", "MarketDataService/GetTicker")
+}
+
+func (h *Handler) GetMarketTrades(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "market-data-service", "MarketDataService/GetTrades")
+}
+
+// --- Warehouse Endpoints (warehouse-service) ---
+
+func (h *Handler) IssueReceipt(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "warehouse-service", "WarehouseService/IssueReceipt")
+}
+
+func (h *Handler) PledgeReceipt(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "warehouse-service", "WarehouseService/PledgeReceipt")
+}
+
+func (h *Handler) CreateDelivery(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "warehouse-service", "WarehouseService/CreateDelivery")
+}
+
+func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "warehouse-service", "WarehouseService/GetInventory")
+}
