@@ -1,0 +1,77 @@
+.sidebar {
+  width: 240px;
+  background: #1a1f36;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  padding: 16px 0;
+  overflow-y: auto;
+}
+
+.logo {
+  padding: 8px 20px 24px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.section {
+  margin-top: 16px;
+}
+
+.sectionTitle {
+  padding: 8px 20px 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8e94a7;
+}
+
+.link {
+  display: block;
+  padding: 10px 20px;
+  color: #c4c8d6;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.link:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.activeLink {
+  composes: link;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-right: 3px solid #4f8cf7;
+}
+
+.userSection {
+  margin-top: auto;
+  padding: 16px 20px;
+  border-top: 1px solid #2d3351;
+}
+
+.userName {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.logoutBtn {
+  background: none;
+  border: 1px solid #555;
+  color: #c4c8d6;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.logoutBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
