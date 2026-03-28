@@ -1,17 +1,53 @@
 {
   "feature": "ACE Platform — Agriculture Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-03-27T00:00:00Z",
+  "last_updated": "2026-03-28T14:13:23Z",
   "phases": [
-    { "id": 0, "name": "Foundation & Infrastructure", "weeks": "1–2" },
-    { "id": 1, "name": "Exchange Engine", "weeks": "2–6" },
-    { "id": 2, "name": "Market Participants", "weeks": "3–6" },
-    { "id": 3, "name": "Physical Commodity Layer", "weeks": "5–8" },
-    { "id": 4, "name": "Financial Infrastructure", "weeks": "6–10" },
-    { "id": 5, "name": "Compliance & Regulation", "weeks": "8–11" },
-    { "id": 6, "name": "Market Data & Analytics", "weeks": "9–12" },
-    { "id": 7, "name": "Frontend Interfaces", "weeks": "10–15" },
-    { "id": 8, "name": "Integrations & Launch", "weeks": "14–18" }
+    {
+      "id": 0,
+      "name": "Foundation & Infrastructure",
+      "weeks": "1–2"
+    },
+    {
+      "id": 1,
+      "name": "Exchange Engine",
+      "weeks": "2–6"
+    },
+    {
+      "id": 2,
+      "name": "Market Participants",
+      "weeks": "3–6"
+    },
+    {
+      "id": 3,
+      "name": "Physical Commodity Layer",
+      "weeks": "5–8"
+    },
+    {
+      "id": 4,
+      "name": "Financial Infrastructure",
+      "weeks": "6–10"
+    },
+    {
+      "id": 5,
+      "name": "Compliance & Regulation",
+      "weeks": "8–11"
+    },
+    {
+      "id": 6,
+      "name": "Market Data & Analytics",
+      "weeks": "9–12"
+    },
+    {
+      "id": 7,
+      "name": "Frontend Interfaces",
+      "weeks": "10–15"
+    },
+    {
+      "id": 8,
+      "name": "Integrations & Launch",
+      "weeks": "14–18"
+    }
   ],
   "critical_path": "Ph0 → Ph1 → Ph4 → Ph5",
   "parallel_streams": {
@@ -42,8 +78,12 @@
       "description": "Create Terraform modules for VPC (3-tier subnets), EKS (5 node groups), RDS (PostgreSQL 15), MSK (Kafka 3.5), security groups. S3+DynamoDB state backend. Workspaces: dev/staging/prod.",
       "agent_role": "devops",
       "phase": 0,
-      "dependencies": ["T001"],
-      "blockedBy": ["T001"],
+      "dependencies": [
+        "T001"
+      ],
+      "blockedBy": [
+        "T001"
+      ],
       "estimate_minutes": 240,
       "status": "done",
       "worktree_branch": "feature/T002-terraform-iac"
@@ -54,11 +94,18 @@
       "description": "Deploy EKS cluster per ADR-001 spec. Install Istio with mTLS enforcement. Configure Karpenter autoscaler, NodeLocal DNSCache, VPC CNI plugin. Validate 5 node groups come up healthy.",
       "agent_role": "devops",
       "phase": 0,
-      "dependencies": ["T002"],
-      "blockedBy": ["T002"],
+      "dependencies": [
+        "T002"
+      ],
+      "blockedBy": [
+        "T002"
+      ],
       "estimate_minutes": 180,
-      "status": "pending",
-      "worktree_branch": "feature/T003-eks-istio"
+      "status": "done",
+      "worktree_branch": "feature/T003-eks-istio",
+      "notes": "Originally rejected, reworked via T031 which was merged to main",
+      "finished_at": "2026-03-27T08:10:37Z",
+      "started_at": "2026-03-27T08:05:09Z"
     },
     {
       "id": "T004",
@@ -66,8 +113,12 @@
       "description": "Create Flyway migrations V1–V5: reference, participants, exchange, clearing, compliance, warehouse, auth, market_data schemas. Append-only trades table, SHA-256 audit hash chain, TimescaleDB hypertables. Seed 14 commodities, 7 delivery locations, 2025–2026 trading calendar.",
       "agent_role": "architect",
       "phase": 0,
-      "dependencies": ["T001"],
-      "blockedBy": ["T001"],
+      "dependencies": [
+        "T001"
+      ],
+      "blockedBy": [
+        "T001"
+      ],
       "estimate_minutes": 300,
       "status": "done",
       "worktree_branch": "feature/T004-db-schema"
@@ -78,11 +129,18 @@
       "description": "Build authentication/authorization microservice. JWT + OAuth2 PKCE + RBAC. Integrate with IRSA for AWS service access. User/API-key/session management against auth schema from T004.",
       "agent_role": "builder",
       "phase": 0,
-      "dependencies": ["T004"],
-      "blockedBy": ["T004"],
+      "dependencies": [
+        "T004"
+      ],
+      "blockedBy": [
+        "T004"
+      ],
       "estimate_minutes": 240,
-      "status": "pending",
-      "worktree_branch": "feature/T005-auth-iam"
+      "status": "done",
+      "worktree_branch": "feature/T005-auth-iam",
+      "finished_at": "2026-03-27T08:20:26Z",
+      "started_at": "2026-03-27T08:11:49Z",
+      "notes": "Status fixed: review APPROVED, was incorrectly marked rejected"
     },
     {
       "id": "T006",
@@ -90,11 +148,17 @@
       "description": "Set up GitHub Actions workflows: build, test, lint, security scan, container image push, Terraform plan/apply. Branch protection rules. Deployment to dev/staging/prod EKS clusters.",
       "agent_role": "devops",
       "phase": 0,
-      "dependencies": ["T002"],
-      "blockedBy": ["T002"],
+      "dependencies": [
+        "T002"
+      ],
+      "blockedBy": [
+        "T002"
+      ],
       "estimate_minutes": 180,
-      "status": "pending",
-      "worktree_branch": "feature/T006-cicd"
+      "status": "done",
+      "worktree_branch": "feature/T006-cicd",
+      "started_at": "2026-03-27T08:21:29Z",
+      "finished_at": "2026-03-27T08:26:42Z"
     },
     {
       "id": "T007",
@@ -102,12 +166,18 @@
       "description": "Design the CLOB (Central Limit Order Book) architecture, order matching algorithms (price-time priority), price discovery mechanism, trade ledger design. Produce spec doc + API contracts for builder agents.",
       "agent_role": "architect",
       "phase": 1,
-      "dependencies": ["T004"],
-      "blockedBy": ["T004"],
+      "dependencies": [
+        "T004"
+      ],
+      "blockedBy": [
+        "T004"
+      ],
       "estimate_minutes": 240,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/T007-exchange-arch-spec",
-      "notes": "CRITICAL PATH"
+      "notes": "CRITICAL PATH",
+      "started_at": "2026-03-27T08:27:36Z",
+      "finished_at": "2026-03-27T08:37:10Z"
     },
     {
       "id": "T008",
@@ -115,12 +185,18 @@
       "description": "Implement the core matching engine in Go. Price-time priority CLOB. Sub-50ms latency target at 10,000 orders/sec. Direct pod-to-pod comms (bypass Istio sidecar). Append-only trade writes.",
       "agent_role": "builder",
       "phase": 1,
-      "dependencies": ["T007"],
-      "blockedBy": ["T007"],
+      "dependencies": [
+        "T007"
+      ],
+      "blockedBy": [
+        "T007"
+      ],
       "estimate_minutes": 480,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/T008-matching-engine",
-      "notes": "HIGH RISK — performance critical"
+      "notes": "HIGH RISK — performance critical",
+      "started_at": "2026-03-27T08:38:38Z",
+      "finished_at": "2026-03-27T08:59:41Z"
     },
     {
       "id": "T015",
@@ -131,8 +207,10 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 180,
-      "status": "pending",
-      "worktree_branch": "feature/T015-kyc-aml-spec"
+      "status": "done",
+      "worktree_branch": "feature/T015-kyc-aml-spec",
+      "finished_at": "2026-03-27T09:08:35Z",
+      "started_at": "2026-03-27T09:00:46Z"
     },
     {
       "id": "T027",
@@ -140,12 +218,19 @@
       "description": "Build clearing engine for trade novation, position management, and netting. Part of highest-risk seam (T027→T028→T029).",
       "agent_role": "builder",
       "phase": 4,
-      "dependencies": ["T007", "T008"],
-      "blockedBy": ["T008"],
+      "dependencies": [
+        "T007",
+        "T008"
+      ],
+      "blockedBy": [
+        "T008"
+      ],
       "estimate_minutes": 480,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/T027-clearing-engine",
-      "notes": "HIGHEST-RISK SEAM start"
+      "notes": "HIGHEST-RISK SEAM start",
+      "started_at": "2026-03-27T09:09:34Z",
+      "finished_at": "2026-03-27T09:18:02Z"
     },
     {
       "id": "T028",
@@ -153,12 +238,18 @@
       "description": "Implement SPAN-style margin model for commodity futures. Real-time margin calculation, margin call generation.",
       "agent_role": "builder",
       "phase": 4,
-      "dependencies": ["T027"],
-      "blockedBy": ["T027"],
+      "dependencies": [
+        "T027"
+      ],
+      "blockedBy": [
+        "T027"
+      ],
       "estimate_minutes": 360,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/T028-span-margin",
-      "notes": "HIGHEST-RISK SEAM middle"
+      "notes": "HIGHEST-RISK SEAM middle",
+      "started_at": "2026-03-27T09:19:05Z",
+      "finished_at": "2026-03-27T09:27:36Z"
     },
     {
       "id": "T029",
@@ -166,12 +257,308 @@
       "description": "Implement daily mark-to-market settlement cycle. Position valuation, P&L calculation, settlement instruction generation, payment gateway integration.",
       "agent_role": "builder",
       "phase": 4,
-      "dependencies": ["T028"],
-      "blockedBy": ["T028"],
+      "dependencies": [
+        "T028"
+      ],
+      "blockedBy": [
+        "T028"
+      ],
       "estimate_minutes": 360,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/T029-daily-settlement",
-      "notes": "HIGHEST-RISK SEAM end"
+      "notes": "HIGHEST-RISK SEAM end",
+      "started_at": "2026-03-27T09:29:05Z",
+      "finished_at": "2026-03-27T09:43:58Z"
+    },
+    {
+      "id": "T031",
+      "title": "Rework EKS+Istio — Fix 3 Reviewer Bugs",
+      "description": "Rework T003 (EKS Cluster + Istio Service Mesh) fixing the 3 bugs identified in handoff/T003-review.md:\n\n1. **Duplicate YAML key in `deploy/helm/istio/values-istiod.yaml`**: `meshConfig.defaultConfig` appears twice. Merge into one block so `holdApplicationUntilProxyStarts: true` is preserved alongside `tracing` config.\n2. **DestinationRule host mismatch in `deploy/k8s/base/istio-mtls.yaml`**: Change `host: \"*.local\"` to `host: \"*.svc.cluster.local\"` for correct in-mesh service matching.\n3. **`node_groups` variable type in `variables.tf`**: Add optional `labels` and `taints` fields to match actual usage in `local.default_node_groups`.\n\nAlso add a YAML lint validation step to the test suite per reviewer suggestion. Read handoff/T003-review.md for full context. Branch from existing feature/T003-eks-istio work.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": [
+        "T002",
+        "T003"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T031-eks-istio-rework",
+      "started_at": "2026-03-28T13:10:42Z",
+      "finished_at": "2026-03-28T13:13:49Z"
+    },
+    {
+      "id": "T032",
+      "title": "Compliance Service (KYC/AML)",
+      "description": "Implement compliance-service as a zero-dependency Go module at `src/compliance-service/`. Follow the T015 KYC/AML spec (read handoff/T015-review.md and the spec artifacts). Ports: gRPC 50056, health HTTP 8086.\n\nFeatures from T015 spec:\n- Participant onboarding workflow (PENDING → DOCUMENTS_SUBMITTED → UNDER_REVIEW → APPROVED/REJECTED)\n- Document verification service (ID, proof of address, business registration)\n- Watchlist screening (sanctions, PEP, adverse media) with configurable providers\n- Risk scoring engine (low/medium/high/critical tiers)\n- Ongoing monitoring and periodic re-screening\n- gRPC API: CreateApplication, SubmitDocuments, RunScreening, GetRiskScore, ApproveParticipant\n- SQL migrations for compliance schema (participants, documents, screenings, risk_scores)\n\nFollow zero-dep Go module pattern (copy Decimal type if needed). Use `cmd/`, `internal/`, `pkg/` layout. Include unit tests targeting 60%+ coverage on business logic. Write handoff/T032.md on completion.",
+      "agent_role": "builder",
+      "phase": 5,
+      "dependencies": [
+        "T015",
+        "T004"
+      ],
+      "blockedBy": [
+        "T015"
+      ],
+      "estimate_minutes": 25,
+      "status": "done",
+      "worktree_branch": "feature/T032-compliance-service",
+      "started_at": "2026-03-28T13:10:42Z",
+      "finished_at": "2026-03-28T13:17:56Z"
+    },
+    {
+      "id": "T033",
+      "title": "API Gateway Architecture Spec",
+      "description": "Design the API gateway service that provides REST→gRPC translation for all exchange engines. Produce spec doc + API contracts.\n\nScope:\n- REST API design for all existing gRPC services: matching-engine (50051), clearing-engine (50052), margin-engine (50053), settlement-engine (50054), auth-service (50055), compliance-service (50056)\n- HTTP port 8080 for all REST endpoints\n- Authentication middleware (JWT validation via auth-service)\n- Rate limiting design (per-user, per-endpoint)\n- Request/response mapping (REST JSON ↔ gRPC protobuf)\n- WebSocket support for real-time order book and trade streams\n- API versioning strategy (v1 prefix)\n- OpenAPI 3.0 spec for all endpoints\n- Error code mapping (gRPC status codes → HTTP status codes)\n\nOutput: architecture doc at `docs/T033_gateway_spec.md`, OpenAPI skeleton, endpoint mapping table. Write handoff/T033.md on completion.",
+      "agent_role": "architect",
+      "phase": 2,
+      "dependencies": [
+        "T007",
+        "T008"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T033-gateway-spec",
+      "started_at": "2026-03-28T13:10:42Z",
+      "finished_at": "2026-03-28T13:17:31Z"
+    },
+    {
+      "id": "T034",
+      "title": "API Gateway Service",
+      "description": "Implement the API gateway as a zero-dependency Go module at `src/gateway/`. Port: HTTP 8080. Read handoff/T033.md for the spec.\n\nFeatures:\n- REST→gRPC translation layer for all exchange services\n- JWT authentication middleware (validate tokens, extract claims, enforce RBAC)\n- Endpoint routing: POST /v1/orders → matching-engine, GET /v1/positions → clearing-engine, GET /v1/margin → margin-engine, POST /v1/settlement → settlement-engine, POST /v1/auth/* → auth-service, POST /v1/compliance/* → compliance-service\n- Request validation and JSON→protobuf marshaling\n- gRPC client connection pool management\n- Rate limiting (token bucket per API key)\n- WebSocket upgrade for /v1/ws/orderbook and /v1/ws/trades\n- Health check at /healthz\n- Structured JSON logging\n- Graceful shutdown\n\nFollow zero-dep Go module pattern. Use `cmd/`, `internal/`, `pkg/` layout. Include unit tests for routing, auth middleware, and request translation. Write handoff/T034.md on completion.",
+      "agent_role": "builder",
+      "phase": 2,
+      "dependencies": [
+        "T033",
+        "T005"
+      ],
+      "blockedBy": [
+        "T033"
+      ],
+      "estimate_minutes": 25,
+      "status": "done",
+      "worktree_branch": "feature/T034-gateway-service",
+      "started_at": "2026-03-28T13:19:45Z",
+      "finished_at": "2026-03-28T13:28:48Z"
+    },
+    {
+      "id": "T035",
+      "title": "Market Data Service Architecture Spec",
+      "description": "Design the market-data-service for OHLCV aggregation from trade streams. Produce spec doc + API contracts.\n\nScope:\n- OHLCV (Open/High/Low/Close/Volume) candle aggregation from matching-engine trade stream\n- Time intervals: 1m, 5m, 15m, 1h, 4h, 1d\n- TimescaleDB continuous aggregates for efficient historical queries\n- Real-time streaming via gRPC server-side streaming and WebSocket\n- Ticker/summary endpoint (last price, 24h change, 24h volume, bid/ask)\n- Trade tape (recent trades list)\n- gRPC API: GetCandles, StreamCandles, GetTicker, GetTrades, StreamTrades\n- SQL migrations for market_data schema (trades hypertable, OHLCV continuous aggregates)\n- Data retention policy (tick data 90 days, 1m candles 1 year, daily candles indefinite)\n\nPorts: gRPC 50057, health HTTP 8087. Output: spec doc at `docs/T035_market_data_spec.md`. Write handoff/T035.md on completion.",
+      "agent_role": "architect",
+      "phase": 6,
+      "dependencies": [
+        "T007",
+        "T008"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T035-market-data-spec",
+      "started_at": "2026-03-28T13:19:45Z",
+      "finished_at": "2026-03-28T13:25:23Z"
+    },
+    {
+      "id": "T036",
+      "title": "Market Data Service",
+      "description": "Implement market-data-service as a zero-dependency Go module at `src/market-data-service/`. Ports: gRPC 50057, health HTTP 8087. Read handoff/T035.md for the spec.\n\nFeatures:\n- Trade ingestion from matching-engine (gRPC client or in-process channel)\n- OHLCV candle aggregation engine (1m, 5m, 15m, 1h, 4h, 1d intervals)\n- TimescaleDB continuous aggregate DDL generation\n- In-memory candle builder with periodic flush to DB\n- gRPC server-side streaming for real-time candle and trade updates\n- Historical candle query with time range and interval selection\n- Ticker/summary computation (last, 24h high/low, 24h volume, 24h change %)\n- Trade tape (last N trades per instrument)\n- Data retention policy enforcement\n- Health check endpoint\n\nFollow zero-dep Go module pattern. Use `cmd/`, `internal/`, `pkg/` layout. Include unit tests for candle aggregation logic (60%+ coverage on business logic). Write handoff/T036.md on completion.",
+      "agent_role": "builder",
+      "phase": 6,
+      "dependencies": [
+        "T035",
+        "T008"
+      ],
+      "blockedBy": [
+        "T035"
+      ],
+      "estimate_minutes": 25,
+      "status": "done",
+      "worktree_branch": "feature/T036-market-data-service",
+      "started_at": "2026-03-28T13:31:17Z",
+      "finished_at": "2026-03-28T13:37:57Z"
+    },
+    {
+      "id": "T037",
+      "title": "Warehouse Service Architecture Spec",
+      "description": "Design the warehouse-service for physical commodity receipt management. Produce spec doc + API contracts.\n\nScope:\n- Electronic Warehouse Receipt (eWR) lifecycle: issuance, transfer, cancellation, delivery\n- Warehouse/storage facility registry with capacity tracking\n- Commodity inventory management (quantity, grade, location, lot tracking)\n- Delivery instruction processing (delivery vs cash settlement)\n- Quality inspection and grading workflow\n- Receipt collateralization (pledge/release for margin)\n- gRPC API: IssueReceipt, TransferReceipt, CancelReceipt, InitiateDelivery, CompleteDelivery, GetInventory, PledgeReceipt, ReleaseReceipt\n- SQL migrations for warehouse schema (receipts, facilities, inventory, deliveries, inspections)\n- Integration points with clearing-engine (delivery obligations) and margin-engine (collateral)\n\nPorts: gRPC 50058, health HTTP 8088. Output: spec doc at `docs/T037_warehouse_spec.md`. Write handoff/T037.md on completion.",
+      "agent_role": "architect",
+      "phase": 3,
+      "dependencies": [
+        "T004"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T037-warehouse-spec",
+      "started_at": "2026-03-28T13:19:45Z",
+      "finished_at": "2026-03-28T13:26:18Z"
+    },
+    {
+      "id": "T038",
+      "title": "Warehouse Service",
+      "description": "Implement warehouse-service as a zero-dependency Go module at `src/warehouse-service/`. Ports: gRPC 50058, health HTTP 8088. Read handoff/T037.md for the spec.\n\nFeatures:\n- eWR (Electronic Warehouse Receipt) management: issue, transfer, cancel with full audit trail\n- Warehouse facility registry (name, location, capacity, commodity types accepted)\n- Commodity inventory tracking (quantity, grade, lot number, storage location)\n- Delivery workflow: initiate → inspect → approve → complete/reject\n- Quality grading system (grade definitions per commodity from T004 seed data)\n- Receipt collateralization: pledge receipt as margin collateral, release on margin call resolution\n- Receipt uniqueness enforcement (one active receipt per lot)\n- gRPC service implementation for all API endpoints\n- SQL repository layer with parameterized queries\n- Health check endpoint\n\nFollow zero-dep Go module pattern. Use `cmd/`, `internal/`, `pkg/` layout. Include unit tests for receipt lifecycle and delivery workflow (60%+ coverage on business logic). Write handoff/T038.md on completion.",
+      "agent_role": "builder",
+      "phase": 3,
+      "dependencies": [
+        "T037",
+        "T004"
+      ],
+      "blockedBy": [
+        "T037"
+      ],
+      "estimate_minutes": 25,
+      "status": "done",
+      "worktree_branch": "feature/T038-warehouse-service",
+      "started_at": "2026-03-28T13:31:17Z",
+      "finished_at": "2026-03-28T13:38:42Z"
+    },
+    {
+      "id": "T039",
+      "title": "Phase 3 Integration Test",
+      "description": "Run full integration test across all services built in Phase 3. Verify:\n- All Go modules compile: compliance-service, gateway, market-data-service, warehouse-service\n- All unit tests pass across all services (including Phase 1-2 services: matching-engine, clearing-engine, margin-engine, settlement-engine, auth-service)\n- Coverage meets floors: 60% for business-critical packages, 30% for infrastructure\n- No import cycles or dependency conflicts between modules\n- All Dockerfiles build successfully\n- EKS+Istio rework passes structural tests\n\nReport SKIP if no compilable code found (per learned pattern). Write handoff/integration-run-<timestamp>.md.",
+      "agent_role": "test_writer",
+      "phase": 3,
+      "dependencies": [
+        "T031",
+        "T032",
+        "T034",
+        "T036",
+        "T038"
+      ],
+      "blockedBy": [
+        "T031",
+        "T032",
+        "T034",
+        "T036",
+        "T038"
+      ],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T039-phase3-integration",
+      "started_at": "2026-03-28T13:40:04Z",
+      "finished_at": "2026-03-28T13:42:40Z"
+    },
+    {
+      "id": "T040",
+      "title": "Rebuild Auth Service",
+      "description": "Rebuild the auth service as a zero-dependency Go module at `src/auth-service/`. The previous T005 implementation was approved but never merged to main — src/auth-service/ currently contains only a stub Dockerfile. Read handoff/T005-review.md for the approved design.\n\nPorts: gRPC 50055, health HTTP 8085.\n\nFeatures (from T005 review):\n- JWT access/refresh tokens (HMAC signing, `AUTH_JWT_SIGNING_KEY` from env)\n- OAuth2 PKCE flow (S256 only — do NOT support plain method per reviewer suggestion)\n- RBAC with roles and permissions (super_admin, admin, trader, viewer, compliance_officer)\n- User registration with bcrypt password hashing (cost 12)\n- Login with account lockout (5 failed attempts, 30-minute duration)\n- API key management (create, validate, revoke) — keys stored as SHA-256 hashes\n- Session management (create, refresh, revoke)\n- Refresh token rotation (address the gap noted in T005 review: ExchangeCode must store refresh token hash on session)\n- SQL repository layer with parameterized queries (never string concatenation)\n- DB SSL mode defaults to `require`\n- HTTP handlers with input validation (required fields, minimum password length, email format)\n- Health check endpoint at /healthz\n- Graceful shutdown with signal handling\n- Dockerfile running as non-root user (appuser, UID 1000)\n\nFollow zero-dep Go module pattern. Use `cmd/`, `internal/`, `pkg/` layout. Include unit tests targeting 60%+ coverage on business logic (JWT, auth service, PKCE, handlers). Write handoff/T040.md on completion.",
+      "agent_role": "builder",
+      "phase": 0,
+      "dependencies": [
+        "T004",
+        "T005"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T040-auth-service-rebuild",
+      "started_at": "2026-03-28T13:53:43Z",
+      "finished_at": "2026-03-28T14:04:21Z",
+      "notes": "Merge failed due to untracked Dockerfile on main — manually resolved and merged"
+    },
+    {
+      "id": "T041",
+      "title": "Fix PostMortem Context Size Bug",
+      "description": "Fix the `build_postmortem_context` function in `pipeline/lib/context.sh` that concatenates ALL handoff files into a single shell variable, which is then passed as a `-p` argument to `claude`. By Phase 3, this exceeded the Linux ARG_MAX limit (~2MB), causing `Argument list too long` (E2BIG).\n\nFix approach: write the assembled postmortem prompt to a temp file, then pipe it via stdin to `claude` instead of passing as `-p` argument. Specifically:\n1. In `build_postmortem_context`, keep the prompt assembly logic as-is (it builds the correct content).\n2. In the caller (likely `pipeline/run.sh` or wherever `build_postmortem_context` is invoked), change from `claude -p \"$(build_postmortem_context)\"` to writing the output to a temp file and using stdin: `build_postmortem_context > \"$tmpfile\" && claude < \"$tmpfile\"`.\n3. Also consider only passing handoff files from the current run (filter by task IDs in tasks.json with status changes in this run) rather than ALL historical handoff files, to keep context focused.\n4. Clean up temp file on exit (trap).\n\nTest by verifying the postmortem prompt can be generated for the current project state (20+ handoff files) without hitting ARG_MAX. Write handoff/T041.md on completion.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T041-fix-postmortem-context",
+      "started_at": "2026-03-28T13:53:43Z",
+      "finished_at": "2026-03-28T13:57:15Z",
+      "notes": "Merge failed due to untracked pipeline/ files on main — manually resolved and merged"
+    },
+    {
+      "id": "T042",
+      "title": "Clean Up Service Naming Stubs",
+      "description": "Remove stub Dockerfile-only directories that conflict with actual service locations:\n\n1. Remove `src/clearing-service/` entirely (real code is at `src/clearing-engine/`). This directory only has a stub Dockerfile.\n2. Verify no other stub directories conflict: check each `src/*/` directory — if it contains only a Dockerfile and no Go source code, and a corresponding `-engine` or differently-named directory has the real code, remove the stub.\n3. Update any references to removed directories in docker-compose.yml, Makefile, CI configs (.github/workflows/), or Dockerfiles.\n4. Do NOT rename any directories that contain real code.\n\nExpected removals: `src/clearing-service/` (stub, real code at `src/clearing-engine/`). Verify `src/auth-service/` is kept (T040 will rebuild it with real code).\n\nWrite handoff/T042.md on completion.",
+      "agent_role": "devops",
+      "phase": 0,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 5,
+      "status": "done",
+      "worktree_branch": "feature/T042-cleanup-naming-stubs",
+      "started_at": "2026-03-28T13:53:43Z",
+      "finished_at": "2026-03-28T13:54:45Z"
+    },
+    {
+      "id": "T043",
+      "title": "Clearing Engine Test Coverage Improvement",
+      "description": "Improve test coverage on business-critical packages in `src/clearing-engine/`. Current coverage is far below the 60% floor:\n- `internal/novation/` — 23.7% → target 60%+\n- `internal/netting/` — 39.8% → target 60%+\n- `internal/engine/` — 32.8% → target 60%+\n\nRead the existing code and tests first. Add tests for uncovered paths:\n- **novation**: test multilateral novation, partial novation failures, CCP interposition edge cases, novation with different position types\n- **netting**: test bilateral netting, multilateral netting, netting with mixed buy/sell positions, netting calculation edge cases (zero positions, single position)\n- **engine**: test trade processing pipeline end-to-end, position updates after clearing, error handling for invalid trades, concurrent trade processing\n\nDo NOT modify existing production code — only add test files. Follow existing test patterns in the package. Use table-driven tests where appropriate. Target 60%+ coverage on each package, 80%+ on novation (financial-critical).\n\nWrite handoff/T043.md on completion with per-package coverage numbers.",
+      "agent_role": "test_writer",
+      "phase": 0,
+      "dependencies": [
+        "T027"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T043-clearing-engine-coverage",
+      "started_at": "2026-03-28T14:06:35Z",
+      "finished_at": "2026-03-28T14:13:23Z"
+    },
+    {
+      "id": "T044",
+      "title": "Margin Engine Test Coverage Improvement",
+      "description": "Improve test coverage on business-critical packages in `src/margin-engine/`. Current coverage is below the 60% floor:\n- `internal/scanner/` — 31.3% → target 60%+\n- `internal/engine/` — 32.4% → target 60%+\n\nRead the existing code and tests first. Add tests for uncovered paths:\n- **scanner**: test SPAN scanning across multiple scenarios, inter-commodity spread credits, delivery month charges, scanning with extreme price moves, scanning with no positions\n- **engine**: test margin calculation pipeline, margin call generation thresholds, margin requirement updates, initial vs maintenance margin transitions, error handling for missing market data\n\nDo NOT modify existing production code — only add test files. Follow existing test patterns in the package. Use table-driven tests where appropriate. Target 60%+ coverage on each package.\n\nWrite handoff/T044.md on completion with per-package coverage numbers.",
+      "agent_role": "test_writer",
+      "phase": 0,
+      "dependencies": [
+        "T028"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T044-margin-engine-coverage",
+      "started_at": "2026-03-28T14:06:35Z",
+      "finished_at": "2026-03-28T14:10:32Z"
+    },
+    {
+      "id": "T045",
+      "title": "Settlement Engine Test Coverage Improvement",
+      "description": "Improve test coverage on business-critical packages in `src/settlement-engine/`. Current coverage is below the 60% floor:\n- `internal/payment/` — 27.9% → target 60%+\n- `internal/pnl/` — 28.4% → target 60%+\n- `internal/valuation/` — 28.0% → target 60%+\n\nRead the existing code and tests first. Add tests for uncovered paths:\n- **payment**: test settlement instruction generation, payment netting, multi-currency settlement, payment failure handling, partial settlement scenarios\n- **pnl**: test daily P&L calculation, realized vs unrealized P&L, P&L with position changes during settlement window, edge cases (zero price, negative values)\n- **valuation**: test mark-to-market valuation, valuation with missing prices, valuation across different commodity types, settlement price determination\n\nDo NOT modify existing production code — only add test files. Follow existing test patterns in the package. Use table-driven tests where appropriate. Target 60%+ coverage on each package, 80%+ on pnl (financial-critical).\n\nWrite handoff/T045.md on completion with per-package coverage numbers.",
+      "agent_role": "test_writer",
+      "phase": 0,
+      "dependencies": [
+        "T029"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "done",
+      "worktree_branch": "feature/T045-settlement-engine-coverage",
+      "started_at": "2026-03-28T14:06:35Z",
+      "finished_at": "2026-03-28T14:10:08Z"
+    },
+    {
+      "id": "T046",
+      "title": "Phase Debt Integration Test",
+      "description": "Run full integration test after all Phase Debt tasks are complete. Verify:\n- Auth service (T040) compiles, all tests pass, 60%+ coverage on business logic\n- Clearing engine coverage improved (T043): novation 60%+, netting 60%+, engine 60%+\n- Margin engine coverage improved (T044): scanner 60%+, engine 60%+\n- Settlement engine coverage improved (T045): payment 60%+, pnl 60%+, valuation 60%+\n- PostMortem pipeline fix (T041): build_postmortem_context generates prompt without ARG_MAX error\n- Naming cleanup (T042): src/clearing-service/ removed, no broken references\n- All existing Phase 1-3 services still compile and pass tests (regression check)\n- No import cycles or dependency conflicts\n\nReport per-service and per-package coverage. Report SKIP if no compilable code found. Write handoff/integration-run-<timestamp>.md.",
+      "agent_role": "test_writer",
+      "phase": 0,
+      "dependencies": [
+        "T040",
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045"
+      ],
+      "blockedBy": [
+        "T040",
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045"
+      ],
+      "estimate_minutes": 5,
+      "status": "pending",
+      "worktree_branch": "feature/T046-phase-debt-integration"
     }
   ]
 }
