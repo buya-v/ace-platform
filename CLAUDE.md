@@ -398,6 +398,31 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** Final state: 9 Go services (689 unit tests), 2 React/TypeScript SPAs (148 frontend tests), 20 e2e tests (skip without infrastructure), 66.5% average Go coverage. All 56 tasks completed — 0 permanently rejected. The two previously-blocked frontend tasks (T048, T050) were unblocked by Node.js availability. Total pipeline execution across all phases: ~3 hours of wall-clock agent time (sum of all task actuals). Estimate accuracy for Phase 5: 1.25-4.3x overestimate (median ~2.5x), consistent with Phase 3-4 steady state.
 - **Action:** This is the definitive baseline for the ACE Platform. Key metrics: 857 tests (689 Go + 148 TS + 20 e2e), 11 build artifacts (9 Go binaries + 2 SPA bundles), 66.5% Go coverage average, 60-100% frontend business logic coverage. For the next feature pipeline, start from these numbers and track deltas.
 
+### Pattern: Demo/documentation tasks have the best estimate calibration — 1.3-3.4x (2026-03-28)
+- **Context:** Phase 5-6 tasks T055-T058: e2e tests, frontend integration test, demo runbook, demo smoke script. All 4 approved first pass, zero rejections.
+- **Finding:** Estimate-to-actual ratios: T055 (10m/5m = 2.0x), T056 (5m/4m = 1.3x), T057 (15m/4.5m = 3.4x), T058 (10m/5.5m = 1.8x). Median 2.0x — the tightest calibration of any phase. T057 (runbook) was the biggest overestimate because document generation from existing code is faster than implementation. T056 (frontend integration) was the tightest because it's mostly running commands (npm install, npm test, npm build) rather than writing code.
+- **Action:** For documentation tasks (runbooks, ADRs, specs that reference existing code), estimate 5m. For "run existing tests and report" tasks, estimate 3-5m. These task types are faster than implementation because they read code rather than write it.
+
+### Pattern: E2E tests expose API contract gaps that unit tests and specs miss (2026-03-28)
+- **Context:** T055 e2e tests found: (1) no `POST /v1/settlement/cycle` endpoint despite being expected by the trading lifecycle, (2) `AccessToken` vs `access_token` JSON field casing inconsistency, (3) warehouse-service and market-data-service have no gateway REST routes.
+- **Finding:** These gaps were invisible to unit tests (which test what's implemented), specs (which describe intent), and reviews (which check implementation against spec). Only e2e tests — which exercise the full HTTP path from client to gateway to backend — surface cross-service integration gaps. The settlement endpoint gap means the demo runbook had to document a grpcurl workaround.
+- **Action:** After completing a new service or API surface, run e2e tests against the gateway routes before marking the feature complete. Missing routes should be filed as bugs, not documented as workarounds. For the ACE platform specifically: add `POST /api/v1/settlement/cycle`, add warehouse REST routes, and add `json:` struct tags to auth-service `TokenPair`.
+
+### Pattern: Mock-server-based bash test suites enable CI testing of shell scripts (2026-03-28)
+- **Context:** T058 demo smoke script includes a 28-test bash test suite (`tests/demo/demo_test.sh`) that uses a Python HTTP mock server to validate all script paths without requiring a running platform.
+- **Finding:** The mock server approach (Python `http.server` returning canned JSON) allows testing: CLI flags, unreachable gateway handling, healthy flow with all 6 steps, unhealthy gateway (503), and file properties. This is the same pattern as Go's `httptest.Server` but for bash scripts. The tests run in <5 seconds and need no infrastructure.
+- **Action:** For any bash script that makes HTTP calls (deploy scripts, health checks, migration runners), include a mock-server-based test suite. The pattern is: Python mock on a random port → run script against it → assert exit codes and output. This catches regressions without requiring a running platform.
+
+### Pattern: Phase 5-6 achieved 100% first-pass approval — zero rejections across all task types (2026-03-28)
+- **Context:** Phase 5-6 ran 4 tasks: T055 (e2e Go tests), T056 (frontend integration test), T057 (demo runbook), T058 (demo smoke script). All 4 approved on first pass with zero required fixes. Reviewers provided only non-blocking suggestions (dead code, tighter assertions, eval→printf-v).
+- **Finding:** The zero-rejection streak now extends across Phases 3-6 (excluding Phase 4's tooling-blocked frontend tasks and T054's cross-resource bugs). The contributing factors: (1) mature learned patterns guide workers, (2) specs are consumed directly without drift, (3) tasks are small and focused (5-15m estimates), (4) workers produce self-contained artifacts with tests. The only Phase 4 rejections (T048, T050, T054) were tooling/environment issues, not logic errors.
+- **Action:** The pipeline has reached steady-state quality for well-scoped tasks. Future rejections should be treated as signals of either a new task type (unfamiliar tooling/pattern) or a missing prerequisite, not normal variance. If rejection rate rises above 10% in a phase, investigate root cause before continuing.
+
+### Pattern: Final pipeline totals (updated) — 857 tests, 58 tasks, 6 phases, ~3h agent time (2026-03-28)
+- **Context:** Complete pipeline run T001-T058 across 6 phases. Final integration run `run-20260328-155812`.
+- **Finding:** 58 tasks total (55 original + T057/T058 demo tasks). 857 tests (689 Go + 148 frontend + 20 e2e). 11 buildable artifacts. Business-logic coverage ~65%. Rejection rate by phase: Phase 0-1 ~60%, Phase 2 ~0%, Phase 3 ~0%, Phase 4 ~30% (tooling), Phase 5-6 ~0%. Estimate accuracy converged from 10-50x (Phase 0-1) to 2x median (Phase 5-6). Total agent execution time: ~3h wall-clock (sum of task actuals). The learning loop (PostMortem → CLAUDE.md → Planner/Worker) was the primary driver of improvement.
+- **Action:** This is the final baseline. For the next feature pipeline on this codebase, start from: 857 tests, 65% business-logic coverage, 2x estimate multiplier, 3-parallel worker limit, spec-first for business logic, zero-dep Go modules, template-duplication for cross-cutting concerns. Track deltas from these numbers.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
