@@ -21,7 +21,7 @@ export type DemoAction =
   | { type: 'TOGGLE_CHECKLIST_ITEM'; itemId: string };
 
 export const initialState: DemoState = {
-  gatewayUrl: 'http://localhost:8080',
+  gatewayUrl: 'https://ace.asla.mn',
   activeSectionId: 'env-setup',
   results: {},
   appState: {},
