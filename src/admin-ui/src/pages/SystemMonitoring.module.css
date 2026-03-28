@@ -1,0 +1,65 @@
+.overallBanner {
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.overallBanner[data-status="healthy"] {
+  background: #d4edda;
+  color: #155724;
+}
+
+.overallBanner[data-status="degraded"] {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.overallBanner[data-status="unhealthy"] {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.lastCheck {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.serviceName {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.statLabel {
+  color: #888;
+  display: inline-block;
+  width: 60px;
+}
