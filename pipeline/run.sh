@@ -184,16 +184,25 @@ run_postmortem() {
   log_section "Phase 4: PostMortem"
   log_info "Running PostMortem Agent..."
 
-  local context
-  context="$(build_postmortem_context)"
+  # Collect task IDs from this run (all non-pending tasks) for focused context.
+  local run_task_ids
+  run_task_ids="$(jq -r '.tasks[] | select(.status != "pending") | .id' "$TASKS_FILE")"
+
+  # build_postmortem_context writes to a temp file and returns its path.
+  # This avoids passing large context as a shell argument (ARG_MAX / E2BIG).
+  local context_file
+  # shellcheck disable=SC2086
+  context_file="$(build_postmortem_context $run_task_ids)"
+  trap 'rm -f "$context_file"' EXIT
 
   _claude -p \
     --append-system-prompt "$(cat "${PROJECT_ROOT}/pipeline/prompts/postmortem.md")" \
     --tools "Read,Write,Edit,Bash,Glob,Grep" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$BUDGET_PER_AGENT" \
-    "$context"
+    < "$context_file"
 
+  rm -f "$context_file"
   log_success "PostMortem complete — CLAUDE.md updated with learned patterns"
 }
 

@@ -178,20 +178,69 @@ PROMPT
 
 # ── PostMortem ───────────────────────────────────────────────────────
 
-build_postmortem_context() {
-  local all_handoffs=""
-  for f in "${HANDOFF_DIR}"/*.md; do
-    [ -f "$f" ] || continue
-    all_handoffs="${all_handoffs}
+# Collect handoff file contents, optionally filtered by task IDs.
+# Usage: _collect_handoffs [task_id ...]
+#   With no args: collects ALL handoff files (legacy behavior).
+#   With task IDs: collects only handoff and review files for those tasks,
+#                  plus any integration-*.md files.
+_collect_handoffs() {
+  local result=""
+  if [ $# -eq 0 ]; then
+    # No filter — collect all handoff files
+    for f in "${HANDOFF_DIR}"/*.md; do
+      [ -f "$f" ] || continue
+      result="${result}
 --- $(basename "$f") ---
 $(cat "$f")
 "
-  done
+    done
+  else
+    # Filtered — collect only files for specified task IDs + integration reports
+    local tid
+    for tid in "$@"; do
+      local hf="${HANDOFF_DIR}/${tid}.md"
+      if [ -f "$hf" ]; then
+        result="${result}
+--- $(basename "$hf") ---
+$(cat "$hf")
+"
+      fi
+      local rf="${HANDOFF_DIR}/${tid}-review.md"
+      if [ -f "$rf" ]; then
+        result="${result}
+--- $(basename "$rf") ---
+$(cat "$rf")
+"
+      fi
+    done
+    # Also include integration reports from this run
+    for f in "${HANDOFF_DIR}"/integration-*.md; do
+      [ -f "$f" ] || continue
+      result="${result}
+--- $(basename "$f") ---
+$(cat "$f")
+"
+    done
+  fi
+  printf '%s' "$result"
+}
+
+# Build postmortem context and write it to a temp file.
+# Usage: build_postmortem_context [task_id ...]
+#   With no args: includes ALL handoff files.
+#   With task IDs: includes only handoff files for those tasks.
+# Outputs the path to the temp file (caller must clean up).
+build_postmortem_context() {
+  local all_handoffs
+  all_handoffs="$(_collect_handoffs "$@")"
 
   local tasks_summary
   tasks_summary="$(jq -r '.tasks[] | "- \(.id) [\(.status)] \(.title) (est: \(.estimate_minutes)m, started: \(.started_at // "n/a"), finished: \(.finished_at // "n/a"))"' "$TASKS_FILE")"
 
-  cat <<PROMPT
+  local tmpfile
+  tmpfile="$(mktemp "${TMPDIR:-/tmp}/postmortem-context.XXXXXX")"
+
+  cat > "$tmpfile" <<PROMPT
 ## PostMortem Analysis
 
 ### All Handoff Files
@@ -210,4 +259,6 @@ Append findings to the "Learned Patterns" section of CLAUDE.md
 (between the LEARNED PATTERNS START and END comment markers).
 Then commit the updated CLAUDE.md.
 PROMPT
+
+  printf '%s' "$tmpfile"
 }
