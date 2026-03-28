@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package ace.marketdata.v1;
+
+option go_package = "github.com/ace-platform/market-data-service/proto/marketdata/v1;marketdatav1";
+
+import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum CandleInterval {
+  CANDLE_INTERVAL_UNSPECIFIED = 0;
+  CANDLE_INTERVAL_1M = 1;
+  CANDLE_INTERVAL_5M = 2;
+  CANDLE_INTERVAL_15M = 3;
+  CANDLE_INTERVAL_1H = 4;
+  CANDLE_INTERVAL_4H = 5;
+  CANDLE_INTERVAL_1D = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Market Data Aggregate Service
+// ---------------------------------------------------------------------------
+
+// MarketDataAggregateService provides aggregated market data derived from
+// the matching engine's trade stream. It produces OHLCV candles, ticker
+// summaries, and trade tape feeds.
+//
+// This service is separate from the matching engine's MarketDataService
+// (ace.exchange.v1), which provides raw order book snapshots and trade streams.
+service MarketDataAggregateService {
+  // Get historical OHLCV candles for an instrument.
+  rpc GetCandles(GetCandlesRequest) returns (GetCandlesResponse);
+
+  // Subscribe to real-time candle updates (server-side streaming).
+  // Sends the current in-progress candle immediately, then updates on every
+  // trade. Sends a heartbeat every 15 seconds if no trades occur.
+  rpc StreamCandles(StreamCandlesRequest) returns (stream CandleUpdate);
+
+  // Get ticker summary (last price, 24h stats, best bid/ask) for one instrument.
+  rpc GetTicker(GetTickerRequest) returns (Ticker);
+
+  // Get ticker summaries for multiple instruments.
+  rpc GetTickers(GetTickersRequest) returns (GetTickersResponse);
+
+  // Get recent trades for an instrument (trade tape), sorted newest first.
+  rpc GetTrades(GetTradesRequest) returns (GetTradesResponse);
+
+  // Subscribe to real-time trade events (server-side streaming).
+  // If since_sequence > 0, replays historical trades first then switches to live.
+  // Sends a heartbeat every 15 seconds if no trades occur.
+  rpc StreamTrades(StreamTradesRequest) returns (stream TradeStreamMessage);
+}
+
+// ---------------------------------------------------------------------------
+// Candle Messages
+// ---------------------------------------------------------------------------
+
+message Candle {
+  string instrument_id = 1;         // UUID
+  CandleInterval interval = 2;
+  google.protobuf.Timestamp bucket = 3;   // candle open time (bucket boundary)
+  string open = 4;                  // decimal string
+  string high = 5;                  // decimal string
+  string low = 6;                   // decimal string
+  string close = 7;                 // decimal string
+  uint64 volume = 8;                // total lots traded
+  int32 trade_count = 9;
+  string vwap = 10;                 // decimal string — volume-weighted avg price
+  string turnover = 11;             // decimal string — total trade value
+  bool is_closed = 12;              // true when the bucket is finalized
+  google.protobuf.Timestamp timestamp = 13;  // server time of this message
+}
+
+message GetCandlesRequest {
+  string instrument_id = 1;         // UUID — required
+  CandleInterval interval = 2;      // required
+  google.protobuf.Timestamp start_time = 3;  // inclusive — required
+  google.protobuf.Timestamp end_time = 4;    // exclusive — defaults to now
+  uint32 limit = 5;                 // max candles; default 500, max 5000
+  string cursor = 6;                // pagination cursor from previous response
+}
+
+message GetCandlesResponse {
+  repeated Candle candles = 1;
+  string next_cursor = 2;           // set if more candles exist
+}
+
+message StreamCandlesRequest {
+  string instrument_id = 1;         // UUID — required
+  CandleInterval interval = 2;      // required
+}
+
+// Wrapper for candle stream: either a candle update or a heartbeat.
+message CandleUpdate {
+  oneof payload {
+    Candle candle = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ticker Messages
+// ---------------------------------------------------------------------------
+
+message Ticker {
+  string instrument_id = 1;         // UUID
+  string symbol = 2;                // human-readable symbol (e.g. "WHT-HRW-2026M07-UB")
+  string last_price = 3;            // decimal string
+  string price_change_24h = 4;      // decimal string — absolute change
+  string price_change_pct_24h = 5;  // decimal string — percentage (e.g. "2.5000")
+  string high_24h = 6;              // decimal string
+  string low_24h = 7;               // decimal string
+  uint64 volume_24h = 8;            // total lots in last 24h
+  string turnover_24h = 9;          // decimal string — total value in last 24h
+  string best_bid = 10;             // decimal string — from order book
+  string best_ask = 11;             // decimal string — from order book
+  int64 open_interest = 12;         // from clearing engine (0 if unavailable)
+  google.protobuf.Timestamp last_trade_at = 13;
+  google.protobuf.Timestamp timestamp = 14;  // server time
+}
+
+message GetTickerRequest {
+  string instrument_id = 1;         // UUID — required
+}
+
+message GetTickersRequest {
+  repeated string instrument_ids = 1;  // UUIDs; empty = all active instruments
+}
+
+message GetTickersResponse {
+  repeated Ticker tickers = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Trade Messages
+// ---------------------------------------------------------------------------
+
+message TradeEvent {
+  string trade_id = 1;              // UUID
+  string instrument_id = 2;         // UUID
+  string price = 3;                 // decimal string
+  uint64 quantity = 4;              // lots
+  string trade_value = 5;           // decimal string
+  string aggressor_side = 6;        // "BUY" or "SELL"
+  string trade_type = 7;            // "CONTINUOUS", "AUCTION", "BLOCK", etc.
+  uint64 sequence_number = 8;       // monotonic sequence from matching engine
+  google.protobuf.Timestamp executed_at = 9;
+}
+
+message GetTradesRequest {
+  string instrument_id = 1;         // UUID — required
+  uint32 limit = 2;                 // max trades; default 100, max 1000
+  uint64 since_sequence = 3;        // return trades after this sequence number
+  google.protobuf.Timestamp start_time = 4;  // filter by time range
+  google.protobuf.Timestamp end_time = 5;
+}
+
+message GetTradesResponse {
+  repeated TradeEvent trades = 1;
+}
+
+message StreamTradesRequest {
+  string instrument_id = 1;         // UUID — required
+  uint64 since_sequence = 2;        // replay from this sequence; 0 = live only
+}
+
+// Wrapper for trade stream: either a trade event or a heartbeat.
+message TradeStreamMessage {
+  oneof payload {
+    TradeEvent trade = 1;
+    Heartbeat heartbeat = 2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Common Messages
+// ---------------------------------------------------------------------------
+
+// Heartbeat sent on streams when no data for 15 seconds.
+message Heartbeat {
+  google.protobuf.Timestamp timestamp = 1;
+}
