@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: settlement-engine
+  namespace: ace-exchange
+  labels:
+    app.kubernetes.io/name: settlement-engine
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: settlement-engine

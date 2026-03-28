@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: ace-services
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: auth-service
+  ports:
+    - name: grpc
+      port: 50055
+      targetPort: grpc
+      protocol: TCP
+    - name: health
+      port: 8085
+      targetPort: health
+      protocol: TCP

@@ -4,8 +4,158 @@ kind: Kustomization
 resources:
   - ../../base
 
+# Prod: 3 replicas, full resources, HPA + PDB enabled, engines get 2x resources
 patches:
-  # Production: on-demand only for exchange-core, no spot
+  # --- Engine deployments: 3 replicas, prod 2x resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (matching-engine,clearing-engine,margin-engine,settlement-engine)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "512Mi"
+            cpu: "400m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+
+  # --- Service deployments: 3 replicas, prod resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (auth-service,compliance-service,market-data-service,warehouse-service,gateway)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+  # --- UI deployments: 2 replicas, prod resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (web-ui,admin-ui)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+  # --- HPA: prod min/max ---
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  # --- PostgreSQL: prod storage + resources ---
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "4000m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "200Gi"
+
+  # --- Redis: prod resources ---
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+  # --- Kafka: prod 3 brokers, large storage ---
+  - target:
+      kind: StatefulSet
+      name: kafka
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "100Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/4/value
+        value: "3"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/5/value
+        value: "3"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/6/value
+        value: "2"
+
+  # --- Zookeeper: prod 3 replicas ---
+  - target:
+      kind: StatefulSet
+      name: zookeeper
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "20Gi"
+
+  # --- NodePool overrides for prod ---
   - target:
       kind: NodePool
       name: exchange-core-burst
@@ -17,7 +167,6 @@ patches:
         path: /spec/limits/memory
         value: 512Gi
 
-  # Production: larger limits for app-general
   - target:
       kind: NodePool
       name: app-general-burst

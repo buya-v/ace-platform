@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: margin-engine
+  namespace: ace-exchange
+  labels:
+    app.kubernetes.io/name: margin-engine
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: margin-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: margin-engine
+        app.kubernetes.io/part-of: ace-platform
+    spec:
+      serviceAccountName: margin-engine
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: margin-engine
+          image: ace-platform/margin-engine:latest
+          ports:
+            - name: grpc
+              containerPort: 50053
+              protocol: TCP
+            - name: health
+              containerPort: 8083
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: service-discovery
+            - secretRef:
+                name: ace-db-credentials
+            - secretRef:
+                name: ace-jwt-signing-key
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
