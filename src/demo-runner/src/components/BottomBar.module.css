@@ -1,0 +1,48 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #0f0f1e;
+  border-top: 1px solid #2a2a4a;
+}
+
+.runAll {
+  background: #2a6a2a;
+  color: #c0f0c0;
+  border: 1px solid #3a8a3a;
+  border-radius: 4px;
+  padding: 8px 24px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.runAll:hover:not(:disabled) {
+  background: #3a8a3a;
+}
+
+.runAll:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reset {
+  background: #3a2a2a;
+  color: #f0c0c0;
+  border: 1px solid #5a3a3a;
+  border-radius: 4px;
+  padding: 8px 24px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reset:hover:not(:disabled) {
+  background: #5a3a3a;
+}
+
+.reset:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

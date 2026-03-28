@@ -1,0 +1,48 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #0f0f1e;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.urlLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #888;
+  font-size: 13px;
+}
+
+.urlInput {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #e0e0f0;
+  padding: 6px 10px;
+  font-size: 13px;
+  width: 280px;
+  font-family: monospace;
+}
+
+.stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.passed {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.failed {
+  color: #f44336;
+  font-weight: 600;
+}
+
+.total {
+  color: #888;
+}

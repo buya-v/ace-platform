@@ -1,0 +1,42 @@
+.panel {
+  margin-top: 8px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.statusOk {
+  background: #1a3a1a;
+  color: #4caf50;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.statusErr {
+  background: #3a1a1a;
+  color: #f44336;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.time {
+  color: #888;
+  font-size: 12px;
+}
+
+.error {
+  color: #f44336;
+  font-size: 12px;
+}
+
+.body {
+  margin-top: 4px;
+}
