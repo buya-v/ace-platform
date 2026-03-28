@@ -694,10 +694,11 @@
       ],
       "blockedBy": [],
       "estimate_minutes": 10,
-      "status": "rejected",
+      "status": "done",
       "worktree_branch": "feature/T053-docker-compose-stack",
       "started_at": "2026-03-28T15:06:38Z",
-      "finished_at": "2026-03-28T15:11:21Z"
+      "finished_at": "2026-03-28T15:11:21Z",
+      "notes": "Merge failed due to untracked Dockerfiles on main — manually resolved"
     },
     {
       "id": "T054",
