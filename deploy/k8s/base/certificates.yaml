@@ -1,0 +1,60 @@
+---
+# ── Let's Encrypt ClusterIssuer (production) ────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@asla.mn
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+# ── Let's Encrypt ClusterIssuer (staging — for testing) ─────────────────────
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@asla.mn
+    privateKeySecretRef:
+      name: letsencrypt-staging-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+# ── Certificate for ace.asla.mn ─────────────────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ace-asla-mn-cert
+  namespace: ace
+spec:
+  secretName: ace-asla-mn-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - ace.asla.mn
+---
+# ── Certificate for demo.ace.asla.mn ────────────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: demo-ace-asla-mn-cert
+  namespace: ace
+spec:
+  secretName: demo-ace-asla-mn-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - demo.ace.asla.mn

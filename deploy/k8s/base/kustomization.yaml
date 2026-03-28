@@ -22,6 +22,9 @@ resources:
   # Frontend UIs
   - web-ui/
   - admin-ui/
+  # Ingress & TLS
+  - ingress.yaml
+  - certificates.yaml
   # Infrastructure
   - postgres/
   - redis/

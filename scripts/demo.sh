@@ -4,13 +4,13 @@
 # Exit 0 if all checks pass, exit 1 if any fail.
 #
 # Usage:
-#   GATEWAY_URL=http://localhost:8080 ./scripts/demo.sh
+#   GATEWAY_URL=https://ace.asla.mn ./scripts/demo.sh
 #   ./scripts/demo.sh --help
 
 set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────────────────────
-GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
+GATEWAY_URL="${GATEWAY_URL:-https://ace.asla.mn}"
 GATEWAY_URL="${GATEWAY_URL%/}"  # strip trailing slash
 CURL_TIMEOUT="${CURL_TIMEOUT:-10}"
 
@@ -44,7 +44,7 @@ Usage:
   ./scripts/demo.sh [--help]
 
 Environment variables:
-  GATEWAY_URL    Base URL of the ACE gateway (default: http://localhost:8080)
+  GATEWAY_URL    Base URL of the ACE gateway (default: https://ace.asla.mn)
   CURL_TIMEOUT   Timeout in seconds for HTTP calls (default: 10)
 
 Behaviour:

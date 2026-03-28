@@ -336,6 +336,72 @@ services:
     networks:
       - ace-network
 
+  # ─── Frontend UIs ──────────────────────────────────────────────────
+
+  web-ui:
+    build:
+      context: ./src/web-ui
+      dockerfile: Dockerfile
+    container_name: ace-web-ui
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
+
+  admin-ui:
+    build:
+      context: ./src/admin-ui
+      dockerfile: Dockerfile
+    container_name: ace-admin-ui
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
+
+  demo-runner:
+    build:
+      context: ./src/demo-runner
+      dockerfile: Dockerfile
+    container_name: ace-demo-runner
+    ports:
+      - "3002:3002"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
+
+  # ─── Reverse Proxy ────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: ace-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+      web-ui:
+        condition: service_healthy
+      admin-ui:
+        condition: service_healthy
+      demo-runner:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      <<: *healthcheck-http
+    networks:
+      - ace-network
+
 volumes:
   pgdata:
     driver: local

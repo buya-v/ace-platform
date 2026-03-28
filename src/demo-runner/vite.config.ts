@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3002,
     proxy: {
       '/api': {
-        target: process.env.VITE_GATEWAY_URL || 'http://localhost:8080',
+        target: process.env.VITE_GATEWAY_URL || 'https://ace.asla.mn',
         changeOrigin: true,
       },
     },

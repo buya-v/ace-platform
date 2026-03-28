@@ -27,7 +27,7 @@ const envSetup: Section = {
       title: 'Check Matching Engine Health',
       description: 'Verify the matching engine service is healthy',
       method: 'GET',
-      url: (state) => `${(state.directHost as string) || 'http://localhost'}:8081/healthz`,
+      url: (state) => `${(state.directHost as string) || 'https://ace.asla.mn'}:8081/healthz`,
       validateResponse: okValidator,
     },
     {
