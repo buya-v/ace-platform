@@ -1,7 +1,7 @@
 {
   "feature": "ACE Platform — Agriculture Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-03-28T14:13:23Z",
+  "last_updated": "2026-03-28T14:57:12Z",
   "phases": [
     {
       "id": 0,
@@ -557,8 +557,185 @@
         "T045"
       ],
       "estimate_minutes": 5,
+      "status": "done",
+      "worktree_branch": "feature/T046-phase-debt-integration",
+      "started_at": "2026-03-28T14:25:55Z",
+      "finished_at": "2026-03-28T14:29:05Z"
+    },
+    {
+      "id": "T047",
+      "title": "Trading Web UI Spec",
+      "description": "Design the trading web interface for the ACE commodity exchange. Produce a spec document at `docs/T047_trading_ui_spec.md`.\n\nScope:\n- React 18 + TypeScript + Vite SPA architecture\n- Component hierarchy and state management design (React Context + useReducer, NO Redux)\n- Real-time order book display via WebSocket (`/ws/book` from gateway)\n- Order entry form supporting order types: limit, market, IOC (Immediate-or-Cancel), FOK (Fill-or-Kill)\n- Trade history feed via WebSocket (`/ws/trades` from gateway)\n- Position summary view (from clearing-engine via gateway GET /v1/positions)\n- P&L display (from settlement-engine via gateway GET /v1/settlement/pnl)\n- Instrument selector for 14 commodities (from T004 seed data: wheat, corn, soybeans, rice, coffee, cocoa, sugar, cotton, palm oil, rubber, soybean meal, soybean oil, rapeseed, barley)\n- Candlestick chart component (OHLCV data from market-data-service via gateway GET /v1/market-data/candles)\n- Account balance and margin status display (from margin-engine via gateway GET /v1/margin)\n- JWT authentication flow: login page, token storage (memory, not localStorage), silent refresh, logout\n- Mobile-responsive layout (breakpoints: 768px tablet, 1024px desktop)\n- WebSocket reconnection strategy with exponential backoff\n- Error handling and loading states\n- Accessibility considerations (ARIA labels, keyboard navigation)\n\nDefine: page routes, component tree, WebSocket message formats, REST endpoint mapping, auth flow sequence diagram. Write handoff/T047.md on completion.",
+      "agent_role": "architect",
+      "phase": 7,
+      "dependencies": [
+        "T033",
+        "T034",
+        "T035",
+        "T036"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T047-trading-ui-spec",
+      "started_at": "2026-03-28T14:25:55Z",
+      "finished_at": "2026-03-28T14:31:14Z"
+    },
+    {
+      "id": "T048",
+      "title": "Trading Web UI Implementation",
+      "description": "Build the trading web UI as a React 18 + TypeScript + Vite SPA at `src/web-ui/`. Read handoff/T047.md for the spec.\n\nStack: React 18, TypeScript, Vite (build tool). Zero heavy dependencies — no Redux, no Material UI, no Tailwind. Use React Context + useReducer for state. Plain CSS modules for styling.\n\nFeatures:\n- **Auth**: Login page, JWT token management (store in memory, not localStorage), silent refresh via auth-service /v1/auth/refresh, logout, protected route wrapper\n- **Order Book**: Real-time display via WebSocket /ws/book, bid/ask columns, depth visualization, spread indicator\n- **Order Entry**: Form with instrument selector, side (buy/sell), order type (limit/market/IOC/FOK), quantity, price (for limit), POST to gateway /v1/orders\n- **Trade History**: Real-time trade feed via WebSocket /ws/trades, scrollable list with time/price/quantity/side\n- **Candlestick Chart**: OHLCV chart using lightweight canvas rendering (no charting library — implement a basic candlestick renderer or use a single lightweight lib like lightweight-charts), timeframe selector (1m/5m/15m/1h/4h/1d)\n- **Position Summary**: Table showing open positions per instrument, quantity, avg price, unrealized P&L\n- **Margin Status**: Account balance, initial margin, maintenance margin, available margin, margin utilization %\n- **Instrument Selector**: Dropdown/tabs for 14 commodities with last price and 24h change\n- **Layout**: Header (logo, instrument selector, account menu), main area (chart + order book + order entry), bottom panel (positions + trades + P&L). Mobile-responsive.\n- **WebSocket hooks**: useWebSocket custom hook with reconnection (exponential backoff), message parsing, connection status indicator\n- **Error handling**: Toast notifications for order submission results, connection status banner\n\nProject structure:\n```\nsrc/web-ui/\n  package.json\n  tsconfig.json\n  vite.config.ts\n  index.html\n  src/\n    main.tsx\n    App.tsx\n    contexts/     (AuthContext, MarketContext)\n    hooks/        (useWebSocket, useAuth, useOrders)\n    components/   (OrderBook, OrderEntry, TradeHistory, Chart, Positions, MarginStatus)\n    pages/        (Login, Trading, NotFound)\n    services/     (api.ts, ws.ts)\n    types/        (order.ts, trade.ts, instrument.ts)\n```\n\nInclude unit tests for hooks and reducers using Vitest. Target 60%+ coverage on business logic (order validation, WebSocket message parsing, auth token management). Write handoff/T048.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T047",
+        "T034",
+        "T040"
+      ],
+      "blockedBy": [
+        "T047"
+      ],
+      "estimate_minutes": 25,
+      "status": "rejected",
+      "worktree_branch": "feature/T048-trading-web-ui",
+      "started_at": "2026-03-28T14:32:30Z",
+      "finished_at": "2026-03-28T14:42:36Z"
+    },
+    {
+      "id": "T049",
+      "title": "Admin Dashboard Spec",
+      "description": "Design the admin dashboard interface for exchange operators. Produce a spec document at `docs/T049_admin_dashboard_spec.md`.\n\nScope:\n- React 18 + TypeScript + Vite SPA (same stack as trading UI)\n- Role-based access: `admin` role sees everything, `compliance_officer` sees only compliance sections (from auth-service RBAC)\n- Component hierarchy and state management (React Context + useReducer)\n\nFeatures to spec:\n- **Participant Management**: List all participants with KYC status, approve/reject KYC applications (via compliance-service /v1/compliance/applications), view participant details and documents\n- **System Monitoring**: Service health dashboard polling /healthz on all 9 services (matching-engine:8081, clearing-engine:8082, margin-engine:8083, settlement-engine:8084, auth-service:8085, compliance-service:8086, market-data-service:8087, warehouse-service:8088, gateway:8080). Show uptime, latency, last check time.\n- **Margin Call Overview**: Active margin calls list (from margin-engine), margin utilization by participant, trigger manual margin call\n- **Settlement Cycle Status**: Current settlement cycle phase, pending settlements, settlement history (from settlement-engine)\n- **Circuit Breaker Controls**: View/set price limits per instrument, halt/resume trading per instrument (via matching-engine admin endpoints)\n- **Warehouse Receipt Overview**: Receipt inventory, pending deliveries, warehouse capacity utilization (from warehouse-service)\n- **Compliance Alerts**: SAR (Suspicious Activity Report) queue, screening results, risk score distribution (from compliance-service)\n- **Audit Log**: Recent system events with filtering\n\nDefine: page routes, component tree, API endpoint mapping, role-permission matrix, polling intervals. Write handoff/T049.md on completion.",
+      "agent_role": "architect",
+      "phase": 7,
+      "dependencies": [
+        "T033",
+        "T034",
+        "T032"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T049-admin-dashboard-spec",
+      "started_at": "2026-03-28T14:25:55Z",
+      "finished_at": "2026-03-28T14:29:53Z"
+    },
+    {
+      "id": "T050",
+      "title": "Admin Dashboard Implementation",
+      "description": "Build the admin dashboard as a React 18 + TypeScript + Vite SPA at `src/admin-ui/`. Read handoff/T049.md for the spec.\n\nStack: React 18, TypeScript, Vite. Zero heavy dependencies. React Context + useReducer. Plain CSS modules.\n\nFeatures:\n- **Auth**: Login page with role check (only admin, compliance_officer), JWT token management (same pattern as trading UI), redirect non-admin users\n- **Participant Management**: Searchable/filterable participant list, KYC application detail view, approve/reject buttons with confirmation dialog, document viewer\n- **System Health**: Dashboard grid showing all 9 services with status (healthy/unhealthy/unknown), polling /healthz every 30s, latency display, last-checked timestamp\n- **Margin Calls**: Active margin calls table (participant, instrument, required amount, deadline), margin utilization bar charts, manual margin call trigger form\n- **Settlement Status**: Current cycle indicator (mark-to-market → netting → payment), pending settlement count, settlement history table with date/amount/status\n- **Circuit Breakers**: Per-instrument price limit config (upper/lower %), halt/resume toggle with confirmation, current status indicators\n- **Warehouse Overview**: Receipt count by commodity, warehouse capacity gauge charts, pending delivery queue, receipt search by ID\n- **Compliance Alerts**: SAR queue with priority sorting, screening result cards, risk distribution pie chart, alert acknowledge/escalate actions\n- **Navigation**: Sidebar nav with section icons, role-based menu filtering (compliance_officer sees only Participants + Compliance sections)\n\nProject structure:\n```\nsrc/admin-ui/\n  package.json\n  tsconfig.json\n  vite.config.ts\n  index.html\n  src/\n    main.tsx\n    App.tsx\n    contexts/     (AuthContext, AdminContext)\n    hooks/        (useAuth, useHealthCheck, usePolling)\n    components/   (ParticipantList, ServiceHealth, MarginCalls, SettlementStatus, CircuitBreakers, WarehouseOverview, ComplianceAlerts)\n    pages/        (Login, Dashboard, Participants, Monitoring, Margins, Settlements, Warehouse, Compliance)\n    services/     (api.ts)\n    types/        (participant.ts, margin.ts, settlement.ts, warehouse.ts)\n```\n\nInclude unit tests using Vitest. Target 60%+ coverage on business logic (role filtering, health polling, data transformation). Write handoff/T050.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T049",
+        "T034",
+        "T040"
+      ],
+      "blockedBy": [
+        "T049"
+      ],
+      "estimate_minutes": 25,
+      "status": "rejected",
+      "worktree_branch": "feature/T050-admin-dashboard",
+      "started_at": "2026-03-28T14:32:30Z",
+      "finished_at": "2026-03-28T14:43:50Z"
+    },
+    {
+      "id": "T051",
+      "title": "Kafka Event Wiring Spec",
+      "description": "Design the event-driven integration between all ACE platform services using Kafka. Produce a spec document at `docs/T051_kafka_event_spec.md`.\n\nScope:\n- **Topic naming convention**: `ace.{domain}.{event-type}` (e.g., `ace.trades.executed`, `ace.clearing.novated`)\n- **Key event flows**:\n  1. matching-engine → `ace.trades.executed` → clearing-engine (trade novation trigger)\n  2. clearing-engine → `ace.clearing.novated` → margin-engine (position update for margin recalc) + settlement-engine (settlement obligation)\n  3. margin-engine → `ace.margin.call-issued` → gateway (WebSocket push to trader) + compliance-service (risk monitoring)\n  4. settlement-engine → `ace.settlement.completed` → clearing-engine (position close) + market-data-service (settlement price)\n  5. compliance-service → `ace.compliance.status-changed` → auth-service (enable/disable trading) + gateway (notification)\n  6. market-data-service → `ace.market-data.trade-ingested` (internal, for candle aggregation)\n  7. warehouse-service → `ace.warehouse.receipt-pledged` → margin-engine (collateral update)\n  8. warehouse-service → `ace.warehouse.delivery-completed` → clearing-engine (delivery obligation fulfilled)\n  9. auth-service → `ace.auth.user-registered` → compliance-service (trigger KYC)\n\n- **Event schema registry**: Define JSON Schema for each event type (event envelope: id, type, timestamp, source, correlation_id, payload)\n- **Consumer group naming**: `{service-name}-{topic}` (e.g., `clearing-engine-ace.trades.executed`)\n- **Idempotency strategy**: Each consumer maintains processed event IDs (clearing-engine already has processedTrades map — extend pattern)\n- **Dead letter topics**: `ace.dlq.{original-topic}` for failed processing after 3 retries\n- **Partitioning strategy**: By instrument_id for trade/market events, by participant_id for compliance/auth events\n- **Retention**: 7 days for event topics, 30 days for DLQ topics\n\nOutput: event flow diagram, topic catalog with schemas, consumer group mapping, partition key table. Write handoff/T051.md on completion.",
+      "agent_role": "architect",
+      "phase": 8,
+      "dependencies": [
+        "T008",
+        "T027",
+        "T028",
+        "T029",
+        "T032",
+        "T034",
+        "T036",
+        "T038"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T051-kafka-event-spec",
+      "started_at": "2026-03-28T14:32:30Z",
+      "finished_at": "2026-03-28T14:36:16Z"
+    },
+    {
+      "id": "T052",
+      "title": "Kafka Event Wiring Implementation",
+      "description": "Implement Kafka producer/consumer adapters for each service. Read handoff/T051.md for the spec.\n\nPattern: Copy a `kafka` package into each service (zero-dep pattern — like the Decimal type). Each service gets its own `internal/kafka/` package with producer and consumer implementations.\n\nImplementation per service:\n- **matching-engine** (`src/matching-engine/internal/kafka/`): Producer for `ace.trades.executed` — publish after each trade match\n- **clearing-engine** (`src/clearing-engine/internal/kafka/`): Consumer for `ace.trades.executed`, Producer for `ace.clearing.novated` — extend existing processedTrades idempotency map\n- **margin-engine** (`src/margin-engine/internal/kafka/`): Consumer for `ace.clearing.novated` + `ace.warehouse.receipt-pledged`, Producer for `ace.margin.call-issued`\n- **settlement-engine** (`src/settlement-engine/internal/kafka/`): Consumer for `ace.clearing.novated`, Producer for `ace.settlement.completed`\n- **compliance-service** (`src/compliance-service/internal/kafka/`): Consumer for `ace.margin.call-issued` + `ace.auth.user-registered`, Producer for `ace.compliance.status-changed`\n- **market-data-service** (`src/market-data-service/internal/kafka/`): Consumer for `ace.trades.executed` + `ace.settlement.completed`\n- **warehouse-service** (`src/warehouse-service/internal/kafka/`): Producer for `ace.warehouse.receipt-pledged` + `ace.warehouse.delivery-completed`\n- **auth-service** (`src/auth-service/internal/kafka/`): Consumer for `ace.compliance.status-changed`, Producer for `ace.auth.user-registered`\n- **gateway** (`src/gateway/internal/kafka/`): Consumer for `ace.margin.call-issued` + `ace.compliance.status-changed` (push to WebSocket clients)\n\nShared kafka package template (copied per service):\n- `producer.go`: Kafka producer with JSON serialization, event envelope (id, type, timestamp, source, correlation_id, payload), retry with backoff\n- `consumer.go`: Kafka consumer with consumer group, JSON deserialization, idempotency check (processed event ID set), dead letter publishing after 3 retries\n- `config.go`: Broker addresses, topic names, consumer group config from environment variables\n- `producer_test.go`, `consumer_test.go`: Unit tests with mock Kafka (in-memory channel-based mock)\n\nIMPORTANT: Keep zero external dependencies. The kafka package uses Go's `net` package directly to implement the Kafka wire protocol (or provides an interface that can be backed by a real client at deployment). For unit tests, use in-memory channel mocks.\n\nTarget 60%+ coverage on the kafka package. Write handoff/T052.md on completion.",
+      "agent_role": "builder",
+      "phase": 8,
+      "dependencies": [
+        "T051"
+      ],
+      "blockedBy": [
+        "T051"
+      ],
+      "estimate_minutes": 25,
+      "status": "done",
+      "worktree_branch": "feature/T052-kafka-event-wiring",
+      "started_at": "2026-03-28T14:46:13Z",
+      "finished_at": "2026-03-28T14:54:34Z",
+      "notes": "Reviewer hit ARG_MAX — code was fine, manually merged"
+    },
+    {
+      "id": "T053",
+      "title": "Docker Compose Production Stack",
+      "description": "Create/update `docker-compose.yml` with all platform services and infrastructure for local development and integration testing.\n\nServices (9 application services):\n- matching-engine (build: src/matching-engine, ports: 50051:50051, 8081:8081)\n- clearing-engine (build: src/clearing-engine, ports: 50052:50052, 8082:8082)\n- margin-engine (build: src/margin-engine, ports: 50053:50053, 8083:8083)\n- settlement-engine (build: src/settlement-engine, ports: 50054:50054, 8084:8084)\n- auth-service (build: src/auth-service, ports: 50055:50055, 8085:8085)\n- compliance-service (build: src/compliance-service, ports: 50056:50056, 8086:8086)\n- market-data-service (build: src/market-data-service, ports: 50057:50057, 8087:8087)\n- warehouse-service (build: src/warehouse-service, ports: 50058:50058, 8088:8088)\n- gateway (build: src/gateway, ports: 8080:8080)\n- web-ui (build: src/web-ui, ports: 3000:3000)\n- admin-ui (build: src/admin-ui, ports: 3001:3001)\n\nInfrastructure services:\n- postgres (image: timescale/timescaledb:latest-pg15, port: 5432, volume: pgdata, init scripts from db/migrations/)\n- redis (image: redis:7-alpine, port: 6379)\n- kafka (image: confluentinc/cp-kafka:7.5.0, port: 9092, depends_on: zookeeper)\n- zookeeper (image: confluentinc/cp-zookeeper:7.5.0, port: 2181)\n\nRequirements:\n- Health checks on all services (curl /healthz or grpc_health_probe)\n- Dependency ordering: postgres → app services, kafka + zookeeper → app services, auth-service → gateway\n- Environment variables: DB connection strings, Kafka broker addresses, JWT signing key, service discovery (other service addresses)\n- Named volumes for postgres data and kafka data\n- Network: single `ace-network` bridge network\n- `.env.example` with all required environment variables documented\n\n`docker compose up` should bring the full platform up. Write handoff/T053.md on completion.",
+      "agent_role": "devops",
+      "phase": 8,
+      "dependencies": [
+        "T048",
+        "T050",
+        "T052"
+      ],
+      "blockedBy": [
+        "T048",
+        "T050",
+        "T052"
+      ],
+      "estimate_minutes": 15,
       "status": "pending",
-      "worktree_branch": "feature/T046-phase-debt-integration"
+      "worktree_branch": "feature/T053-docker-compose-stack"
+    },
+    {
+      "id": "T054",
+      "title": "Kubernetes Deployment Manifests",
+      "description": "Create Kubernetes manifests for all ACE platform services using Kustomize. Located at `deploy/k8s/`.\n\nStructure:\n```\ndeploy/k8s/\n  base/\n    namespace.yaml\n    matching-engine/    (deployment, service, hpa, pdb)\n    clearing-engine/\n    margin-engine/\n    settlement-engine/\n    auth-service/\n    compliance-service/\n    market-data-service/\n    warehouse-service/\n    gateway/\n    web-ui/\n    admin-ui/\n    postgres/           (statefulset, service, pvc)\n    redis/              (deployment, service)\n    kafka/              (statefulset, service, pvc)\n    zookeeper/          (statefulset, service, pvc)\n    kustomization.yaml\n  overlays/\n    dev/                (replicas: 1, resource limits: low, no HPA)\n    staging/            (replicas: 2, moderate resources, HPA)\n    prod/               (replicas: 3, full resources, HPA, PDB)\n    kustomization.yaml (each)\n```\n\nPer application service:\n- Deployment: container image, ports, env vars (from ConfigMap + Secret), readiness/liveness probes (/healthz), resource requests/limits\n- Service: ClusterIP, gRPC port + health port\n- HPA: min/max replicas, CPU/memory targets (prod overlay only)\n- PDB: maxUnavailable: 1 (prod overlay only)\n- ServiceAccount with IRSA annotation (from T002 Terraform outputs)\n\nResource limits per overlay:\n- dev: requests 64Mi/50m, limits 256Mi/200m\n- staging: requests 128Mi/100m, limits 512Mi/500m\n- prod: requests 256Mi/200m, limits 1Gi/1000m (engines get 2x)\n\nInfrastructure:\n- PostgreSQL StatefulSet with PVC (10Gi dev, 50Gi staging, 200Gi prod)\n- Redis Deployment (single replica dev/staging, sentinel for prod — just manifests, not full sentinel setup)\n- Kafka + Zookeeper StatefulSets with PVCs\n\nConfigMaps for service discovery (other service addresses within cluster). Secrets for JWT signing key, DB credentials (use placeholders, real values from external secret manager).\n\nWrite handoff/T054.md on completion.",
+      "agent_role": "devops",
+      "phase": 8,
+      "dependencies": [
+        "T002",
+        "T003"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 20,
+      "status": "rejected",
+      "worktree_branch": "feature/T054-k8s-manifests",
+      "started_at": "2026-03-28T14:46:13Z",
+      "finished_at": "2026-03-28T14:51:55Z"
+    },
+    {
+      "id": "T055",
+      "title": "End-to-End Integration Test",
+      "description": "Build and run an end-to-end integration test that exercises the full ACE platform flow. Located at `tests/e2e/`.\n\nTest flow (happy path):\n1. **Register user**: POST /v1/auth/register → create trader account\n2. **Login**: POST /v1/auth/login → get JWT token\n3. **KYC submit**: POST /v1/compliance/applications → submit KYC application\n4. **KYC approve**: POST /v1/compliance/applications/{id}/approve (as admin) → participant approved\n5. **Deposit collateral**: POST /v1/margin/deposit → fund margin account\n6. **Place buy order**: POST /v1/orders → limit buy order for WHEAT-2026-07\n7. **Place sell order**: POST /v1/orders (as second user) → limit sell order, should match\n8. **Verify trade**: GET /v1/trades → confirm trade executed\n9. **Verify clearing**: GET /v1/positions → confirm positions created via novation\n10. **Verify margin**: GET /v1/margin → confirm margin requirements updated\n11. **Trigger settlement**: POST /v1/settlement/cycle → run settlement cycle\n12. **Verify P&L**: GET /v1/settlement/pnl → confirm P&L calculated\n\nImplementation:\n- Write as Go test file(s) at `tests/e2e/e2e_test.go` using Go's `testing` package + `net/http` client\n- Tests require the full stack running (designed to run against docker-compose or k8s)\n- Base URL configurable via `E2E_BASE_URL` env var (default: `http://localhost:8080`)\n- Each test step validates HTTP status code and response body structure\n- Use test helpers for auth (login and attach JWT to subsequent requests)\n- Include negative tests: unauthorized access (no token), invalid order (bad instrument), insufficient margin\n- Test WebSocket connections: connect to /ws/book, verify order book updates arrive after order placement\n- Write results to `handoff/integration-run-<timestamp>.md`\n\nThis test validates that all services are wired correctly end-to-end through the gateway. It does NOT require Kafka (services communicate via gRPC through gateway for now). Write handoff/T055.md on completion.",
+      "agent_role": "test_writer",
+      "phase": 8,
+      "dependencies": [
+        "T048",
+        "T050",
+        "T052",
+        "T053"
+      ],
+      "blockedBy": [
+        "T053"
+      ],
+      "estimate_minutes": 15,
+      "status": "pending",
+      "worktree_branch": "feature/T055-e2e-integration-test"
     }
   ]
 }
