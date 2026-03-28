@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  # Production: on-demand only for exchange-core, no spot
+  - target:
+      kind: NodePool
+      name: exchange-core-burst
+    patch: |
+      - op: replace
+        path: /spec/limits/cpu
+        value: "256"
+      - op: replace
+        path: /spec/limits/memory
+        value: 512Gi
+
+  # Production: larger limits for app-general
+  - target:
+      kind: NodePool
+      name: app-general-burst
+    patch: |
+      - op: replace
+        path: /spec/limits/cpu
+        value: "512"
+      - op: replace
+        path: /spec/limits/memory
+        value: 1024Gi

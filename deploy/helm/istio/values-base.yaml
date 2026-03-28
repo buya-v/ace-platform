@@ -1,0 +1,4 @@
+# Istio Base chart values
+# Installed via: helm install istio-base istio/base -n istio-system
+global:
+  istioNamespace: istio-system

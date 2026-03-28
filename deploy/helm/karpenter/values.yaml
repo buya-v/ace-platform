@@ -1,0 +1,46 @@
+# Karpenter Helm values
+# Installed via: helm install karpenter oci://public.ecr.aws/karpenter/karpenter -n karpenter -f values.yaml
+#
+# Required overrides at install time (from Terraform outputs):
+#   --set settings.clusterName=<cluster_name>
+#   --set settings.clusterEndpoint=<cluster_endpoint>
+#   --set settings.interruptionQueue=<karpenter_interruption_queue_name>
+#   --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=<karpenter_controller_role_arn>
+
+replicas: 2
+
+serviceAccount:
+  create: true
+  name: karpenter
+  # IRSA annotation set via --set at install time
+  annotations: {}
+
+settings:
+  # Set via --set at install time
+  clusterName: ""
+  clusterEndpoint: ""
+  interruptionQueue: ""
+
+controller:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+nodeSelector:
+  ace-platform/node-role: system
+
+tolerations:
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: karpenter
