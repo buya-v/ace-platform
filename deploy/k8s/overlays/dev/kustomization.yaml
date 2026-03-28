@@ -4,8 +4,165 @@ kind: Kustomization
 resources:
   - ../../base
 
+# Dev: single replicas, low resources, no HPA, no PDB
 patches:
-  # Scale down for dev environment
+  # --- Remove HPA and PDB in dev ---
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: unused
+  - target:
+      kind: PodDisruptionBudget
+    patch: |
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: unused
+
+  # --- Engine deployments: 1 replica, dev resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (matching-engine,clearing-engine,margin-engine,settlement-engine)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+  # --- Service deployments: 1 replica, dev resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (auth-service,compliance-service,market-data-service,warehouse-service,gateway)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+  # --- UI deployments: 1 replica, minimal resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (web-ui,admin-ui)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+  # --- PostgreSQL: dev storage ---
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "10Gi"
+
+  # --- Redis: dev resources ---
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+  # --- Kafka: dev single broker, small storage ---
+  - target:
+      kind: StatefulSet
+      name: kafka
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "5Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/4/value
+        value: "1"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/5/value
+        value: "1"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/6/value
+        value: "1"
+
+  # --- Zookeeper: dev resources ---
+  - target:
+      kind: StatefulSet
+      name: zookeeper
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "2Gi"
+
+  # --- NodePool overrides for dev ---
   - target:
       kind: NodePool
       name: exchange-core-burst

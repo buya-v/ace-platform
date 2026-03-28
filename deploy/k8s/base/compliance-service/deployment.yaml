@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance-service
+  namespace: ace-services
+  labels:
+    app.kubernetes.io/name: compliance-service
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: compliance-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: compliance-service
+        app.kubernetes.io/part-of: ace-platform
+    spec:
+      serviceAccountName: compliance-service
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: compliance-service
+          image: ace-platform/compliance-service:latest
+          ports:
+            - name: grpc
+              containerPort: 50056
+              protocol: TCP
+            - name: health
+              containerPort: 8086
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: service-discovery
+            - secretRef:
+                name: ace-db-credentials
+            - secretRef:
+                name: ace-jwt-signing-key
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

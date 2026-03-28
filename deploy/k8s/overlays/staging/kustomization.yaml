@@ -3,3 +3,155 @@ kind: Kustomization
 
 resources:
   - ../../base
+
+# Staging: 2 replicas, moderate resources, HPA enabled, no PDB
+patches:
+  # --- Remove PDB in staging ---
+  - target:
+      kind: PodDisruptionBudget
+    patch: |
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: unused
+
+  # --- Engine deployments: 2 replicas, staging resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (matching-engine,clearing-engine,margin-engine,settlement-engine)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+  # --- Service deployments: 2 replicas, staging resources ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (auth-service,compliance-service,market-data-service,warehouse-service,gateway)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+  # --- UI deployments: 2 replicas ---
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (web-ui,admin-ui)
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+  # --- HPA: staging min/max ---
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+
+  # --- PostgreSQL: staging storage ---
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "50Gi"
+
+  # --- Redis: staging resources ---
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+  # --- Kafka: staging 2 brokers ---
+  - target:
+      kind: StatefulSet
+      name: kafka
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "25Gi"
+
+  # --- Zookeeper: staging resources ---
+  - target:
+      kind: StatefulSet
+      name: zookeeper
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: "10Gi"

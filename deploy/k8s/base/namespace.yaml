@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ace-exchange
+  labels:
+    istio-injection: enabled
+    app.kubernetes.io/part-of: ace-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ace-services
+  labels:
+    istio-injection: enabled
+    app.kubernetes.io/part-of: ace-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ace-infra
+  labels:
+    app.kubernetes.io/part-of: ace-platform

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clearing-engine
+  namespace: ace-exchange
+  labels:
+    app.kubernetes.io/name: clearing-engine
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clearing-engine
