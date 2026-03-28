@@ -7,7 +7,7 @@ import styles from './SystemMonitoring.module.css';
 export function SystemMonitoring() {
   const { data, lastUpdated } = usePolling(
     (signal) => fetchHealth(signal),
-    15000,
+    30000,
   );
 
   return (

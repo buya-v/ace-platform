@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { RoleGuard } from './components/RoleGuard';
 import { LoginPage } from './pages/Login';
 import { DashboardLayout } from './pages/DashboardLayout';
 import { DashboardHome } from './pages/DashboardHome';
@@ -13,6 +14,8 @@ import { WarehouseOverviewPage } from './pages/WarehouseOverview';
 import { ComplianceAlertsPage } from './pages/ComplianceAlerts';
 import { AuditLogPage } from './pages/AuditLog';
 
+const ADMIN_ROLES = ['admin', 'exchange_admin'];
+
 export function App() {
   return (
     <AuthProvider>
@@ -21,12 +24,16 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
-            <Route path="monitoring" element={<SystemMonitoring />} />
+            {/* Admin-only routes */}
+            <Route element={<RoleGuard allowedRoles={ADMIN_ROLES} />}>
+              <Route path="monitoring" element={<SystemMonitoring />} />
+              <Route path="margin" element={<MarginCallsPage />} />
+              <Route path="settlement" element={<SettlementStatusPage />} />
+              <Route path="circuit-breakers" element={<CircuitBreakersPage />} />
+              <Route path="warehouse" element={<WarehouseOverviewPage />} />
+            </Route>
+            {/* Admin + compliance routes */}
             <Route path="participants" element={<ParticipantsPage />} />
-            <Route path="margin" element={<MarginCallsPage />} />
-            <Route path="settlement" element={<SettlementStatusPage />} />
-            <Route path="circuit-breakers" element={<CircuitBreakersPage />} />
-            <Route path="warehouse" element={<WarehouseOverviewPage />} />
             <Route path="compliance" element={<ComplianceAlertsPage />} />
             <Route path="audit" element={<AuditLogPage />} />
           </Route>
