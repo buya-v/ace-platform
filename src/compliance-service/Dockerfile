@@ -1,0 +1,12 @@
+# ACE Platform — Compliance Service (Java/Kotlin)
+# Build: docker build -t ace-compliance-service ./src/compliance-service
+
+FROM eclipse-temurin:21-jdk AS builder
+WORKDIR /app
+COPY . .
+RUN ./gradlew bootJar --no-daemon
+
+FROM eclipse-temurin:21-jre
+COPY --from=builder /app/build/libs/*.jar /app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "/app.jar"]

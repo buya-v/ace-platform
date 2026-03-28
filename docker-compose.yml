@@ -1,0 +1,277 @@
+###############################################################################
+# ACE Platform — Local Development Environment
+#
+# Usage:
+#   docker compose up -d              # Start infrastructure services
+#   docker compose ps                 # Check service status
+#   docker compose logs -f ace-postgres  # Follow logs for a service
+#   docker compose down               # Stop all services
+#   docker compose down -v            # Stop and destroy volumes
+###############################################################################
+
+services:
+
+  # ── Infrastructure ───────────────────────────────────────────────────
+
+  ace-postgres:
+    image: postgres:15
+    container_name: ace-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ace_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ace_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ace_platform}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ace-pg-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ace_admin} -d ${POSTGRES_DB:-ace_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ace-net
+
+  ace-redis:
+    image: redis:7-alpine
+    container_name: ace-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ace-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - ace-net
+
+  ace-kafka:
+    image: apache/kafka:3.7.0
+    container_name: ace-kafka
+    environment:
+      # KRaft mode (built-in, no Zookeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@ace-kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Listeners
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://ace-kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Performance
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Cluster ID for KRaft
+      CLUSTER_ID: "ace-local-dev-cluster-001"
+    ports:
+      - "${KAFKA_PORT:-9094}:9094"
+    volumes:
+      - ace-kafka-data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - ace-net
+
+  ace-kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: ace-kafka-init
+    depends_on:
+      ace-kafka:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/docker/kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: ["/bin/bash", "/create-topics.sh"]
+    networks:
+      - ace-net
+
+  # ── Application Services ─────────────────────────────────────────────
+  # Uncomment as each service gets implemented.
+
+  # ace-matching-engine:
+  #   build:
+  #     context: ./src/matching-engine
+  #     dockerfile: Dockerfile
+  #   container_name: ace-matching-engine
+  #   ports:
+  #     - "50051:50051"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_exchange_svc
+  #     DB_PASSWORD: ${EXCHANGE_SVC_PASSWORD:-exchange_dev_pass}
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #     REDIS_URL: redis://ace-redis:6379
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-kafka:
+  #       condition: service_healthy
+  #     ace-redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-auth-service:
+  #   build:
+  #     context: ./src/auth-service
+  #     dockerfile: Dockerfile
+  #   container_name: ace-auth-service
+  #   ports:
+  #     - "8081:8080"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_auth_svc
+  #     DB_PASSWORD: ${AUTH_SVC_PASSWORD:-auth_dev_pass}
+  #     REDIS_URL: redis://ace-redis:6379
+  #     JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-clearing-service:
+  #   build:
+  #     context: ./src/clearing-service
+  #     dockerfile: Dockerfile
+  #   container_name: ace-clearing-service
+  #   ports:
+  #     - "8082:8080"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_clearing_svc
+  #     DB_PASSWORD: ${CLEARING_SVC_PASSWORD:-clearing_dev_pass}
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #     REDIS_URL: redis://ace-redis:6379
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-kafka:
+  #       condition: service_healthy
+  #     ace-redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-compliance-service:
+  #   build:
+  #     context: ./src/compliance-service
+  #     dockerfile: Dockerfile
+  #   container_name: ace-compliance-service
+  #   ports:
+  #     - "8083:8080"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_compliance_svc
+  #     DB_PASSWORD: ${COMPLIANCE_SVC_PASSWORD:-compliance_dev_pass}
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-warehouse-service:
+  #   build:
+  #     context: ./src/warehouse-service
+  #     dockerfile: Dockerfile
+  #   container_name: ace-warehouse-service
+  #   ports:
+  #     - "8084:8080"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_warehouse_svc
+  #     DB_PASSWORD: ${WAREHOUSE_SVC_PASSWORD:-warehouse_dev_pass}
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-kafka:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-market-data-service:
+  #   build:
+  #     context: ./src/market-data-service
+  #     dockerfile: Dockerfile
+  #   container_name: ace-market-data-service
+  #   ports:
+  #     - "8085:8080"
+  #     - "50052:50051"
+  #   environment:
+  #     DB_HOST: ace-postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-ace_platform}
+  #     DB_USER: ace_analytics_ro
+  #     DB_PASSWORD: ${ANALYTICS_SVC_PASSWORD:-analytics_dev_pass}
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #     REDIS_URL: redis://ace-redis:6379
+  #   depends_on:
+  #     ace-postgres:
+  #       condition: service_healthy
+  #     ace-kafka:
+  #       condition: service_healthy
+  #     ace-redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - ace-net
+
+  # ace-gateway:
+  #   build:
+  #     context: ./src/gateway
+  #     dockerfile: Dockerfile
+  #   container_name: ace-gateway
+  #   ports:
+  #     - "8080:8080"
+  #     - "9878:9878"
+  #   environment:
+  #     AUTH_SERVICE_URL: http://ace-auth-service:8080
+  #     MATCHING_ENGINE_URL: ace-matching-engine:50051
+  #     KAFKA_BOOTSTRAP_SERVERS: ace-kafka:9092
+  #   depends_on:
+  #     ace-auth-service:
+  #       condition: service_started
+  #     ace-matching-engine:
+  #       condition: service_started
+  #   networks:
+  #     - ace-net
+
+# ── Networks & Volumes ──────────────────────────────────────────────
+
+networks:
+  ace-net:
+    name: ace-net
+    driver: bridge
+
+volumes:
+  ace-pg-data:
+    name: ace-pg-data
+  ace-redis-data:
+    name: ace-redis-data
+  ace-kafka-data:
+    name: ace-kafka-data
