@@ -3,9 +3,30 @@ kind: Kustomization
 
 resources:
   - namespaces.yaml
+  - secrets.yaml
+  - service-discovery-configmap.yaml
   - istio-mtls.yaml
   - karpenter-nodepools.yaml
   - nodelocal-dnscache.yaml
+  # Exchange engines
+  - matching-engine/
+  - clearing-engine/
+  - margin-engine/
+  - settlement-engine/
+  # Supporting services
+  - auth-service/
+  - compliance-service/
+  - market-data-service/
+  - warehouse-service/
+  - gateway/
+  # Frontend UIs
+  - web-ui/
+  - admin-ui/
+  # Infrastructure
+  - postgres/
+  - redis/
+  - kafka/
+  - zookeeper/
 
 commonLabels:
   app.kubernetes.io/managed-by: ace-platform

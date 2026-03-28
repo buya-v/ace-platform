@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: warehouse-service
+  namespace: ace-services
+  labels:
+    app.kubernetes.io/name: warehouse-service
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: warehouse-service

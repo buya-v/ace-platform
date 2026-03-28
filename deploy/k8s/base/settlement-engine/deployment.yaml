@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: settlement-engine
+  namespace: ace-exchange
+  labels:
+    app.kubernetes.io/name: settlement-engine
+    app.kubernetes.io/part-of: ace-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: settlement-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: settlement-engine
+        app.kubernetes.io/part-of: ace-platform
+    spec:
+      serviceAccountName: settlement-engine
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: settlement-engine
+          image: ace-platform/settlement-engine:latest
+          ports:
+            - name: grpc
+              containerPort: 50054
+              protocol: TCP
+            - name: health
+              containerPort: 8084
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: service-discovery
+            - secretRef:
+                name: ace-db-credentials
+            - secretRef:
+                name: ace-jwt-signing-key
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
