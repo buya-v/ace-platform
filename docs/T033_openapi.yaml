@@ -1,0 +1,2221 @@
+openapi: "3.0.3"
+info:
+  title: ACE Platform API
+  description: |
+    REST API for the Agriculture Commodity Exchange of Mongolia.
+    This gateway translates REST/JSON requests to gRPC calls on backend exchange services.
+  version: "1.0.0"
+  contact:
+    name: ACE Platform Engineering
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.ace.mn/api/v1
+    description: Production
+  - url: https://staging-api.ace.mn/api/v1
+    description: Staging
+
+tags:
+  - name: Orders
+    description: Order submission, cancellation, modification, and queries
+  - name: Market Data
+    description: Order book snapshots and trade data
+  - name: Admin
+    description: Exchange administration (halt, resume, circuit breakers)
+  - name: Clearing
+    description: Position and netting queries
+  - name: Margin
+    description: Portfolio margin and margin calls
+  - name: Settlement
+    description: Daily settlement cycles
+  - name: Auth
+    description: Authentication and session management
+  - name: Participants
+    description: KYC onboarding and document management
+  - name: Screening
+    description: Watchlist screening and risk scores
+  - name: Compliance
+    description: Compliance administration, alerts, and SAR filing
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ─── Orders ───────────────────────────────────────────────────────────
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Submit a new order
+      operationId: submitOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitOrderRequest"
+      responses:
+        "201":
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    get:
+      tags: [Orders]
+      summary: List open orders
+      operationId: getOpenOrders
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: instrument_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: side
+          in: query
+          schema:
+            $ref: "#/components/schemas/Side"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Open orders list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenOrdersResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [Orders]
+      summary: Cancel all orders for an account
+      operationId: cancelAllOrders
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: instrument_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: side
+          in: query
+          schema:
+            $ref: "#/components/schemas/Side"
+      responses:
+        "200":
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelAllOrdersResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Get order details
+      operationId: getOrder
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Orders]
+      summary: Cancel an order
+      operationId: cancelOrder
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cancellation execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Orders]
+      summary: Modify an order (cancel-replace)
+      operationId: modifyOrder
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModifyOrderRequest"
+      responses:
+        "200":
+          description: Modification execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Market Data ──────────────────────────────────────────────────────
+  /instruments/{instrument_id}/book:
+    get:
+      tags: [Market Data]
+      summary: Get L2 order book snapshot
+      operationId: getOrderBook
+      security: []
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Order book snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderBookSnapshot"
+
+  /instruments/{instrument_id}/book/l3:
+    get:
+      tags: [Market Data]
+      summary: Get L3 order book (individual orders)
+      operationId: getOrderBookL3
+      security: []
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: L3 order book snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderBookSnapshotL3"
+
+  /instruments/{instrument_id}/trades/latest:
+    get:
+      tags: [Market Data]
+      summary: Get the most recent trade
+      operationId: getLastTrade
+      security: []
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Most recent trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  # ─── Admin ────────────────────────────────────────────────────────────
+  /admin/instruments/{instrument_id}/halt:
+    post:
+      tags: [Admin]
+      summary: Halt trading for an instrument
+      operationId: haltInstrument
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Halt confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HaltInstrumentResponse"
+
+  /admin/instruments/{instrument_id}/resume:
+    post:
+      tags: [Admin]
+      summary: Resume trading after halt
+      operationId: resumeInstrument
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trigger_auction:
+                  type: boolean
+                  default: true
+      responses:
+        "200":
+          description: Resume confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResumeInstrumentResponse"
+
+  /admin/trades/{trade_id}/bust:
+    post:
+      tags: [Admin]
+      summary: Bust an erroneous trade
+      operationId: bustTrade
+      parameters:
+        - name: trade_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Bust trade result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  /admin/instruments/{instrument_id}/circuit-breaker:
+    put:
+      tags: [Admin]
+      summary: Update circuit breaker configuration
+      operationId: setCircuitBreaker
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CircuitBreakerConfig"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CircuitBreakerConfig"
+
+  /admin/participants/{participant_id}/disable:
+    post:
+      tags: [Admin]
+      summary: Disable a participant from trading
+      operationId: disableParticipant
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Disable result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisableParticipantResponse"
+
+  /admin/mass-cancel:
+    post:
+      tags: [Admin]
+      summary: Mass cancel orders
+      operationId: massCancel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instrument_id:
+                  type: string
+                  format: uuid
+                participant_id:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Mass cancel result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled_count:
+                    type: integer
+
+  # ─── Clearing ─────────────────────────────────────────────────────────
+  /clearing/positions:
+    get:
+      tags: [Clearing]
+      summary: List positions for a participant
+      operationId: getPositions
+      parameters:
+        - name: participant_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Position list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Position"
+
+  /clearing/positions/{instrument_id}:
+    get:
+      tags: [Clearing]
+      summary: Get position for specific instrument
+      operationId: getPosition
+      parameters:
+        - name: instrument_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: participant_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Position details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Position"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /clearing/netting:
+    get:
+      tags: [Clearing]
+      summary: Get netting results
+      operationId: getNettingResults
+      responses:
+        "200":
+          description: Netting results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NettingResult"
+
+  # ─── Margin ───────────────────────────────────────────────────────────
+  /margin:
+    get:
+      tags: [Margin]
+      summary: Get portfolio margin for authenticated participant
+      operationId: getPortfolioMargin
+      parameters:
+        - name: participant_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+            description: Defaults to authenticated user's participant_id
+      responses:
+        "200":
+          description: Portfolio margin details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioMargin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /margin/calculate:
+    post:
+      tags: [Margin]
+      summary: Trigger margin calculation
+      operationId: calculateMargin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participant_id:
+                  type: string
+                  format: uuid
+              required: [participant_id]
+      responses:
+        "200":
+          description: Margin calculation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioMargin"
+
+  /margin/calls:
+    get:
+      tags: [Margin]
+      summary: List active margin calls
+      operationId: getActiveMarginCalls
+      responses:
+        "200":
+          description: Active margin calls
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MarginCall"
+
+  /margin/calls/stats:
+    get:
+      tags: [Margin]
+      summary: Margin call statistics
+      operationId: getMarginCallStats
+      responses:
+        "200":
+          description: Statistics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  # ─── Settlement ───────────────────────────────────────────────────────
+  /settlement/cycles:
+    get:
+      tags: [Settlement]
+      summary: List settlement cycles
+      operationId: getSettlementCycles
+      responses:
+        "200":
+          description: Settlement cycles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SettlementCycle"
+
+  /settlement/cycles/{cycle_id}:
+    get:
+      tags: [Settlement]
+      summary: Get settlement cycle details
+      operationId: getSettlementCycle
+      parameters:
+        - name: cycle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cycle details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementCycle"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─── Auth ─────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate and get JWT
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              required: [email, password]
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh an expired JWT
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+              required: [refresh_token]
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate session
+      operationId: logout
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a new account
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 12
+                full_name:
+                  type: string
+              required: [email, password, full_name]
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+        "409":
+          description: Email already registered
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      operationId: getProfile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /auth/password/change:
+    post:
+      tags: [Auth]
+      summary: Change password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 12
+              required: [current_password, new_password]
+      responses:
+        "204":
+          description: Password changed
+
+  /auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: Request password reset
+      operationId: requestPasswordReset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required: [email]
+      responses:
+        "202":
+          description: Reset email sent (if account exists)
+
+  # ─── Participants / KYC ───────────────────────────────────────────────
+  /participants:
+    post:
+      tags: [Participants]
+      summary: Submit KYC application
+      operationId: submitApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitApplicationRequest"
+      responses:
+        "201":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+    get:
+      tags: [Participants]
+      summary: List KYC applications
+      operationId: listApplications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [application_submitted, documents_pending, documents_uploaded, verification_in_progress, screening_in_progress, risk_scoring, manual_review, approved, rejected, suspended, expired]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [individual, corporate, cooperative, broker, institutional]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Application list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/KYCApplication"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /participants/{participant_id}:
+    get:
+      tags: [Participants]
+      summary: Get KYC application details
+      operationId: getApplication
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /participants/{participant_id}/documents:
+    post:
+      tags: [Participants]
+      summary: Upload a KYC document
+      operationId: uploadDocument
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document_type:
+                  type: string
+                  enum: [national_id, passport, proof_of_address, company_registration, beneficial_ownership, financial_statements, broker_license, board_resolution, tax_registration, cooperative_membership]
+                file:
+                  type: string
+                  format: binary
+              required: [document_type, file]
+      responses:
+        "201":
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+    get:
+      tags: [Participants]
+      summary: List documents for a participant
+      operationId: listDocuments
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Document list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Document"
+
+  /participants/{participant_id}/approve:
+    post:
+      tags: [Participants]
+      summary: Approve a KYC application
+      operationId: approveApplication
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Application approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+
+  /participants/{participant_id}/reject:
+    post:
+      tags: [Participants]
+      summary: Reject a KYC application
+      operationId: rejectApplication
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Application rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+
+  # ─── Screening ────────────────────────────────────────────────────────
+  /screening/check:
+    post:
+      tags: [Screening]
+      summary: Run watchlist screening
+      operationId: screenParticipant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                application_id:
+                  type: string
+                  format: uuid
+                participant_id:
+                  type: string
+                  format: uuid
+                force_rescreen:
+                  type: boolean
+                  default: false
+              required: [participant_id]
+      responses:
+        "200":
+          description: Screening result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningResult"
+
+  /screening/{screening_id}:
+    get:
+      tags: [Screening]
+      summary: Get screening result
+      operationId: getScreeningResult
+      parameters:
+        - name: screening_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Screening result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningResult"
+
+  /screening/batch:
+    post:
+      tags: [Screening]
+      summary: Batch screening
+      operationId: batchScreen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participant_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                reason:
+                  type: string
+              required: [participant_ids]
+      responses:
+        "200":
+          description: Batch screening summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchScreenResponse"
+
+  /screening/{screening_id}/resolve:
+    post:
+      tags: [Screening]
+      summary: Resolve a screening match
+      operationId: resolveMatch
+      parameters:
+        - name: screening_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                match_id:
+                  type: string
+                  format: uuid
+                is_true_match:
+                  type: boolean
+                resolution_notes:
+                  type: string
+              required: [match_id, is_true_match]
+      responses:
+        "200":
+          description: Match resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScreeningMatch"
+
+  /risk-scores/{participant_id}:
+    get:
+      tags: [Screening]
+      summary: Get risk score for a participant
+      operationId: getRiskScore
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Risk score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskScore"
+
+  # ─── Compliance Admin ─────────────────────────────────────────────────
+  /compliance/alerts:
+    get:
+      tags: [Compliance]
+      summary: List monitoring alerts
+      operationId: listAlerts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, under_review, resolved_false_positive, resolved_confirmed, sar_filed]
+        - name: participant_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MonitoringAlert"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /compliance/alerts/{alert_id}/resolve:
+    post:
+      tags: [Compliance]
+      summary: Resolve an alert
+      operationId: resolveAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution:
+                  type: string
+                  enum: [resolved_false_positive, resolved_confirmed, sar_filed]
+                notes:
+                  type: string
+              required: [resolution]
+      responses:
+        "200":
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringAlert"
+
+  /compliance/audit-trail:
+    get:
+      tags: [Compliance]
+      summary: Get audit trail
+      operationId: getAuditTrail
+      parameters:
+        - name: participant_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEvent"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+
+  /compliance/sar:
+    post:
+      tags: [Compliance]
+      summary: File a Suspicious Activity Report
+      operationId: fileSAR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participant_id:
+                  type: string
+                  format: uuid
+                alert_id:
+                  type: string
+                  format: uuid
+                narrative:
+                  type: string
+                supporting_evidence:
+                  type: object
+              required: [participant_id, narrative]
+      responses:
+        "201":
+          description: SAR filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SARFiling"
+
+  /compliance/participants/{participant_id}/suspend:
+    post:
+      tags: [Compliance]
+      summary: Suspend a participant
+      operationId: suspendParticipant
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "200":
+          description: Participant suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+
+  /compliance/participants/{participant_id}/reinstate:
+    post:
+      tags: [Compliance]
+      summary: Reinstate a suspended participant
+      operationId: reinstateParticipant
+      parameters:
+        - name: participant_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Participant reinstated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KYCApplication"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+        description: Opaque pagination cursor
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # ─── Common ───────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  reason:
+                    type: string
+            request_id:
+              type: string
+          required: [code, message]
+
+    Pagination:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+
+    Side:
+      type: string
+      enum: [buy, sell]
+
+    # ─── Orders ───────────────────────────────────────────────────────
+    SubmitOrderRequest:
+      type: object
+      properties:
+        client_order_id:
+          type: string
+        instrument_id:
+          type: string
+          format: uuid
+        side:
+          $ref: "#/components/schemas/Side"
+        order_type:
+          type: string
+          enum: [limit, market, stop_limit, stop_market]
+        time_in_force:
+          type: string
+          enum: [day, gtc, gtd, ioc, fok]
+          default: day
+        price:
+          type: string
+          description: Decimal string, required for limit orders
+        stop_price:
+          type: string
+          description: Decimal string, required for stop orders
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantity in lots
+        expire_at:
+          type: string
+          format: date-time
+          description: Required for GTD orders
+        stp_mode:
+          type: string
+          enum: [cancel_newest, cancel_oldest, cancel_both]
+          default: cancel_newest
+      required: [instrument_id, side, order_type, quantity]
+
+    ExecutionReport:
+      type: object
+      properties:
+        exec_id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        client_order_id:
+          type: string
+        exec_type:
+          type: string
+          enum: [new, partial_fill, fill, cancelled, rejected, expired, trade_bust]
+        order_status:
+          type: string
+          enum: [new, partially_filled, filled, cancelled, rejected, expired, pending_new]
+        side:
+          $ref: "#/components/schemas/Side"
+        instrument_id:
+          type: string
+          format: uuid
+        price:
+          type: string
+        quantity:
+          type: integer
+        last_qty:
+          type: integer
+        last_price:
+          type: string
+        cumulative_qty:
+          type: integer
+        leaves_qty:
+          type: integer
+        trade_id:
+          type: string
+          format: uuid
+        transact_time:
+          type: string
+          format: date-time
+        reject_reason:
+          type: string
+        account_id:
+          type: string
+          format: uuid
+
+    OrderDetail:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        client_order_id:
+          type: string
+        instrument_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        side:
+          $ref: "#/components/schemas/Side"
+        order_type:
+          type: string
+          enum: [limit, market, stop_limit, stop_market]
+        time_in_force:
+          type: string
+          enum: [day, gtc, gtd, ioc, fok]
+        price:
+          type: string
+        stop_price:
+          type: string
+        quantity:
+          type: integer
+        filled_qty:
+          type: integer
+        remaining_qty:
+          type: integer
+        status:
+          type: string
+          enum: [new, partially_filled, filled, cancelled, rejected, expired, pending_new]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        expire_at:
+          type: string
+          format: date-time
+
+    ModifyOrderRequest:
+      type: object
+      properties:
+        new_price:
+          type: string
+          description: New price (decimal string), omit to keep current
+        new_quantity:
+          type: integer
+          description: New quantity, omit or 0 to keep current
+
+    OpenOrdersResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderDetail"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CancelAllOrdersResponse:
+      type: object
+      properties:
+        cancelled_count:
+          type: integer
+        cancelled_order_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    # ─── Market Data ──────────────────────────────────────────────────
+    PriceLevel:
+      type: object
+      properties:
+        price:
+          type: string
+        quantity:
+          type: integer
+        order_count:
+          type: integer
+
+    OrderBookSnapshot:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceLevel"
+        asks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceLevel"
+        last_trade_price:
+          type: string
+        sequence_number:
+          type: integer
+        state:
+          type: string
+          enum: [preopen, auction, continuous, halted, closed]
+        timestamp:
+          type: string
+          format: date-time
+
+    L3Order:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        price:
+          type: string
+        quantity:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+
+    OrderBookSnapshotL3:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/L3Order"
+        asks:
+          type: array
+          items:
+            $ref: "#/components/schemas/L3Order"
+        last_trade_price:
+          type: string
+        sequence_number:
+          type: integer
+        state:
+          type: string
+          enum: [preopen, auction, continuous, halted, closed]
+        timestamp:
+          type: string
+          format: date-time
+
+    Trade:
+      type: object
+      properties:
+        trade_id:
+          type: string
+          format: uuid
+        instrument_id:
+          type: string
+          format: uuid
+        buy_order_id:
+          type: string
+          format: uuid
+        sell_order_id:
+          type: string
+          format: uuid
+        buyer_participant_id:
+          type: string
+          format: uuid
+        seller_participant_id:
+          type: string
+          format: uuid
+        price:
+          type: string
+        quantity:
+          type: integer
+        trade_value:
+          type: string
+        aggressor_side:
+          $ref: "#/components/schemas/Side"
+        trade_type:
+          type: string
+          enum: [continuous, auction, block, bust, correction]
+        sequence_number:
+          type: integer
+        executed_at:
+          type: string
+          format: date-time
+
+    # ─── Admin ────────────────────────────────────────────────────────
+    HaltInstrumentResponse:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+        previous_state:
+          type: string
+        current_state:
+          type: string
+        halted_at:
+          type: string
+          format: date-time
+
+    ResumeInstrumentResponse:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+        current_state:
+          type: string
+        resumed_at:
+          type: string
+          format: date-time
+
+    CircuitBreakerConfig:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          format: uuid
+        level1_pct:
+          type: string
+        level1_halt_minutes:
+          type: integer
+        level2_pct:
+          type: string
+        level2_halt_minutes:
+          type: integer
+        level3_pct:
+          type: string
+
+    DisableParticipantResponse:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        cancelled_order_count:
+          type: integer
+        disabled_at:
+          type: string
+          format: date-time
+
+    # ─── Clearing ─────────────────────────────────────────────────────
+    Position:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        instrument_id:
+          type: string
+          format: uuid
+        net_quantity:
+          type: integer
+          description: Positive = long, negative = short
+        avg_entry_price:
+          type: string
+        total_buy_qty:
+          type: integer
+        total_sell_qty:
+          type: integer
+        realized_pnl:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    NettingResult:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        instrument_id:
+          type: string
+          format: uuid
+        net_quantity:
+          type: integer
+        net_value:
+          type: string
+        gross_long_qty:
+          type: integer
+        gross_short_qty:
+          type: integer
+        obligations_count:
+          type: integer
+        netting_efficiency:
+          type: number
+          format: double
+        netted_at:
+          type: string
+          format: date-time
+
+    # ─── Margin ───────────────────────────────────────────────────────
+    MarginRequirement:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        instrument_id:
+          type: string
+          format: uuid
+        net_quantity:
+          type: integer
+        scan_risk:
+          type: string
+        inter_month:
+          type: string
+        delivery_month:
+          type: string
+        short_option:
+          type: string
+        initial_margin:
+          type: string
+        mark_to_market:
+          type: string
+        total_required:
+          type: string
+        calculated_at:
+          type: string
+          format: date-time
+
+    PortfolioMargin:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          format: uuid
+        requirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarginRequirement"
+        total_initial:
+          type: string
+        total_mtm:
+          type: string
+        total_required:
+          type: string
+        collateral_on_hand:
+          type: string
+        excess_deficit:
+          type: string
+        calculated_at:
+          type: string
+          format: date-time
+
+    MarginCall:
+      type: object
+      properties:
+        call_id:
+          type: string
+        participant_id:
+          type: string
+          format: uuid
+        required:
+          type: string
+        on_hand:
+          type: string
+        deficit:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, issued, satisfied, breached]
+        issued_at:
+          type: string
+          format: date-time
+
+    # ─── Settlement ───────────────────────────────────────────────────
+    SettlementCycle:
+      type: object
+      properties:
+        cycle_id:
+          type: string
+        settle_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [pending, valuing, calculated, settling, completed, failed]
+        total_pay_in:
+          type: string
+        total_pay_out:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+
+    # ─── Auth ─────────────────────────────────────────────────────────
+    AuthTokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
+        expires_in:
+          type: integer
+          description: Seconds until access token expires
+
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        participant_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ─── Compliance ───────────────────────────────────────────────────
+    SubmitApplicationRequest:
+      type: object
+      properties:
+        participant_type:
+          type: string
+          enum: [individual, corporate, cooperative, broker, institutional]
+        legal_name:
+          type: string
+        trading_name:
+          type: string
+        nationality:
+          type: string
+          description: ISO 3166-1 alpha-2
+        registration_number:
+          type: string
+        tax_id:
+          type: string
+        contact:
+          type: object
+          properties:
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+            contact_person_name:
+              type: string
+        registered_address:
+          type: object
+          properties:
+            line1:
+              type: string
+            line2:
+              type: string
+            city:
+              type: string
+            province:
+              type: string
+            postal_code:
+              type: string
+            country:
+              type: string
+        source_of_funds:
+          type: string
+      required: [participant_type, legal_name, nationality]
+
+    KYCApplication:
+      type: object
+      properties:
+        application_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        participant_type:
+          type: string
+        status:
+          type: string
+        legal_name:
+          type: string
+        trading_name:
+          type: string
+        nationality:
+          type: string
+        risk_tier:
+          type: string
+          enum: [low, medium, high, prohibited]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        approved_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    Document:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+        document_type:
+          type: string
+        status:
+          type: string
+          enum: [uploaded, validating, verified, rejected, expired, needs_review]
+        filename:
+          type: string
+        content_type:
+          type: string
+        file_size_bytes:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+        verified_at:
+          type: string
+          format: date-time
+
+    ScreeningResult:
+      type: object
+      properties:
+        screening_id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum: [clear, match_found, error]
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScreeningMatch"
+        provider:
+          type: string
+        screened_at:
+          type: string
+          format: date-time
+
+    ScreeningMatch:
+      type: object
+      properties:
+        match_id:
+          type: string
+          format: uuid
+        matched_name:
+          type: string
+        list_source:
+          type: string
+        match_type:
+          type: string
+          enum: [exact_id, exact_name, fuzzy_name, phonetic]
+        match_score:
+          type: string
+        resolved:
+          type: boolean
+        is_true_match:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+
+    BatchScreenResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        clear:
+          type: integer
+        matches_found:
+          type: integer
+        errors:
+          type: integer
+        screening_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    RiskScore:
+      type: object
+      properties:
+        score_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        overall_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        tier:
+          type: string
+          enum: [low, medium, high, prohibited]
+        model_version:
+          type: string
+        factors:
+          type: object
+          properties:
+            participant_type_score:
+              type: integer
+            country_risk_score:
+              type: integer
+            screening_result_score:
+              type: integer
+            transaction_profile_score:
+              type: integer
+            source_of_funds_score:
+              type: integer
+            document_quality_score:
+              type: integer
+        computed_at:
+          type: string
+          format: date-time
+        next_review_at:
+          type: string
+          format: date-time
+
+    MonitoringAlert:
+      type: object
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        rule_id:
+          type: string
+        status:
+          type: string
+          enum: [open, under_review, resolved_false_positive, resolved_confirmed, sar_filed]
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+
+    AuditEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        details:
+          type: object
+        prev_hash:
+          type: string
+        hash:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    SARFiling:
+      type: object
+      properties:
+        sar_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        alert_id:
+          type: string
+          format: uuid
+        narrative:
+          type: string
+        reference_number:
+          type: string
+        filed_at:
+          type: string
+          format: date-time
