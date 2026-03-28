@@ -248,6 +248,36 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** The third integration run validated 4 services (matching, clearing, margin, settlement) with 165 passing tests and ~43% average coverage. Coverage ranged from 23.7% (novation) to 89.3% (orderbook). The core matching logic (orderbook) has the highest coverage, which is appropriate for a financial system.
 - **Action:** Set a coverage floor of 60% for business-critical packages (orderbook, position, novation, pnl) and 30% for infrastructure packages (server, config, store). The current ~43% average is acceptable for phase 1-2 but should increase as services mature.
 
+### Pattern: Phase 3 achieved zero rejections — spec-first + calibrated estimates = clean runs (2026-03-28)
+- **Context:** Phase 3 pipeline run — 9 tasks (T031-T039), all 9 approved on first pass, zero rejections. This is the first run with a perfect approval rate.
+- **Finding:** Three factors contributed: (1) spec-first for all business services (T033→T034, T035→T036, T037→T038), (2) AI-calibrated estimates (10-25 min vs Phase 1-2's 180-480 min), (3) all prerequisites satisfied before task launch. Actual times: specs ~5-7 min, implementations ~7-9 min, integration test ~2.5 min. Estimates were 1.5-3x actual (acceptable), vs Phase 1-2's 10-50x overestimates.
+- **Action:** The current estimate calibration (10m specs, 25m implementations, 15m integration) is close. Fine-tune to: specs ~10m, implementations ~15m, rework ~10m, integration ~5m. These are upper bounds, not targets.
+
+### Pattern: PostMortem agent fails on large context — pipeline needs context size guard (2026-03-28)
+- **Context:** PostMortem agent failed with `Argument list too long` (shell error E2BIG) after Phase 3. The `build_postmortem_context` function concatenates ALL handoff files into a single CLI argument string. By Phase 3, this exceeded the Linux ARG_MAX limit (~2MB).
+- **Finding:** The pipeline's postmortem prompt builder reads every `handoff/*.md` file and passes them as a single `-p` argument to `claude`. With 20+ handoff files totaling ~50KB+ of text, plus the CLAUDE.md content, this exceeds shell limits.
+- **Action:** Fix `pipeline/lib/context.sh` `build_postmortem_context` to either: (1) write context to a temp file and pass via `--input-file` or stdin, (2) summarize completed tasks rather than passing full handoff contents, or (3) only pass handoff files from the current run (not all historical files). Option 1 is the quickest fix.
+
+### Pattern: Auth service code exists on a branch but was never merged to main (2026-03-28)
+- **Context:** T005 (Auth Service) status was fixed to `done` and the review says APPROVED, but `src/auth-service/` on main still contains only a stub Dockerfile. The integration test confirms: "auth-service — SKIP, Dockerfile only."
+- **Finding:** T005 was originally rejected (Phase 1), then the review file was written as APPROVED (likely from a rework run), but the branch was never merged. The planner updated the status to `done` without verifying the code was on main. Similarly, `src/clearing-service/` is a stub — the clearing engine lives at `src/clearing-engine/` (different directory name).
+- **Action:** Before marking a rejected task as `done`, the Orchestrator must verify the worktree branch was actually merged. Add a check: `git log --oneline main | grep <branch>` or verify the expected deliverable files exist on main. For T005, the auth service code needs to be rebuilt or the original branch found and merged. The clearing-service/clearing-engine naming mismatch should be reconciled.
+
+### Pattern: Service naming inconsistency — src directory names don't match service names (2026-03-28)
+- **Context:** `src/clearing-engine/` vs `src/clearing-service/` (stub). Similarly `src/matching-engine/` vs `src/margin-engine/` vs `src/settlement-engine/` use `-engine` suffix while `src/auth-service/`, `src/compliance-service/`, `src/market-data-service/`, `src/warehouse-service/`, `src/gateway/` use `-service` or no suffix.
+- **Finding:** The `-engine` suffix was used for core exchange pipeline services (matching, clearing, margin, settlement) and `-service` for supporting services (auth, compliance, market-data, warehouse). This is actually a meaningful convention — engines are the real-time trading pipeline, services are supporting infrastructure. But the stub `src/clearing-service/` directory creates confusion since the real code is in `src/clearing-engine/`.
+- **Action:** Remove the stub `src/clearing-service/` directory (it only has a Dockerfile). Document the naming convention: `*-engine` for real-time trading pipeline, `*-service` for supporting services, bare name for `gateway`. Update Dockerfiles and CI to reference the correct directory names.
+
+### Pattern: Coverage improved from 43% to ~55% average — Phase 3 services set higher bar (2026-03-28)
+- **Context:** Phase 1-2 services averaged ~43% coverage. Phase 3 services: compliance 80.1% (onboarding), gateway 93% (router), market-data 68.7% (candle), warehouse 83.8% (store). The 60% floor instruction in the task descriptions worked.
+- **Finding:** Explicitly stating coverage targets in task descriptions ("targeting 60%+ coverage on business logic") produced measurably higher coverage than Phase 1-2 where no target was specified. Phase 3 business-critical packages averaged ~75%, vs Phase 1-2's ~45%.
+- **Action:** Always include explicit coverage targets in builder task descriptions. Use "60%+ on business logic packages, 30%+ on infrastructure packages" as the standard instruction. For financial-critical packages (orderbook, novation, pnl), raise to "80%+ coverage."
+
+### Pattern: 3-parallel worker limit is optimal for current pipeline (2026-03-28)
+- **Context:** MAX_PARALLEL=3 was used throughout. Iteration 1 had 5 ready tasks but only launched 3 (T031, T032, T033). Iterations 2-3 naturally had 2-3 ready tasks.
+- **Finding:** All 3 parallel workers completed successfully in every iteration — no resource contention, no merge conflicts, no race conditions on `tasks.json`. The worktree isolation pattern prevents conflicts. The pipeline completed 9 tasks in 4 iterations over ~32 minutes of execution time.
+- **Action:** Keep MAX_PARALLEL=3 as default. Consider increasing to 4-5 only when tasks are all independent (no shared file writes). The bottleneck is sequential review-then-merge after each batch, not worker concurrency.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
