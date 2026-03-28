@@ -1,0 +1,17 @@
+.container {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.null {
+  color: #888;
+  font-style: italic;
+}

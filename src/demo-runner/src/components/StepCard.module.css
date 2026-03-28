@@ -1,0 +1,68 @@
+.card {
+  background: #16162a;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+}
+
+.card.pass {
+  border-color: #2d5a2d;
+}
+
+.card.fail {
+  border-color: #5a2d2d;
+}
+
+.card.running {
+  border-color: #2d4a6a;
+}
+
+.header {
+  margin-bottom: 8px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  color: #e0e0f0;
+  font-weight: 600;
+}
+
+.description {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #888;
+}
+
+.actions {
+  margin: 8px 0;
+}
+
+.runBtn {
+  background: #2a4a6a;
+  color: #b0d0f0;
+  border: 1px solid #3a5a7a;
+  border-radius: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.runBtn:hover:not(:disabled) {
+  background: #3a5a8a;
+}
+
+.runBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
