@@ -468,6 +468,21 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** The T059/T060 estimates are the most accurate implementation-task estimates in the pipeline history. Previous phases: Phase 0-1 (10-50x), Phase 3 (1.5-3x), Phase 4 (1.4-5x), Phase 5-6 (1.3-3.4x). The ~2x ratio for T059 (a full React SPA) and T060 (an integration test) suggests the pipeline has reached optimal estimate calibration for tasks that follow established patterns.
 - **Action:** Maintain current estimate ranges: React SPA implementation 15m, integration/validation tests 5m, spec tasks 5-10m, Go service implementation 10-15m. The 2x overestimate buffer is appropriate — it absorbs minor variance without significantly impacting scheduling.
 
+### Pattern: Final integration run confirms platform stability — 6 consecutive green runs with identical test counts (2026-03-28)
+- **Context:** Integration runs 153022, 154735, 155812, 162057, 171513, and 191810 all report 689 Go tests and 0 failures across the same 9 services. Frontend tests stabilized at 198 (84 web-ui + 64 admin-ui + 50 demo-runner) after demo-runner was added.
+- **Finding:** After the demo-runner merge (T059), six consecutive integration runs produced identical pass/fail counts (689 Go, 198 frontend, 20 e2e skipped). No flaky tests were observed across any run. Go coverage methodology variance persists (all-packages avg ranges 44.7-53.3% across runs, but business-logic avg is stable at 65-66%). This confirms the test suite is deterministic and the codebase is stable.
+- **Action:** For the next feature pipeline, any test count decrease from the 887 baseline (689+198) should be treated as a regression to investigate, not normal variance. Any new flaky test (passing in one run, failing in another) should be fixed immediately — the current suite has zero flakiness.
+
+### Pattern: Frontend business-logic coverage exceeds Go coverage — different testing economics (2026-03-28)
+- **Context:** Final run shows Go business-logic coverage at ~66% vs frontend business-logic coverage at ~84% (web-ui services 98.7%, demo-runner services 100%, admin-ui services 50.2%).
+- **Finding:** Frontend TypeScript services (API clients, state reducers, validators, token managers) achieve near-100% coverage with pure unit tests because they have no I/O dependencies — they're pure functions operating on typed data. Go services achieve lower coverage because business logic is interleaved with concurrency primitives (mutexes, channels) and interface-based store interactions that require more test setup. The exception is admin-ui's `api.ts` at 50.2% — it has 29 endpoint functions but only 5 are tested.
+- **Action:** For frontend coverage, the bottleneck is React component testing (requires RTL), not business logic. For Go coverage, the bottleneck is store/engine integration paths. Prioritize Go coverage improvements over frontend — the marginal value of going from 84% to 90% on frontend is lower than going from 66% to 75% on Go business logic.
+
+### Pattern: Complete pipeline timing — 42 timed tasks, median 5.4 min, total ~3.5h agent time (2026-03-28)
+- **Context:** All 42 tasks with start/finish timestamps analyzed. 18 tasks lack timing (T001, T002, T004 from Phase 0 had no timestamps; T005/T006/T007/T008/T015 from Phase 1 had pre-fix timestamps).
+- **Finding:** Across all 42 timed tasks: fastest was T042 (cleanup, 1m02s), slowest was T040 (auth service rebuild, 10m38s). Median actual time: 5.4 min. Total actual agent execution: ~3.5 hours. By task type: spec tasks averaged 5.3 min (T033 6m49s, T035 5m38s, T037 6m33s, T047 5m19s, T049 3m58s, T051 3m46s), implementation tasks averaged 7.8 min (T034 9m03s, T036 6m40s, T038 7m25s, T052 8m21s, T048 5m30s, T050 3m30s, T059 7m54s), coverage tasks averaged 4.4 min (T043 6m48s, T044 3m57s, T045 3m33s), integration tests averaged 2.9 min (T039 2m36s, T046 3m10s, T056 3m56s, T060 2m27s), rework averaged 3.3 min (T031 3m07s, T054 2m56s).
+- **Action:** Use these medians for future estimation: spec tasks 6m, implementation tasks 8m, coverage improvement 5m, integration tests 3m, rework/bugfix 4m, cleanup 2m, documentation 5m. These are actuals, not estimates — apply a 1.5x buffer for planning purposes.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
