@@ -53,14 +53,15 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=ruok,srvr,stat"
     ports:
       - "${ZOOKEEPER_PORT:-2181}:2181"
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo srvr | nc localhost 2181 | grep Zookeeper"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 15s
     networks:
       - ace-network
 
@@ -344,9 +345,9 @@ services:
       dockerfile: Dockerfile
     container_name: ace-web-ui
     ports:
-      - "3000:3000"
+      - "${WEB_UI_PORT:-13000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       <<: *healthcheck-http
     networks:
       - ace-network
@@ -357,9 +358,9 @@ services:
       dockerfile: Dockerfile
     container_name: ace-admin-ui
     ports:
-      - "3001:3001"
+      - "${ADMIN_UI_PORT:-13001}:3001"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/"]
       <<: *healthcheck-http
     networks:
       - ace-network
@@ -370,37 +371,25 @@ services:
       dockerfile: Dockerfile
     container_name: ace-demo-runner
     ports:
-      - "3002:3002"
+      - "${DEMO_PORT:-13002}:3002"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3002/"]
       <<: *healthcheck-http
     networks:
       - ace-network
 
   # ─── Reverse Proxy ────────────────────────────────────────────────
 
-  nginx:
-    image: nginx:alpine
-    container_name: ace-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      gateway:
-        condition: service_healthy
-      web-ui:
-        condition: service_healthy
-      admin-ui:
-        condition: service_healthy
-      demo-runner:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-      <<: *healthcheck-http
-    networks:
-      - ace-network
+  # nginx reverse proxy disabled — using system nginx on this server
+  # To enable: uncomment and ensure ports 80/443 are available
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: ace-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   pgdata:

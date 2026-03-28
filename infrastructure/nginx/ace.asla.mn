@@ -1,0 +1,62 @@
+# ACE Platform — ace.asla.mn + demo.ace.asla.mn
+# Install: sudo ln -sf /home/vcp/ace-platform/infrastructure/nginx/ace.asla.mn /etc/nginx/sites-enabled/ace.asla.mn
+
+# ── Main platform: ace.asla.mn ──────────────────────────────────────
+server {
+    listen 80;
+    server_name ace.asla.mn;
+
+    # API routes → gateway container
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket routes → gateway container
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # Health check passthrough
+    location /healthz {
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    # Admin UI → admin-ui container (port 3001 inside Docker network)
+    location /admin {
+        proxy_pass http://127.0.0.1:13001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Trading Web UI → web-ui container (port 3000 inside Docker network)
+    location / {
+        proxy_pass http://127.0.0.1:13000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+
+# ── Demo Runner: demo.ace.asla.mn ──────────────────────────────────
+server {
+    listen 80;
+    server_name demo.ace.asla.mn;
+
+    location / {
+        proxy_pass http://127.0.0.1:13002;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

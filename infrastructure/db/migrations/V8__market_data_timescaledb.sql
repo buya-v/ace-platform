@@ -53,11 +53,7 @@ CREATE INDEX idx_trades_instrument_seq
 CREATE INDEX idx_trades_instrument_time
     ON market_data.trades (instrument_id, executed_at DESC);
 
--- Append-only: block updates and deletes
-CREATE RULE no_update_market_data_trades AS ON UPDATE TO market_data.trades
-    DO INSTEAD NOTHING;
-CREATE RULE no_delete_market_data_trades AS ON DELETE TO market_data.trades
-    DO INSTEAD NOTHING;
+-- Append-only enforcement: RULEs not supported on hypertables, use app-level enforcement
 
 -- ============================================================
 -- 1-minute OHLCV continuous aggregate (base)
