@@ -44,6 +44,12 @@ func Auth(validator *auth.JWTValidator, cfg *AuthConfig) func(http.Handler) http
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			reqID := RequestIDFromContext(r.Context())
 
+			// CORS preflight requests are always allowed
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
 			// Check if path is public
 			if isPublicPath(r.URL.Path, r.Method, cfg) {
 				next.ServeHTTP(w, r)

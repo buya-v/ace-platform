@@ -1,35 +1,30 @@
 # ACE Platform — ace.asla.mn + demo.ace.asla.mn
-# Install: sudo ln -sf /home/vcp/ace-platform/infrastructure/nginx/ace.asla.mn /etc/nginx/sites-enabled/ace.asla.mn
+
+# Map origin to CORS header value (outside server block)
+map $http_origin $cors_origin {
+    default "";
+    "https://demo.ace.asla.mn" "https://demo.ace.asla.mn";
+}
 
 # ── Main platform: ace.asla.mn ──────────────────────────────────────
 server {
     server_name ace.asla.mn;
 
-    # CORS headers for demo.ace.asla.mn
-    set $cors_origin "";
-    if ($http_origin ~* "^https://demo\.ace\.asla\.mn$") {
-        set $cors_origin $http_origin;
-    }
+    # Proxy headers (inherited by all locations)
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 
     # API routes → gateway container
     location /api/ {
-        # Handle CORS preflight
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' $cors_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-            add_header 'Access-Control-Max-Age' 86400;
-            add_header 'Content-Length' 0;
-            return 204;
-        }
+        proxy_pass http://127.0.0.1:8080;
+
+        # CORS headers on every response
         add_header 'Access-Control-Allow-Origin' $cors_origin always;
         add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, PATCH, OPTIONS' always;
+        add_header 'Access-Control-Max-Age' 86400 always;
     }
 
     # WebSocket routes → gateway container
@@ -38,54 +33,33 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
 
-    # Health check passthrough
+    # Health/readiness check passthrough
     location /healthz {
-        # CORS for demo runner
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' $cors_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-            add_header 'Content-Length' 0;
-            return 204;
-        }
+        proxy_pass http://127.0.0.1:8080;
         add_header 'Access-Control-Allow-Origin' $cors_origin always;
         add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-
-        proxy_pass http://127.0.0.1:8080;
+        add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
     }
 
     location /readyz {
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' $cors_origin always;
-            add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-            add_header 'Content-Length' 0;
-            return 204;
-        }
+        proxy_pass http://127.0.0.1:8080;
         add_header 'Access-Control-Allow-Origin' $cors_origin always;
         add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type' always;
-
-        proxy_pass http://127.0.0.1:8080;
+        add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
     }
 
-    # Admin UI → admin-ui container (port 3001 inside Docker network)
+    # Admin UI
     location /admin {
         proxy_pass http://127.0.0.1:13001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # Trading Web UI → web-ui container (port 3000 inside Docker network)
+    # Trading Web UI (catch-all)
     location / {
         proxy_pass http://127.0.0.1:13000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 
     listen 443 ssl; # managed by Certbot
@@ -93,7 +67,6 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/ace.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
 }
 
 # ── Demo Runner: demo.ace.asla.mn ──────────────────────────────────
@@ -113,30 +86,17 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/demo.ace.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-
 }
 
+# HTTP → HTTPS redirects
 server {
-    if ($host = demo.ace.asla.mn) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
-    listen 80;
-    server_name demo.ace.asla.mn;
-    return 404; # managed by Certbot
-
-
-}
-server {
-    if ($host = ace.asla.mn) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
-
-
     listen 80;
     server_name ace.asla.mn;
-    return 404; # managed by Certbot
+    return 301 https://$host$request_uri;
+}
 
-
+server {
+    listen 80;
+    server_name demo.ace.asla.mn;
+    return 301 https://$host$request_uri;
 }

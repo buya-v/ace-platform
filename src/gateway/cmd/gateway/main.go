@@ -27,8 +27,15 @@ func main() {
 	// Initialize JWT validator
 	jwtValidator := auth.NewJWTValidator(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience)
 
-	// Initialize backend client (stub for now — real gRPC client would go here)
-	var backendClient proxy.BackendClient = &proxy.StubBackendClient{}
+	// Initialize backend client — forwards to service HTTP APIs
+	var backendClient proxy.BackendClient = proxy.NewHTTPBackendClient(map[string]string{
+		"matching-engine":    fmt.Sprintf("http://%s", strings.Replace(cfg.MatchingEngineAddr, ":50051", ":8081", 1)),
+		"clearing-engine":   fmt.Sprintf("http://%s", strings.Replace(cfg.ClearingEngineAddr, ":50052", ":8082", 1)),
+		"margin-engine":     fmt.Sprintf("http://%s", strings.Replace(cfg.MarginEngineAddr, ":50053", ":8083", 1)),
+		"settlement-engine": fmt.Sprintf("http://%s", strings.Replace(cfg.SettlementEngineAddr, ":50054", ":8084", 1)),
+		"auth-service":      fmt.Sprintf("http://%s", strings.Replace(cfg.AuthServiceAddr, ":50055", ":8085", 1)),
+		"compliance-service":fmt.Sprintf("http://%s", strings.Replace(cfg.ComplianceServiceAddr, ":50056", ":8086", 1)),
+	})
 
 	// Initialize handler and router
 	h := handler.New(backendClient)
