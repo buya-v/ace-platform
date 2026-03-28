@@ -278,6 +278,41 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** All 3 parallel workers completed successfully in every iteration — no resource contention, no merge conflicts, no race conditions on `tasks.json`. The worktree isolation pattern prevents conflicts. The pipeline completed 9 tasks in 4 iterations over ~32 minutes of execution time.
 - **Action:** Keep MAX_PARALLEL=3 as default. Consider increasing to 4-5 only when tasks are all independent (no shared file writes). The bottleneck is sequential review-then-merge after each batch, not worker concurrency.
 
+### Pattern: Frontend implementation tasks fail without Node.js tooling — gate on runtime availability (2026-03-28)
+- **Context:** Phase 4 — T048 (Trading Web UI) and T050 (Admin Dashboard) were both rejected. Both are React+TypeScript+Vite SPAs requiring `npm`/`node` to scaffold and build.
+- **Finding:** The worker environment has Go tooling but no Node.js/npm. Both tasks were rejected after ~10 minutes (vs 25m estimate), the same "instant rejection" pattern seen in Phase 1 when Go scaffolding was missing. The specs (T047, T049) were approved — only the implementations failed.
+- **Action:** Planner must verify that the target runtime/toolchain exists before scheduling implementation tasks. For frontend tasks, add an explicit "frontend tooling setup" task (install Node.js, create `package.json`, configure Vite) before any React implementation task. Alternatively, if the pipeline environment cannot run `npm`, mark frontend tasks as "manual" and skip them in automated runs.
+
+### Pattern: External dependency implementations fail without library availability (2026-03-28)
+- **Context:** Phase 4 — T052 (Kafka Event Wiring Implementation) was rejected. The task required a Kafka client library (`segmentio/kafka-go` or `confluent-kafka-go`) which isn't available in the zero-dependency Go module pattern.
+- **Finding:** The spec (T051) was approved cleanly, but the implementation couldn't proceed without an external Go dependency for Kafka protocol support. Unlike HTTP/gRPC (which can use stdlib `net/http`), Kafka requires a dedicated client library. The zero-dep pattern that worked for all 8 Go services breaks down for integration-layer code.
+- **Action:** Planner should distinguish between "business logic" tasks (zero-dep viable) and "integration glue" tasks (external deps required). Integration tasks should either: (1) allow external dependencies in `go.mod`, or (2) define an interface with a stub implementation (like the existing `TradeStore`, `CollateralSource` patterns) and defer real Kafka wiring to a deployment phase where deps are available.
+
+### Pattern: K8s manifest tasks need cross-resource validation — YAML linting is insufficient (2026-03-28)
+- **Context:** Phase 4 — T054 (Kubernetes Deployment Manifests) was REJECTED with 3 correctness bugs: cross-namespace ConfigMap reference (pods in `ace-exchange` referencing ConfigMap in `ace-services`), duplicate namespace file (`namespace.yaml` vs existing `namespaces.yaml`), and missing Secret in `ace-exchange` namespace.
+- **Finding:** These bugs are cross-resource reference errors — each individual YAML file is valid, but the references between them are broken. Standard YAML linting or `kubectl --dry-run` on individual files wouldn't catch these. The reviewer correctly identified all three. This is similar to T003's rejection (duplicate YAML key, wrong DestinationRule host) — infrastructure manifests have a higher cross-reference bug rate than application code.
+- **Action:** For K8s manifest tasks, the worker should include a validation step that checks: (1) every `configMapRef`/`secretRef` has a matching resource in the same namespace, (2) no duplicate resource definitions across files, (3) namespace consistency between resource definitions and references. Consider adding `kustomize build` as a pre-handoff check (catches duplicate resources).
+
+### Pattern: Phase 4 estimate calibration is converging — 1.5-4x overestimate is acceptable (2026-03-28)
+- **Context:** Phase 4 timing data across 14 tasks with timestamps. Estimates ranged 5-25 minutes. Actuals ranged 1-11 minutes.
+- **Finding:** Estimate-to-actual ratios: T040 (15m est / 11m actual = 1.4x), T041 (10m/3.5m = 2.9x), T042 (5m/1m = 5x), T043 (15m/7m = 2.1x), T044 (15m/4m = 3.8x), T045 (15m/3.5m = 4.3x), T046 (5m/3m = 1.7x), T047 (10m/5m = 2x), T049 (10m/4m = 2.5x), T051 (10m/4m = 2.5x). Average ratio: ~2.6x. Phase 3 was 1.5-3x. Phase 1-2 was 10-50x. The calibration is converging but still consistently overestimates.
+- **Action:** Fine-tune estimates down one more notch: cleanup/bug-fix tasks ~3m, spec tasks ~5m, coverage improvement tasks ~5m, Go service implementations ~10m, integration tests ~3m. These are upper bounds. The 5-minute minimum estimate is still too high for trivial tasks like T042 (1 minute actual).
+
+### Pattern: Spec-approved then implementation-rejected is a tooling gap, not a spec gap (2026-03-28)
+- **Context:** Three spec→implementation pairs in Phase 4: T047→T048 (UI), T049→T050 (Admin), T051→T052 (Kafka). All specs were APPROVED; all implementations were REJECTED.
+- **Finding:** The rejections were not caused by spec quality issues — the specs were comprehensive and the reviewers praised them. The rejections were caused by missing tooling (Node.js for frontend, Kafka client library for event wiring). This is a different failure mode than Phase 1's rejections (missing Go scaffolding), which were fixed by adding project-init tasks. The current failure is at the environment/dependency level, not the project level.
+- **Action:** Planner should tag tasks with required toolchain (`go`, `node`, `python`, `external-deps`). Orchestrator should verify toolchain availability before spawning workers. If a toolchain is unavailable, the task should be marked `blocked` (not `rejected`) with a clear reason, preserving the approved spec for when the toolchain becomes available.
+
+### Pattern: Coverage improvement tasks are highly efficient — batch them (2026-03-28)
+- **Context:** T043 (clearing-engine coverage), T044 (margin-engine coverage), T045 (settlement-engine coverage) ran in parallel. All three completed in 3.5-7 minutes, all approved first pass with zero required fixes.
+- **Finding:** Coverage tasks have the best effort-to-value ratio in the pipeline: they add no new features but significantly improve confidence in existing code. T043 took novation from 23.7%→100%, netting from 39.8%→100%, engine from 32.8%→95%. T044 took engine from 76.7%→96.7%. T045 closed the only real gap (pnl CalculateBatch error path). All three workers independently identified which coverage gaps were worth closing vs which required source changes to test.
+- **Action:** After any phase that adds new services, schedule a dedicated "coverage batch" iteration with one coverage task per service. These parallelize perfectly (no shared state), complete fast (~5m each), and dramatically improve the integration test signal. Estimate 5m per service for coverage tasks.
+
+### Pattern: T054 review file exists for rejected task — reviewer process is now working (2026-03-28)
+- **Context:** T054 (K8s Manifests) was REJECTED and has a detailed `handoff/T054-review.md` with 3 specific required fixes, security evaluation, and suggestions.
+- **Finding:** In Phase 1, rejected tasks (T003, T005, T006, T007, T015) had no review files, breaking the learning loop. The learned pattern "Reviewer must always produce a review file" (2026-03-27) has been successfully adopted — T054's rejection includes a thorough review with actionable fixes. This means the rework pipeline has the information it needs to re-queue T054 with specific fix instructions.
+- **Action:** Continue enforcing review files for all verdicts. The T054 review is a model: it identifies exactly which lines/files have bugs, explains why they're bugs, and provides fix instructions. When re-queuing T054, inject the 3 required fixes directly into the worker prompt.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
