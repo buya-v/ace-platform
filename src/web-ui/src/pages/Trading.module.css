@@ -1,0 +1,102 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-secondary, #1a1a2e);
+  border-bottom: 1px solid var(--border, #333);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--accent, #3498db);
+  letter-spacing: 2px;
+}
+
+.logoutBtn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border, #333);
+  color: var(--text-muted, #8888aa);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.logoutBtn:hover {
+  color: var(--text-primary, #eee);
+  border-color: var(--text-muted);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 4px;
+  padding: 4px;
+}
+
+.chartArea {
+  height: 35%;
+  min-height: 200px;
+}
+
+.tradingArea {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.bookPanel, .entryPanel, .tradesPanel {
+  overflow: hidden;
+}
+
+.bottomArea {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 4px;
+  height: 25%;
+  min-height: 150px;
+}
+
+.positionsPanel, .marginPanel {
+  overflow: auto;
+}
+
+@media (max-width: 768px) {
+  .tradingArea {
+    grid-template-columns: 1fr;
+  }
+
+  .bottomArea {
+    grid-template-columns: 1fr;
+  }
+
+  .chartArea {
+    height: 30%;
+  }
+}

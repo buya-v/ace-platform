@@ -1,0 +1,73 @@
+.selector {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  color: var(--text-primary, #eee);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.symbol {
+  font-weight: 700;
+}
+
+.price {
+  font-family: 'Courier New', monospace;
+  color: var(--text-muted, #8888aa);
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 350px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  z-index: 100;
+  margin-top: 4px;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr 0.8fr;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #eee);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.active {
+  background: var(--bg-active, #333);
+}
+
+.itemSymbol { font-weight: 600; }
+.itemCommodity { color: var(--text-muted, #8888aa); }
+.itemPrice { font-family: 'Courier New', monospace; }
+.positive { color: var(--buy-color, #2ecc71); }
+.negative { color: var(--sell-color, #e74c3c); }
+
+.empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted, #8888aa);
+}
