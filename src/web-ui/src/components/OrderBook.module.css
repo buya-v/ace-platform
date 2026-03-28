@@ -1,0 +1,71 @@
+.orderBook {
+  display: flex;
+  flex-direction: column;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 4px;
+  padding: 8px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.5fr;
+  padding: 4px 8px;
+  color: var(--text-muted, #8888aa);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.asks, .bids {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.askRow, .bidRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.5fr;
+  padding: 2px 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.askRow:hover, .bidRow:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.depthBar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  opacity: 0.15;
+}
+
+.askRow .depthBar {
+  background: var(--sell-color, #e74c3c);
+}
+
+.bidRow .depthBar {
+  background: var(--buy-color, #2ecc71);
+}
+
+.askPrice {
+  color: var(--sell-color, #e74c3c);
+}
+
+.bidPrice {
+  color: var(--buy-color, #2ecc71);
+}
+
+.spread {
+  text-align: center;
+  padding: 4px;
+  color: var(--text-muted, #8888aa);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border, #333);
+}

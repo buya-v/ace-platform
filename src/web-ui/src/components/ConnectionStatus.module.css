@@ -1,0 +1,34 @@
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.label {
+  color: var(--text-muted, #8888aa);
+}
+
+.connected .dot {
+  background: var(--buy-color, #2ecc71);
+}
+
+.connecting .dot, .reconnecting .dot {
+  background: #f39c12;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.disconnected .dot {
+  background: var(--sell-color, #e74c3c);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

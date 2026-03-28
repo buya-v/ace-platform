@@ -1,0 +1,12 @@
+:root {
+  --bg-primary: #0f0f23;
+  --bg-secondary: #1a1a2e;
+  --bg-active: #333;
+  --border: #333;
+  --text-primary: #eee;
+  --text-muted: #8888aa;
+  --buy-color: #2ecc71;
+  --sell-color: #e74c3c;
+  --accent: #3498db;
+  --font-mono: 'Courier New', Courier, monospace;
+}

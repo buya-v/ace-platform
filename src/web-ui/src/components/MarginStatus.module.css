@@ -1,0 +1,82 @@
+.margin {
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 0.8rem;
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--text-primary, #eee);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  color: var(--text-muted, #8888aa);
+  font-size: 0.75rem;
+}
+
+.value {
+  color: var(--text-primary, #eee);
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.warning {
+  color: var(--sell-color, #e74c3c) !important;
+}
+
+.barContainer {
+  margin-top: 8px;
+  height: 6px;
+  background: var(--bg-primary, #0f0f23);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  background: var(--buy-color, #2ecc71);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.barWarning {
+  background: var(--sell-color, #e74c3c);
+}
+
+.calls {
+  margin-top: 12px;
+}
+
+.calls h4 {
+  margin: 0 0 4px;
+  color: var(--sell-color, #e74c3c);
+  font-size: 0.8rem;
+}
+
+.call {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+  color: var(--text-muted, #8888aa);
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-muted, #8888aa);
+  padding: 16px;
+}
