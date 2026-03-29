@@ -1,0 +1,221 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Top Bar */
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+}
+
+.instrumentSelect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selectLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: 1px solid var(--accent-blue);
+}
+
+.tickerStats {
+  display: flex;
+  gap: 24px;
+  margin-left: auto;
+}
+
+.tickerItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.tickerLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tickerValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Main Area */
+.mainArea {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+}
+
+.depthCard,
+.tradesCard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardTitle {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Depth View */
+.depthContainer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.depthColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.depthHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-primary);
+  margin-bottom: 2px;
+}
+
+.depthRow {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.depthBarBid {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(63, 185, 80, 0.12);
+  pointer-events: none;
+}
+
+.depthBarAsk {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: rgba(248, 81, 73, 0.12);
+  pointer-events: none;
+}
+
+.depthPrice {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  z-index: 1;
+}
+
+.depthQty {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  z-index: 1;
+}
+
+.depthCum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 1;
+}
+
+.emptyDepth {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Spread */
+.spreadSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 28px 12px 0;
+  min-width: 80px;
+}
+
+.spreadLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.spreadValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-yellow);
+}
+
+/* Trades */
+.priceGreen {
+  color: var(--accent-green);
+}
+
+.priceRed {
+  color: var(--accent-red);
+}
+
+.sideBuy {
+  color: var(--accent-green);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sideSell {
+  color: var(--accent-red);
+  font-size: 11px;
+  font-weight: 600;
+}

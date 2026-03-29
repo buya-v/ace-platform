@@ -14,6 +14,9 @@ import {
   ClipboardIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  BookIcon,
+  AlertIcon,
+  ChartBarIcon,
 } from './icons';
 import styles from './Sidebar.module.css';
 
@@ -26,6 +29,9 @@ interface NavItem {
 
 const operationsNav: NavItem[] = [
   { label: 'System Health', path: '/dashboard/monitoring', adminOnly: true, icon: HeartbeatIcon },
+  { label: 'Order Book', path: '/dashboard/orderbook', adminOnly: true, icon: BookIcon },
+  { label: 'Positions', path: '/dashboard/positions', adminOnly: true, icon: ChartBarIcon },
+  { label: 'Risk Overview', path: '/dashboard/risk', adminOnly: true, icon: AlertIcon },
   { label: 'Margin Calls', path: '/dashboard/margin', adminOnly: true, icon: DollarIcon },
   { label: 'Settlement', path: '/dashboard/settlement', adminOnly: true, icon: ExchangeIcon },
   { label: 'Circuit Breakers', path: '/dashboard/circuit-breakers', adminOnly: true, icon: ShieldIcon },

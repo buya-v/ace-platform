@@ -228,6 +228,40 @@ export function fileSAR(data: { participant_id: string; alert_type: string; desc
   return apiFetch<void>('/compliance/sar', { method: 'POST', body: JSON.stringify(data) });
 }
 
+// Instruments / Order Book / Market Data
+export function fetchInstrumentList(signal?: AbortSignal) {
+  return apiFetch<{ instruments?: any[]; [key: string]: any }>('/instruments/list', {}, signal);
+}
+
+export function fetchOrderBook(instrumentId: string, signal?: AbortSignal) {
+  return apiFetch<any>(`/instruments/${instrumentId}/book`, {}, signal);
+}
+
+export function fetchLastTrade(instrumentId: string, signal?: AbortSignal) {
+  return apiFetch<any>(`/instruments/${instrumentId}/trades/latest`, {}, signal);
+}
+
+export function fetchMarketTrades(instrumentId: string, signal?: AbortSignal) {
+  return apiFetch<any>(`/market-data/trades/${instrumentId}`, {}, signal);
+}
+
+export function fetchTicker(instrumentId: string, signal?: AbortSignal) {
+  return apiFetch<any>(`/market-data/ticker/${instrumentId}`, {}, signal);
+}
+
+// Positions / Netting / Portfolio Margin
+export function fetchPositions(signal?: AbortSignal) {
+  return apiFetch<any[]>('/clearing/positions', {}, signal);
+}
+
+export function fetchNetting(signal?: AbortSignal) {
+  return apiFetch<any>('/clearing/netting', {}, signal);
+}
+
+export function fetchPortfolioMargin(signal?: AbortSignal) {
+  return apiFetch<any>('/margin', {}, signal);
+}
+
 // Audit
 export function fetchAuditTrail(params?: { actor?: string; action?: string; from?: string; to?: string; page?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();

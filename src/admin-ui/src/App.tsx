@@ -13,6 +13,9 @@ import { CircuitBreakersPage } from './pages/CircuitBreakers';
 import { WarehouseOverviewPage } from './pages/WarehouseOverview';
 import { ComplianceAlertsPage } from './pages/ComplianceAlerts';
 import { AuditLogPage } from './pages/AuditLog';
+import { OrderBookPage } from './pages/OrderBook';
+import { PositionsPage } from './pages/Positions';
+import { RiskOverviewPage } from './pages/RiskOverview';
 
 const ADMIN_ROLES = ['admin', 'exchange_admin'];
 
@@ -27,6 +30,9 @@ export function App() {
             {/* Admin-only routes */}
             <Route element={<RoleGuard allowedRoles={ADMIN_ROLES} />}>
               <Route path="monitoring" element={<SystemMonitoring />} />
+              <Route path="orderbook" element={<OrderBookPage />} />
+              <Route path="positions" element={<PositionsPage />} />
+              <Route path="risk" element={<RiskOverviewPage />} />
               <Route path="margin" element={<MarginCallsPage />} />
               <Route path="settlement" element={<SettlementStatusPage />} />
               <Route path="circuit-breakers" element={<CircuitBreakersPage />} />

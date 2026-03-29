@@ -143,6 +143,30 @@ export interface AuditEvent {
   ip_address: string;
 }
 
+export interface OrderBookLevel {
+  price: string;
+  quantity: number | string;
+  order_count?: number;
+}
+
+export interface OrderBook {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  instrument_id: string;
+  last_trade_price?: string;
+  state?: number;
+}
+
+export interface Position {
+  participant_id: string;
+  instrument_id: string;
+  side?: string;
+  net_quantity?: number;
+  avg_price?: string;
+  unrealized_pnl?: string;
+  margin_required?: string;
+}
+
 export type AdminRole = 'admin' | 'exchange_admin' | 'compliance_officer';
 
 export function isAdminRole(role: string): boolean {

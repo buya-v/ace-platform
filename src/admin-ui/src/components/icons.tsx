@@ -179,6 +179,25 @@ export function AlertIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function BookIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M2 2h4.5c1 0 1.5.5 1.5 1.5v11S7 13 5.5 13H2V2z" />
+      <path d="M14 2H9.5C8.5 2 8 2.5 8 3.5v11s1-1.5 2.5-1.5H14V2z" />
+    </svg>
+  );
+}
+
+export function ChartBarIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="1" y="8" width="3" height="6" rx="0.5" />
+      <rect x="6.5" y="4" width="3" height="10" rx="0.5" />
+      <rect x="12" y="1" width="3" height="13" rx="0.5" />
+    </svg>
+  );
+}
+
 export function InfoIcon({ size = 16, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
