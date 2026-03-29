@@ -245,6 +245,8 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/book", s.handleGetBook)
 	mux.HandleFunc("/trades/latest/", s.handleGetLastTrade)
 	mux.HandleFunc("/trades/latest", s.handleGetLastTrade)
+	mux.HandleFunc("/circuit-breakers", s.handleGetCircuitBreakers)
+	mux.HandleFunc("/instruments", s.handleListInstruments)
 
 	addr := fmt.Sprintf("%s:%d", s.config.BindAddress, s.config.HealthPort)
 	log.Printf("Health/API server listening on %s", addr)
@@ -445,6 +447,40 @@ func (s *Server) handleGetLastTrade(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(tradeToJSON(trade))
+}
+
+// handleGetCircuitBreakers returns circuit breaker status for all instruments.
+func (s *Server) handleGetCircuitBreakers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	breakers := s.engine.GetCircuitBreakers()
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"circuit_breakers": breakers,
+		"total":            len(breakers),
+	})
+}
+
+// handleListInstruments returns all registered instruments.
+func (s *Server) handleListInstruments(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	instruments := s.engine.ListInstruments()
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"instruments": instruments,
+		"total":       len(instruments),
+	})
 }
 
 // --- JSON helpers ---

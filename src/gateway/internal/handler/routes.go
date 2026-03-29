@@ -19,6 +19,7 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("PATCH", "/api/v1/orders/{order_id}", h.ModifyOrder)
 
 	// --- Market Data (matching-engine, public) ---
+	rt.Handle("GET", "/api/v1/instruments/list", h.ListInstruments)
 	rt.Handle("GET", "/api/v1/instruments/{instrument_id}/book", h.GetOrderBook)
 	rt.Handle("GET", "/api/v1/instruments/{instrument_id}/book/l3", h.GetOrderBookL3)
 	rt.Handle("GET", "/api/v1/instruments/{instrument_id}/trades/latest", h.GetLastTrade)
@@ -28,6 +29,7 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("POST", "/api/v1/admin/instruments/{instrument_id}/resume", h.ResumeInstrument)
 	rt.Handle("POST", "/api/v1/admin/trades/{trade_id}/bust", h.BustTrade)
 	rt.Handle("PUT", "/api/v1/admin/instruments/{instrument_id}/circuit-breaker", h.SetCircuitBreaker)
+	rt.Handle("GET", "/api/v1/admin/circuit-breakers", h.GetCircuitBreakers)
 	rt.Handle("POST", "/api/v1/admin/participants/{participant_id}/disable", h.DisableParticipant)
 	rt.Handle("POST", "/api/v1/admin/mass-cancel", h.MassCancel)
 

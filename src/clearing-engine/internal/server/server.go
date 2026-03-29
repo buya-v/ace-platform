@@ -72,7 +72,9 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/positions", func(w http.ResponseWriter, r *http.Request) {
 		participantID := r.URL.Query().Get("participant_id")
 		if participantID == "" {
-			http.Error(w, "participant_id required", http.StatusBadRequest)
+			// Return empty positions list when no participant specified
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode([]types.Position{})
 			return
 		}
 		positions := s.engine.GetPositions(participantID)

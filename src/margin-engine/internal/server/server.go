@@ -61,7 +61,12 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/margin", func(w http.ResponseWriter, r *http.Request) {
 		participantID := r.URL.Query().Get("participant_id")
 		if participantID == "" {
-			http.Error(w, "participant_id required", http.StatusBadRequest)
+			// Return empty margin summary when no participant specified
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"margins": []interface{}{},
+				"total":   0,
+			})
 			return
 		}
 		pm, ok := s.engine.GetPortfolioMargin(participantID)

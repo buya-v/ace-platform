@@ -80,6 +80,28 @@ func (s *Server) StartHealthServer() error {
 		json.NewEncoder(w).Encode(status)
 	})
 
+	mux.HandleFunc("/alerts", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"alerts": []interface{}{},
+			"total":  0,
+		})
+	})
+
+	mux.HandleFunc("/risk-score", func(w http.ResponseWriter, r *http.Request) {
+		participantID := r.URL.Query().Get("participant_id")
+		if participantID == "" {
+			http.Error(w, "participant_id required", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"participant_id": participantID,
+			"risk_score":     50,
+			"risk_level":     "MEDIUM",
+		})
+	})
+
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)
 	return http.ListenAndServe(addr, mux)
 }

@@ -171,6 +171,50 @@ func (e *Engine) getBook(instrumentID string) (*bookEntry, error) {
 	return entry, nil
 }
 
+// CircuitBreakerStatus describes the circuit breaker state for an instrument.
+type CircuitBreakerStatus struct {
+	InstrumentID string `json:"instrument_id"`
+	State        string `json:"state"`
+	Halted       bool   `json:"halted"`
+}
+
+// GetCircuitBreakers returns circuit breaker status for all instruments.
+func (e *Engine) GetCircuitBreakers() []CircuitBreakerStatus {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	result := make([]CircuitBreakerStatus, 0, len(e.books))
+	for id, entry := range e.books {
+		state := "CONTINUOUS"
+		halted := false
+		switch entry.book.State {
+		case types.BookStateHalted:
+			state = "HALTED"
+			halted = true
+		case types.BookStateAuction:
+			state = "AUCTION"
+		}
+		result = append(result, CircuitBreakerStatus{
+			InstrumentID: id,
+			State:        state,
+			Halted:       halted,
+		})
+	}
+	return result
+}
+
+// ListInstruments returns the IDs of all registered instruments.
+func (e *Engine) ListInstruments() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	ids := make([]string, 0, len(e.books))
+	for id := range e.books {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (e *Engine) dispatchResults(result orderbook.MatchResult) {
 	if e.tradeHandler != nil {
 		for _, t := range result.Trades {

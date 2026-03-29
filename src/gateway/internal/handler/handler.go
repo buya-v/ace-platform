@@ -311,6 +311,18 @@ func (h *Handler) GetMarketTrades(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, "market-data-service", "MarketDataService/GetTrades")
 }
 
+// --- Admin Query Endpoints (matching-engine) ---
+
+func (h *Handler) GetCircuitBreakers(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "matching-engine", "AdminService/GetCircuitBreakers")
+}
+
+// --- Instrument List Endpoint (matching-engine) ---
+
+func (h *Handler) ListInstruments(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "matching-engine", "MarketDataService/ListInstruments")
+}
+
 // --- Warehouse Endpoints (warehouse-service) ---
 
 func (h *Handler) IssueReceipt(w http.ResponseWriter, r *http.Request) {
