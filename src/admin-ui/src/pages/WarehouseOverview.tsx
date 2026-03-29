@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchWarehouseReceipts, fetchWarehouseDeliveries, fetchWarehouseFacilities } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
+import { DataGrid, Column } from '../components/DataGrid';
+import { WarehouseReceipt, PendingDelivery } from '../types';
 import styles from './WarehouseOverview.module.css';
 
 export function WarehouseOverviewPage() {
@@ -36,6 +38,28 @@ export function WarehouseOverviewPage() {
     commodityCounts[r.commodity] = (commodityCounts[r.commodity] || 0) + 1;
   });
 
+  const receiptColumns: Column<WarehouseReceipt>[] = [
+    { key: 'id', header: 'Receipt ID', mono: true, sortable: true },
+    { key: 'commodity', header: 'Commodity', sortable: true },
+    { key: 'grade', header: 'Grade' },
+    { key: 'quantity', header: 'Quantity', render: (row) => `${row.quantity} ${row.unit}` },
+    { key: 'warehouse_name', header: 'Warehouse', sortable: true },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'holder_name', header: 'Holder', sortable: true },
+    { key: 'issued_at', header: 'Issued', sortable: true, render: (row) => new Date(row.issued_at).toLocaleDateString() },
+  ];
+
+  const deliveryColumns: Column<PendingDelivery>[] = [
+    { key: 'id', header: 'Delivery ID', mono: true, sortable: true },
+    { key: 'receipt_id', header: 'Receipt', mono: true },
+    { key: 'from_warehouse', header: 'From', sortable: true },
+    { key: 'to_destination', header: 'To', sortable: true },
+    { key: 'commodity', header: 'Commodity', sortable: true },
+    { key: 'quantity', header: 'Quantity', align: 'right', mono: true },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'requested_at', header: 'Requested', sortable: true, render: (row) => new Date(row.requested_at).toLocaleDateString() },
+  ];
+
   return (
     <div>
       <h1>Warehouse Overview</h1>
@@ -64,7 +88,7 @@ export function WarehouseOverviewPage() {
                 <div className={styles.gaugeTrack}>
                   <div
                     className={styles.gaugeFill}
-                    style={{ width: `${pct}%`, background: pct > 90 ? '#dc3545' : pct > 70 ? '#ffc107' : '#28a745' }}
+                    style={{ width: `${pct}%`, background: pct > 90 ? 'var(--accent-red)' : pct > 70 ? 'var(--accent-yellow)' : 'var(--accent-green)' }}
                   />
                 </div>
                 <span className={styles.gaugePct}>{pct.toFixed(0)}%</span>
@@ -84,73 +108,25 @@ export function WarehouseOverviewPage() {
           onChange={e => setReceiptSearch(e.target.value)}
           className={styles.searchInput}
         />
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Receipt ID</th>
-              <th>Commodity</th>
-              <th>Grade</th>
-              <th>Quantity</th>
-              <th>Warehouse</th>
-              <th>Status</th>
-              <th>Holder</th>
-              <th>Issued</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredReceipts.map(r => (
-              <tr key={r.id}>
-                <td className={styles.mono}>{r.id}</td>
-                <td>{r.commodity}</td>
-                <td>{r.grade}</td>
-                <td>{r.quantity} {r.unit}</td>
-                <td>{r.warehouse_name}</td>
-                <td><StatusBadge status={r.status} /></td>
-                <td>{r.holder_name}</td>
-                <td>{new Date(r.issued_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-            {filteredReceipts.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No receipts found</td></tr>
-            )}
-          </tbody>
-        </table>
+        <DataGrid
+          columns={receiptColumns}
+          data={filteredReceipts}
+          keyField="id"
+          emptyMessage="No receipts found"
+          exportFilename="warehouse-receipts"
+        />
       </div>
 
       {/* Pending deliveries */}
       <div className={styles.section}>
         <h2>Pending Deliveries</h2>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Delivery ID</th>
-              <th>Receipt</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Commodity</th>
-              <th>Quantity</th>
-              <th>Status</th>
-              <th>Requested</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allDeliveries.map(d => (
-              <tr key={d.id}>
-                <td className={styles.mono}>{d.id}</td>
-                <td className={styles.mono}>{d.receipt_id}</td>
-                <td>{d.from_warehouse}</td>
-                <td>{d.to_destination}</td>
-                <td>{d.commodity}</td>
-                <td>{d.quantity}</td>
-                <td><StatusBadge status={d.status} /></td>
-                <td>{new Date(d.requested_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
-            {allDeliveries.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No pending deliveries</td></tr>
-            )}
-          </tbody>
-        </table>
+        <DataGrid
+          columns={deliveryColumns}
+          data={allDeliveries}
+          keyField="id"
+          emptyMessage="No pending deliveries"
+          exportFilename="warehouse-deliveries"
+        />
       </div>
     </div>
   );

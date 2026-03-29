@@ -1,28 +1,28 @@
 .overallBanner {
   padding: 12px 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-weight: 600;
   margin-bottom: 16px;
 }
 
 .overallBanner[data-status="healthy"] {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
 }
 
 .overallBanner[data-status="degraded"] {
-  background: #fff3cd;
-  color: #856404;
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
 }
 
 .overallBanner[data-status="unhealthy"] {
-  background: #f8d7da;
-  color: #721c24;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
 }
 
 .lastCheck {
   font-size: 13px;
-  color: #888;
+  color: var(--text-secondary);
   margin-bottom: 16px;
 }
 
@@ -33,10 +33,10 @@
 }
 
 .card {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-primary);
 }
 
 .cardHeader {
@@ -49,6 +49,7 @@
 .serviceName {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .stats {
@@ -56,10 +57,11 @@
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+  color: var(--text-primary);
 }
 
 .statLabel {
-  color: #888;
+  color: var(--text-secondary);
   display: inline-block;
   width: 60px;
 }

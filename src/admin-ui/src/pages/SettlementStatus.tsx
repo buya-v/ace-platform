@@ -3,6 +3,7 @@ import { usePolling } from '../hooks/usePolling';
 import { fetchSettlementCycles } from '../services/api';
 import { SettlementCycle } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import { DataGrid, Column } from '../components/DataGrid';
 import styles from './SettlementStatus.module.css';
 
 const PHASES = ['OPEN', 'NETTING', 'SETTLING', 'COMPLETED'] as const;
@@ -16,6 +17,15 @@ export function SettlementStatusPage() {
   const cycles = data?.data ?? [];
   const activeCycle = cycles.find(c => c.phase !== 'COMPLETED' && c.phase !== 'FAILED');
   const history = cycles.filter(c => c.phase === 'COMPLETED' || c.phase === 'FAILED');
+
+  const columns: Column<SettlementCycle>[] = [
+    { key: 'id', header: 'Cycle ID', sortable: true, mono: true },
+    { key: 'phase', header: 'Phase', render: (row) => <StatusBadge status={row.phase} /> },
+    { key: 'started_at', header: 'Started', sortable: true, render: (row) => new Date(row.started_at).toLocaleString() },
+    { key: 'completed_at', header: 'Completed', sortable: true, render: (row) => row.completed_at ? new Date(row.completed_at).toLocaleString() : '\u2014' },
+    { key: 'total_settlements', header: 'Settlements', align: 'right', mono: true, sortable: true },
+    { key: 'total_value', header: 'Total Value', align: 'right', mono: true },
+  ];
 
   return (
     <div>
@@ -39,33 +49,12 @@ export function SettlementStatusPage() {
       )}
 
       <h2>Settlement History</h2>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Cycle ID</th>
-            <th>Phase</th>
-            <th>Started</th>
-            <th>Completed</th>
-            <th>Settlements</th>
-            <th>Total Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map(c => (
-            <tr key={c.id}>
-              <td>{c.id}</td>
-              <td><StatusBadge status={c.phase} /></td>
-              <td>{new Date(c.started_at).toLocaleString()}</td>
-              <td>{c.completed_at ? new Date(c.completed_at).toLocaleString() : '—'}</td>
-              <td>{c.total_settlements}</td>
-              <td>{c.total_value}</td>
-            </tr>
-          ))}
-          {history.length === 0 && (
-            <tr><td colSpan={6} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No settlement history</td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataGrid
+        columns={columns}
+        data={history}
+        keyField="id"
+        emptyMessage="No settlement history"
+      />
     </div>
   );
 }

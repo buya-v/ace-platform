@@ -1,6 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchAuditTrail } from '../services/api';
+import { DataGrid, Column } from '../components/DataGrid';
+import { AuditEvent } from '../types';
 import styles from './AuditLog.module.css';
 
 const ACTION_TYPES = [
@@ -30,6 +32,14 @@ export function AuditLogPage() {
 
   const events = data?.data ?? [];
   const pagination = data?.pagination;
+
+  const columns: Column<AuditEvent>[] = [
+    { key: 'timestamp', header: 'Timestamp', sortable: true, render: (row) => new Date(row.timestamp).toLocaleString() },
+    { key: 'actor', header: 'Actor', sortable: true, filterable: true },
+    { key: 'action', header: 'Action', mono: true, sortable: true, filterable: true },
+    { key: 'target_type', header: 'Target', render: (row) => `${row.target_type} / ${row.target_id}` },
+    { key: 'ip_address', header: 'IP Address', mono: true },
+  ];
 
   return (
     <div>
@@ -68,31 +78,13 @@ export function AuditLogPage() {
         />
       </div>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Timestamp</th>
-            <th>Actor</th>
-            <th>Action</th>
-            <th>Target</th>
-            <th>IP Address</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map(evt => (
-            <tr key={evt.id}>
-              <td>{new Date(evt.timestamp).toLocaleString()}</td>
-              <td>{evt.actor}</td>
-              <td className={styles.action}>{evt.action}</td>
-              <td>{evt.target_type} / {evt.target_id}</td>
-              <td className={styles.mono}>{evt.ip_address}</td>
-            </tr>
-          ))}
-          {events.length === 0 && (
-            <tr><td colSpan={5} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No audit events found</td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataGrid
+        columns={columns}
+        data={events}
+        keyField="id"
+        emptyMessage="No audit events found"
+        exportFilename="audit-log"
+      />
 
       {pagination && pagination.total_pages > 1 && (
         <div className={styles.pagination}>

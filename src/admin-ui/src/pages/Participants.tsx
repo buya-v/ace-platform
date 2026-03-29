@@ -3,6 +3,7 @@ import { usePolling } from '../hooks/usePolling';
 import { fetchParticipants, approveParticipant, rejectParticipant } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DataGrid, Column } from '../components/DataGrid';
 import { Participant } from '../types';
 import styles from './Participants.module.css';
 
@@ -34,6 +35,29 @@ export function ParticipantsPage() {
     refresh();
   };
 
+  const columns: Column<Participant>[] = [
+    { key: 'name', header: 'Name', sortable: true },
+    { key: 'email', header: 'Email', sortable: true },
+    { key: 'organization', header: 'Organization', sortable: true },
+    { key: 'kyc_status', header: 'KYC Status', render: (row) => <StatusBadge status={row.kyc_status} /> },
+    { key: 'risk_score', header: 'Risk Score', align: 'right', mono: true, sortable: true },
+    { key: 'submitted_at', header: 'Submitted', sortable: true, render: (row) => new Date(row.submitted_at).toLocaleDateString() },
+    {
+      key: 'actions', header: 'Actions', render: (row) => (
+        (row.kyc_status === 'PENDING' || row.kyc_status === 'UNDER_REVIEW') ? (
+          <div className={styles.actionBtns}>
+            <button className={styles.approveBtn} onClick={() => setActionTarget({ participant: row, action: 'approve' })}>
+              Approve
+            </button>
+            <button className={styles.rejectBtn} onClick={() => setActionTarget({ participant: row, action: 'reject' })}>
+              Reject
+            </button>
+          </div>
+        ) : null
+      ),
+    },
+  ];
+
   return (
     <div>
       <h1>Participant Management</h1>
@@ -55,46 +79,13 @@ export function ParticipantsPage() {
         </select>
       </div>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Organization</th>
-            <th>KYC Status</th>
-            <th>Risk Score</th>
-            <th>Submitted</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map(p => (
-            <tr key={p.id}>
-              <td>{p.name}</td>
-              <td>{p.email}</td>
-              <td>{p.organization}</td>
-              <td><StatusBadge status={p.kyc_status} /></td>
-              <td>{p.risk_score}</td>
-              <td>{new Date(p.submitted_at).toLocaleDateString()}</td>
-              <td>
-                {(p.kyc_status === 'PENDING' || p.kyc_status === 'UNDER_REVIEW') && (
-                  <div className={styles.actionBtns}>
-                    <button className={styles.approveBtn} onClick={() => setActionTarget({ participant: p, action: 'approve' })}>
-                      Approve
-                    </button>
-                    <button className={styles.rejectBtn} onClick={() => setActionTarget({ participant: p, action: 'reject' })}>
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr><td colSpan={7} className={styles.empty}>No participants found</td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataGrid
+        columns={columns}
+        data={filtered}
+        keyField="id"
+        emptyMessage="No participants found"
+        exportFilename="participants"
+      />
 
       {actionTarget && (
         <ConfirmDialog

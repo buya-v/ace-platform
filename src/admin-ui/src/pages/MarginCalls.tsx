@@ -3,6 +3,8 @@ import { usePolling } from '../hooks/usePolling';
 import { fetchMarginCalls, fetchMarginCallStats, triggerMarginCalculation } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DataGrid, Column } from '../components/DataGrid';
+import { MarginCall } from '../types';
 import styles from './MarginCalls.module.css';
 
 export function MarginCallsPage() {
@@ -21,6 +23,17 @@ export function MarginCallsPage() {
   );
 
   const marginCalls = calls.data?.data ?? [];
+
+  const columns: Column<MarginCall>[] = [
+    { key: 'participant_name', header: 'Participant', sortable: true },
+    { key: 'instrument_id', header: 'Instrument', sortable: true },
+    { key: 'required_margin', header: 'Required', align: 'right', mono: true },
+    { key: 'current_margin', header: 'Current', align: 'right', mono: true },
+    { key: 'shortfall', header: 'Shortfall', align: 'right', mono: true },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'issued_at', header: 'Issued', sortable: true, render: (row) => new Date(row.issued_at).toLocaleString() },
+    { key: 'deadline', header: 'Deadline', sortable: true, render: (row) => new Date(row.deadline).toLocaleString() },
+  ];
 
   return (
     <div>
@@ -52,37 +65,12 @@ export function MarginCallsPage() {
         </div>
       )}
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Participant</th>
-            <th>Instrument</th>
-            <th>Required</th>
-            <th>Current</th>
-            <th>Shortfall</th>
-            <th>Status</th>
-            <th>Issued</th>
-            <th>Deadline</th>
-          </tr>
-        </thead>
-        <tbody>
-          {marginCalls.map(mc => (
-            <tr key={mc.id}>
-              <td>{mc.participant_name}</td>
-              <td>{mc.instrument_id}</td>
-              <td>{mc.required_margin}</td>
-              <td>{mc.current_margin}</td>
-              <td>{mc.shortfall}</td>
-              <td><StatusBadge status={mc.status} /></td>
-              <td>{new Date(mc.issued_at).toLocaleString()}</td>
-              <td>{new Date(mc.deadline).toLocaleString()}</td>
-            </tr>
-          ))}
-          {marginCalls.length === 0 && (
-            <tr><td colSpan={8} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No active margin calls</td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataGrid
+        columns={columns}
+        data={marginCalls}
+        keyField="id"
+        emptyMessage="No active margin calls"
+      />
 
       {/* Utilization bars */}
       {marginCalls.length > 0 && (
@@ -98,7 +86,7 @@ export function MarginCallsPage() {
                 <div className={styles.barTrack}>
                   <div
                     className={styles.barFill}
-                    style={{ width: `${pct}%`, background: pct < 80 ? '#28a745' : pct < 100 ? '#ffc107' : '#dc3545' }}
+                    style={{ width: `${pct}%`, background: pct < 80 ? 'var(--accent-green)' : pct < 100 ? 'var(--accent-yellow)' : 'var(--accent-red)' }}
                   />
                 </div>
                 <span className={styles.barPct}>{pct.toFixed(1)}%</span>

@@ -4,6 +4,7 @@ import { fetchInstruments, haltTrading, resumeTrading, setCircuitBreaker } from 
 import { InstrumentControl } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DataGrid, Column } from '../components/DataGrid';
 import styles from './CircuitBreakers.module.css';
 
 export function CircuitBreakersPage() {
@@ -41,59 +42,48 @@ export function CircuitBreakersPage() {
     refresh();
   };
 
+  const columns: Column<InstrumentControl>[] = [
+    { key: 'ticker', header: 'Instrument', sortable: true, mono: true },
+    { key: 'last_price', header: 'Last Price', align: 'right', mono: true },
+    { key: 'upper_limit', header: 'Upper Limit', align: 'right', mono: true },
+    { key: 'lower_limit', header: 'Lower Limit', align: 'right', mono: true },
+    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'daily_volume', header: 'Daily Volume', align: 'right', mono: true, sortable: true, render: (row) => row.daily_volume.toLocaleString() },
+    {
+      key: 'actions', header: 'Actions', render: (row) => (
+        <div className={styles.actionBtns}>
+          <button
+            className={row.status === 'HALTED' ? styles.resumeBtn : styles.haltBtn}
+            onClick={() => setHaltTarget(row)}
+          >
+            {row.status === 'HALTED' ? 'Resume' : 'Halt'}
+          </button>
+          <button className={styles.editBtn} onClick={() => {
+            setEditTarget(row);
+            setEditForm({
+              upper: row.upper_limit,
+              lower: row.lower_limit,
+              cooldown: '5',
+              refPrice: row.last_price,
+            });
+          }}>
+            Edit Limits
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <h1>Circuit Breakers</h1>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Instrument</th>
-            <th>Last Price</th>
-            <th>Upper Limit</th>
-            <th>Lower Limit</th>
-            <th>Status</th>
-            <th>Daily Volume</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {instruments.map(inst => (
-            <tr key={inst.instrument_id}>
-              <td className={styles.ticker}>{inst.ticker}</td>
-              <td>{inst.last_price}</td>
-              <td>{inst.upper_limit}</td>
-              <td>{inst.lower_limit}</td>
-              <td><StatusBadge status={inst.status} /></td>
-              <td>{inst.daily_volume.toLocaleString()}</td>
-              <td>
-                <div className={styles.actionBtns}>
-                  <button
-                    className={inst.status === 'HALTED' ? styles.resumeBtn : styles.haltBtn}
-                    onClick={() => setHaltTarget(inst)}
-                  >
-                    {inst.status === 'HALTED' ? 'Resume' : 'Halt'}
-                  </button>
-                  <button className={styles.editBtn} onClick={() => {
-                    setEditTarget(inst);
-                    setEditForm({
-                      upper: inst.upper_limit,
-                      lower: inst.lower_limit,
-                      cooldown: '5',
-                      refPrice: inst.last_price,
-                    });
-                  }}>
-                    Edit Limits
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {instruments.length === 0 && (
-            <tr><td colSpan={7} style={{ textAlign: 'center', color: '#888', padding: 32 }}>No instruments found</td></tr>
-          )}
-        </tbody>
-      </table>
+      <DataGrid
+        columns={columns}
+        data={instruments}
+        keyField="instrument_id"
+        emptyMessage="No instruments found"
+      />
 
       {haltTarget && (
         <ConfirmDialog

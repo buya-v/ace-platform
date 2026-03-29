@@ -9,15 +9,18 @@
 
 .select {
   padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
   font-size: 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .distribution {
   display: flex;
   gap: 16px;
   font-size: 13px;
+  color: var(--text-primary);
 }
 
 .distItem {
@@ -33,13 +36,13 @@
   display: inline-block;
 }
 
-.dotCRITICAL { background: #dc3545; }
-.dotHIGH { background: #fd7e14; }
-.dotMEDIUM { background: #ffc107; }
-.dotLOW { background: #28a745; }
+.dotCRITICAL { background: var(--accent-red); }
+.dotHIGH { background: var(--accent-orange); }
+.dotMEDIUM { background: var(--accent-yellow); }
+.dotLOW { background: var(--accent-green); }
 
 .distPct {
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .alertList {
@@ -49,24 +52,24 @@
 }
 
 .alertCard {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-primary);
   border-left: 4px solid transparent;
 }
 
 .critical {
-  background: #fff5f5;
-  border-left-color: #dc3545;
+  background: rgba(248, 81, 73, 0.08);
+  border-left-color: var(--accent-red);
 }
 
 .high {
-  border-left-color: #fd7e14;
+  border-left-color: var(--accent-orange);
 }
 
 .medium {
-  border-left-color: #ffc107;
+  border-left-color: var(--accent-yellow);
 }
 
 .alertHeader {
@@ -80,20 +83,22 @@
   font-weight: 600;
   font-size: 14px;
   flex: 1;
+  color: var(--text-primary);
 }
 
 .alertBody {
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .alertBody p {
   margin: 4px 0 8px;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .alertTime {
   font-size: 12px;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .alertActions {
@@ -104,18 +109,19 @@
 
 .resolveBtn {
   padding: 6px 14px;
-  background: #4f8cf7;
+  background: var(--accent-blue);
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
 }
 
 .empty {
   text-align: center;
-  color: #888;
+  color: var(--text-secondary);
   padding: 32px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
 }
