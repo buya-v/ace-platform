@@ -45,6 +45,34 @@ spec:
   dnsNames:
     - ace.asla.mn
 ---
+# ── Certificate for admin.ace.asla.mn ───────────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: admin-ace-asla-mn-cert
+  namespace: ace
+spec:
+  secretName: admin-ace-asla-mn-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - admin.ace.asla.mn
+---
+# ── Certificate for trade.ace.asla.mn ───────────────────────────────────────
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: trade-ace-asla-mn-cert
+  namespace: ace
+spec:
+  secretName: trade-ace-asla-mn-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - trade.ace.asla.mn
+---
 # ── Certificate for demo.ace.asla.mn ────────────────────────────────────────
 apiVersion: cert-manager.io/v1
 kind: Certificate

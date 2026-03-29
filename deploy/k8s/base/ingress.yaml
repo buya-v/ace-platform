@@ -17,10 +17,16 @@ spec:
         - ace.asla.mn
       secretName: ace-asla-mn-tls
     - hosts:
+        - admin.ace.asla.mn
+      secretName: admin-ace-asla-mn-tls
+    - hosts:
+        - trade.ace.asla.mn
+      secretName: trade-ace-asla-mn-tls
+    - hosts:
         - demo.ace.asla.mn
       secretName: demo-ace-asla-mn-tls
   rules:
-    # ── Main platform ──────────────────────────────────────────────────
+    # ── ace.asla.mn — API + redirect root to trade ────────────────────
     - host: ace.asla.mn
       http:
         paths:
@@ -31,22 +37,44 @@ spec:
                 name: gateway
                 port:
                   number: 8080
-          - path: /ws/
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+          - path: /readyz
+            pathType: Exact
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+    # ── admin.ace.asla.mn — Admin Dashboard ───────────────────────────
+    - host: admin.ace.asla.mn
+      http:
+        paths:
+          - path: /api/
             pathType: Prefix
             backend:
               service:
                 name: gateway
                 port:
                   number: 8080
-          - path: /admin
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: admin-ui
                 port:
                   number: 3001
-          - path: /healthz
-            pathType: Exact
+    # ── trade.ace.asla.mn — Trading Web UI ────────────────────────────
+    - host: trade.ace.asla.mn
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
             backend:
               service:
                 name: gateway
@@ -59,7 +87,7 @@ spec:
                 name: web-ui
                 port:
                   number: 3000
-    # ── Demo runner ────────────────────────────────────────────────────
+    # ── demo.ace.asla.mn — Demo Runner ────────────────────────────────
     - host: demo.ace.asla.mn
       http:
         paths:

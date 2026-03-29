@@ -419,7 +419,7 @@ const adminOrderbook: Section = {
     {
       id: 'ob-1',
       title: 'Fetch Instrument List',
-      description: 'Lists all tradeable instruments. View on Admin → Order Book page (/dashboard/orderbook)',
+      description: 'Lists all tradeable instruments. View on admin.ace.asla.mn → Order Book page',
       method: 'GET',
       url: '/api/v1/instruments/list',
       validateResponse: okValidator,
@@ -427,7 +427,7 @@ const adminOrderbook: Section = {
     {
       id: 'ob-2',
       title: 'Fetch Order Book for Wheat',
-      description: 'Shows bid/ask depth for wheat futures. View on Admin → Order Book page',
+      description: 'Shows bid/ask depth for wheat futures. View on admin.ace.asla.mn → Order Book page',
       method: 'GET',
       url: '/api/v1/instruments/WHT-HRW-2026M07-UB/book',
       validateResponse: okValidator,
@@ -435,7 +435,7 @@ const adminOrderbook: Section = {
     {
       id: 'ob-3',
       title: 'Fetch Last Trade',
-      description: 'Most recent trade execution. View on Admin → Order Book page',
+      description: 'Most recent trade execution. View on admin.ace.asla.mn → Order Book page',
       method: 'GET',
       url: '/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest',
       validateResponse: okValidator,
@@ -443,7 +443,7 @@ const adminOrderbook: Section = {
     {
       id: 'ob-4',
       title: 'Fetch Market Trades',
-      description: 'Trade tape from market data service. View on Admin → Order Book page',
+      description: 'Trade tape from market data service. View on admin.ace.asla.mn → Order Book page',
       method: 'GET',
       url: '/api/v1/market-data/trades/WHT-HRW-2026M07-UB',
       validateResponse: okValidator,
@@ -458,7 +458,7 @@ const adminPositions: Section = {
     {
       id: 'pos-1',
       title: 'Fetch Clearing Positions',
-      description: 'All open positions across participants. View on Admin → Positions page (/dashboard/positions)',
+      description: 'All open positions across participants. View on admin.ace.asla.mn → Positions page',
       method: 'GET',
       url: '/api/v1/clearing/positions',
       headers: (state) => authHeader(state, 'admin'),
@@ -467,7 +467,7 @@ const adminPositions: Section = {
     {
       id: 'pos-2',
       title: 'Fetch Netting Obligations',
-      description: 'Netting obligations for settled trades. View on Admin → Positions page',
+      description: 'Netting obligations for settled trades. View on admin.ace.asla.mn → Positions page',
       method: 'GET',
       url: '/api/v1/clearing/netting',
       headers: (state) => authHeader(state, 'admin'),
@@ -476,7 +476,7 @@ const adminPositions: Section = {
     {
       id: 'pos-3',
       title: 'Fetch Portfolio Margin',
-      description: 'Portfolio-level margin requirements. View on Admin → Risk Overview page (/dashboard/risk)',
+      description: 'Portfolio-level margin requirements. View on admin.ace.asla.mn → Risk Overview page',
       method: 'GET',
       url: '/api/v1/margin',
       headers: (state) => authHeader(state, 'admin'),
@@ -485,7 +485,7 @@ const adminPositions: Section = {
     {
       id: 'pos-4',
       title: 'Fetch Margin Calls',
-      description: 'Outstanding margin calls. View on Admin → Margin Calls page (/dashboard/margin)',
+      description: 'Outstanding margin calls. View on admin.ace.asla.mn → Margin Calls page',
       method: 'GET',
       url: '/api/v1/margin/calls',
       headers: (state) => authHeader(state, 'admin'),
@@ -501,7 +501,7 @@ const adminSettlement: Section = {
     {
       id: 'stl-1',
       title: 'Fetch Settlement Cycles',
-      description: 'Settlement cycle history and status. View on Admin → Settlement page (/dashboard/settlement)',
+      description: 'Settlement cycle history and status. View on admin.ace.asla.mn → Settlement page',
       method: 'GET',
       url: '/api/v1/settlement/cycles',
       headers: (state) => authHeader(state, 'admin'),
@@ -510,7 +510,7 @@ const adminSettlement: Section = {
     {
       id: 'stl-2',
       title: 'Trigger Settlement Cycle',
-      description: 'Initiates a new settlement cycle. View on Admin → Settlement page',
+      description: 'Initiates a new settlement cycle. View on admin.ace.asla.mn → Settlement page',
       method: 'POST',
       url: '/api/v1/settlement/cycle',
       headers: (state) => authHeader(state, 'admin'),
@@ -523,7 +523,7 @@ const adminSettlement: Section = {
     {
       id: 'stl-3',
       title: 'Verify Settlement Cycle',
-      description: 'Confirm new cycle appears. View on Admin → Settlement page',
+      description: 'Confirm new cycle appears. View on admin.ace.asla.mn → Settlement page',
       method: 'GET',
       url: '/api/v1/settlement/cycles',
       headers: (state) => authHeader(state, 'admin'),
@@ -539,7 +539,7 @@ const adminCircuitBreakers: Section = {
     {
       id: 'cb-1',
       title: 'Fetch Instruments with Status',
-      description: 'Instruments with trading phase and circuit breaker config. View on Admin → Circuit Breakers page (/dashboard/circuit-breakers)',
+      description: 'Instruments with trading phase and circuit breaker config. View on admin.ace.asla.mn → Circuit Breakers page',
       method: 'GET',
       url: '/api/v1/instruments',
       headers: (state) => authHeader(state, 'admin'),
@@ -548,7 +548,7 @@ const adminCircuitBreakers: Section = {
     {
       id: 'cb-2',
       title: 'Set Circuit Breaker',
-      description: 'Configure price limits for wheat. View on Admin → Circuit Breakers page',
+      description: 'Configure price limits for wheat. View on admin.ace.asla.mn → Circuit Breakers page',
       method: 'PUT',
       url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker',
       headers: (state) => authHeader(state, 'admin'),
@@ -558,7 +558,7 @@ const adminCircuitBreakers: Section = {
     {
       id: 'cb-3',
       title: 'Halt Instrument',
-      description: 'Halt trading on wheat futures. View on Admin → Market Phase page (/dashboard/market-phase)',
+      description: 'Halt trading on wheat futures. View on admin.ace.asla.mn → Market Phase page',
       method: 'POST',
       url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt',
       headers: (state) => authHeader(state, 'admin'),
@@ -567,7 +567,7 @@ const adminCircuitBreakers: Section = {
     {
       id: 'cb-4',
       title: 'Resume Instrument',
-      description: 'Resume trading on wheat futures. View on Admin → Market Phase page',
+      description: 'Resume trading on wheat futures. View on admin.ace.asla.mn → Market Phase page',
       method: 'POST',
       url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume',
       headers: (state) => authHeader(state, 'admin'),
@@ -583,7 +583,7 @@ const adminMonitoring: Section = {
     {
       id: 'mon-1',
       title: 'Fetch Admin Health',
-      description: 'Aggregated service health status. View on Admin → System Health page (/dashboard/monitoring)',
+      description: 'Aggregated service health status. View on admin.ace.asla.mn → System Health page',
       method: 'GET',
       url: '/api/v1/admin/health',
       headers: (state) => authHeader(state, 'admin'),
@@ -592,7 +592,7 @@ const adminMonitoring: Section = {
     {
       id: 'mon-2',
       title: 'Fetch Compliance Alerts',
-      description: 'Active compliance alerts. View on Admin → Compliance page',
+      description: 'Active compliance alerts. View on admin.ace.asla.mn → Compliance page',
       method: 'GET',
       url: '/api/v1/compliance/alerts',
       headers: (state) => authHeader(state, 'admin'),
@@ -610,7 +610,7 @@ const adminMonitoring: Section = {
     {
       id: 'mon-4',
       title: 'Fetch Warehouse Facilities',
-      description: 'Warehouse facility registry and capacity. View on Admin → Warehouse page (/dashboard/warehouse)',
+      description: 'Warehouse facility registry and capacity. View on admin.ace.asla.mn → Warehouse page',
       method: 'GET',
       url: '/api/v1/warehouse/facilities',
       headers: (state) => authHeader(state, 'admin'),

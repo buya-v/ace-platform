@@ -18,6 +18,8 @@ type CORSConfig struct {
 func DefaultCORSConfig() *CORSConfig {
 	origins := []string{
 		"https://ace.asla.mn",
+		"https://admin.ace.asla.mn",
+		"https://trade.ace.asla.mn",
 		"https://demo.ace.asla.mn",
 	}
 
