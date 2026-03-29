@@ -36,6 +36,7 @@ const operationsNav: NavItem[] = [
   { label: 'Settlement', path: '/dashboard/settlement', adminOnly: true, icon: ExchangeIcon },
   { label: 'Circuit Breakers', path: '/dashboard/circuit-breakers', adminOnly: true, icon: ShieldIcon },
   { label: 'Warehouse', path: '/dashboard/warehouse', adminOnly: true, icon: BoxIcon },
+  { label: 'Market Phase', path: '/dashboard/market-phase', adminOnly: true, icon: ShieldIcon },
 ];
 
 const complianceNav: NavItem[] = [

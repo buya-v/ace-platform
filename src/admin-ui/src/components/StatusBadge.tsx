@@ -36,6 +36,7 @@ const statusColors: Record<string, string> = {
   BREACHED: styles.red,
   MATCH_FOUND: styles.red,
   CANCELLED: styles.gray,
+  AUCTION: styles.blue,
   PLEDGED: styles.blue,
 };
 

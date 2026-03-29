@@ -16,6 +16,7 @@ import { AuditLogPage } from './pages/AuditLog';
 import { OrderBookPage } from './pages/OrderBook';
 import { PositionsPage } from './pages/Positions';
 import { RiskOverviewPage } from './pages/RiskOverview';
+import { MarketPhasePage } from './pages/MarketPhase';
 
 const ADMIN_ROLES = ['admin', 'exchange_admin'];
 
@@ -37,6 +38,7 @@ export function App() {
               <Route path="settlement" element={<SettlementStatusPage />} />
               <Route path="circuit-breakers" element={<CircuitBreakersPage />} />
               <Route path="warehouse" element={<WarehouseOverviewPage />} />
+              <Route path="market-phase" element={<MarketPhasePage />} />
             </Route>
             {/* Admin + compliance routes */}
             <Route path="participants" element={<ParticipantsPage />} />
