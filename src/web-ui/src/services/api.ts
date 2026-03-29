@@ -28,7 +28,7 @@ async function attemptRefresh(): Promise<boolean> {
     });
     if (!res.ok) return false;
     const data = await res.json();
-    tokenManager.setToken(data.access_token, data.expires_in);
+    tokenManager.setToken(data.access_token || data.AccessToken, data.expires_in || data.ExpiresIn);
     return true;
   } catch {
     return false;
@@ -80,7 +80,7 @@ export async function login(email: string, password: string): Promise<{ user: { 
   }
 
   const data = await response.json();
-  tokenManager.setToken(data.access_token, data.expires_in);
+  tokenManager.setToken(data.access_token || data.AccessToken, data.expires_in || data.ExpiresIn);
   return { user: data.user };
 }
 
@@ -103,7 +103,7 @@ export async function silentRefresh(): Promise<{ user: { id: string; email: stri
     });
     if (!res.ok) return null;
     const data = await res.json();
-    tokenManager.setToken(data.access_token, data.expires_in);
+    tokenManager.setToken(data.access_token || data.AccessToken, data.expires_in || data.ExpiresIn);
     return { user: data.user };
   } catch {
     return null;

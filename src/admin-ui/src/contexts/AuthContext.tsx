@@ -80,7 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'LOGIN_START' });
     try {
       const response = await apiLogin(email, password);
-      const claims = decodeJwtPayload(response.access_token);
+      const raw = response as Record<string, unknown>;
+      const accessToken = (raw.access_token || raw.AccessToken || raw.token) as string;
+      if (!accessToken) throw new Error('No access token in response');
+      const claims = decodeJwtPayload(accessToken);
       const user: User = {
         id: (claims.sub as string) ?? '',
         email: (claims.email as string) ?? email,
@@ -88,8 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         roles: (claims.roles as string[]) ?? [],
         participant_id: (claims.participant_id as string) ?? null,
       };
-      setAccessToken(response.access_token);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: { token: response.access_token, user } });
+      setAccessToken(accessToken);
+      dispatch({ type: 'LOGIN_SUCCESS', payload: { token: accessToken, user } });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       dispatch({ type: 'LOGIN_FAILURE', payload: { error: message } });
