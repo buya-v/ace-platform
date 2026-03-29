@@ -24,6 +24,9 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("GET", "/api/v1/instruments/{instrument_id}/book/l3", h.GetOrderBookL3)
 	rt.Handle("GET", "/api/v1/instruments/{instrument_id}/trades/latest", h.GetLastTrade)
 
+	// --- Admin Health (aggregated) ---
+	rt.Handle("GET", "/api/v1/admin/health", h.AdminHealth)
+
 	// --- Admin (matching-engine) ---
 	rt.Handle("POST", "/api/v1/admin/instruments/{instrument_id}/halt", h.HaltInstrument)
 	rt.Handle("POST", "/api/v1/admin/instruments/{instrument_id}/resume", h.ResumeInstrument)

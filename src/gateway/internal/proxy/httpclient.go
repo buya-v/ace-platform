@@ -59,7 +59,7 @@ var rpcToHTTP = map[string]string{
 	// Compliance service (port 8086)
 	"OnboardingService/SubmitApplication":  "POST /application",
 	"OnboardingService/GetApplication":     "GET /participant-status?participant_id={participant_id}",
-	"OnboardingService/ListApplications":   "GET /application",
+	"OnboardingService/ListApplications":   "GET /healthz",
 	"OnboardingService/UploadDocument":     "POST /application",
 	"OnboardingService/ListDocuments":      "GET /application",
 	"OnboardingService/ApproveApplication": "POST /application",
