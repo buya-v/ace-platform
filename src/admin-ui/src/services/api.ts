@@ -262,6 +262,15 @@ export function fetchPortfolioMargin(signal?: AbortSignal) {
   return apiFetch<any>('/margin', {}, signal);
 }
 
+// Admin actions
+export function triggerSettlementCycle() {
+  return apiFetch<{ cycle_id: string }>('/settlement/cycle', { method: 'POST' });
+}
+
+export function massCancel() {
+  return apiFetch<void>('/admin/mass-cancel', { method: 'POST' });
+}
+
 // Audit
 export function fetchAuditTrail(params?: { actor?: string; action?: string; from?: string; to?: string; page?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();
