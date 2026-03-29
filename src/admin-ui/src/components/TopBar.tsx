@@ -57,6 +57,14 @@ export function TopBar() {
         )}
       </div>
       <div className={styles.right}>
+        <button
+          className={styles.printBtn}
+          onClick={() => window.print()}
+          title="Print / PDF"
+          data-print-hide
+        >
+          &#128424; Print / PDF
+        </button>
         <span className={statusClass}>
           <span className={styles.statusDot} />
           {statusLabel}

@@ -1,0 +1,68 @@
+@media print {
+  /* Hide navigation and topbar */
+  nav,
+  .sidebar,
+  [class*="sidebar"],
+  [class*="Sidebar"] {
+    display: none !important;
+  }
+
+  [class*="topbar"],
+  [class*="TopBar"] {
+    display: none !important;
+  }
+
+  /* Show only main content area */
+  main,
+  .content,
+  [class*="content"],
+  [class*="Content"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Remove decorative styles */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Ensure tables print cleanly */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc !important;
+    padding: 6px 8px !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Prevent page breaks inside table rows */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Hide print button itself */
+  [class*="printBtn"],
+  [data-print-hide] {
+    display: none !important;
+  }
+}
