@@ -275,9 +275,9 @@ describe('T066: Demo Runner Admin Integration', () => {
       const steps = getAllSteps();
       steps.forEach((step) => {
         expect(step.validateResponse).toBeDefined();
-        const pass = step.validateResponse(200);
+        const pass = step.validateResponse(200, {});
         expect(['PASS', 'FAIL']).toContain(pass);
-        const fail = step.validateResponse(500);
+        const fail = step.validateResponse(500, {});
         expect(['PASS', 'FAIL']).toContain(fail);
       });
     });

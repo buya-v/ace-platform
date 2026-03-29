@@ -1,7 +1,7 @@
 {
   "feature": "ACE Platform — Agriculture Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-03-29T10:31:13Z",
+  "last_updated": "2026-03-29T11:00:01Z",
   "phases": [
     {
       "id": 0,
@@ -885,6 +885,43 @@
       "worktree_branch": "feature/T064-market-phase-control",
       "started_at": "2026-03-29T10:27:28Z",
       "finished_at": "2026-03-29T10:31:13Z"
+    },
+    {
+      "id": "T065",
+      "title": "Demo Runner — Admin Dashboard Sections",
+      "description": "Expand the Demo Runner at `src/demo-runner/` to cover admin dashboard features. Update `src/demo-runner/src/data/sections.ts` to add 5 new sections (sections 9-13, inserted before the existing `readiness` checklist which becomes section 14).\n\nNode.js v22 at /usr/bin/node, npm at /usr/bin/npm. Run: export PATH=/usr/bin:$PATH before npm commands.\n\nThe demo-runner currently has 9 sections (8 step sections + 1 checklist). Add 5 new step sections between `adminOps` (section 8) and `readiness` (currently section 9, will become section 14). Each new section exercises admin dashboard API endpoints — use the exact paths from `src/admin-ui/src/services/api.ts`.\n\nAll admin-endpoint steps require an admin JWT. Use `authHeader(state, 'admin')` for the `headers` function (same pattern as existing sections). Market data steps are public (no auth header needed).\n\nAfter each step, note which admin-ui page the user should view to see the result. Include the note in the step `description` field, e.g., 'View result on Admin Dashboard → Order Book page (/dashboard/orderbook)'.\n\n**Section 9 — Order Book (Admin View)** (`id: 'admin-orderbook'`, 4 steps):\n- `ob-1`: Fetch instrument list — GET `/api/v1/instruments/list` (public, no auth). Description: 'Lists all tradeable instruments. View on Admin → Order Book page (/dashboard/orderbook)'\n- `ob-2`: Fetch order book for wheat — GET `/api/v1/instruments/WHT-HRW-2026M07-UB/book` (public). Description: 'Shows bid/ask depth for wheat futures. View on Admin → Order Book page'\n- `ob-3`: Fetch last trade — GET `/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest` (public). Description: 'Most recent trade execution. View on Admin → Order Book page'\n- `ob-4`: Fetch market trades — GET `/api/v1/market-data/trades/WHT-HRW-2026M07-UB` (public). Description: 'Trade tape from market data service. View on Admin → Order Book page'\n\n**Section 10 — Positions & Risk** (`id: 'admin-positions'`, 4 steps):\n- `pos-1`: Fetch clearing positions — GET `/api/v1/clearing/positions` (admin auth). Description: 'All open positions across participants. View on Admin → Positions page (/dashboard/positions)'\n- `pos-2`: Fetch netting obligations — GET `/api/v1/clearing/netting` (admin auth). Description: 'Netting obligations for settled trades. View on Admin → Positions page'\n- `pos-3`: Fetch portfolio margin — GET `/api/v1/margin` (admin auth). Description: 'Portfolio-level margin requirements. View on Admin → Risk Overview page (/dashboard/risk)'\n- `pos-4`: Fetch margin calls — GET `/api/v1/margin/calls` (admin auth). Description: 'Outstanding margin calls. View on Admin → Margin Calls page (/dashboard/margin)'\n\n**Section 11 — Settlement** (`id: 'admin-settlement'`, 3 steps):\n- `stl-1`: Fetch settlement cycles — GET `/api/v1/settlement/cycles` (admin auth). Description: 'Settlement cycle history and status. View on Admin → Settlement page (/dashboard/settlement)'\n- `stl-2`: Trigger settlement cycle — POST `/api/v1/settlement/cycle` (admin auth, no body). Description: 'Initiates a new settlement cycle. View on Admin → Settlement page'. extractState: save `cycle_id` from response.\n- `stl-3`: Verify settlement cycle — GET `/api/v1/settlement/cycles` (admin auth). Description: 'Confirm new cycle appears. View on Admin → Settlement page'\n\n**Section 12 — Circuit Breakers** (`id: 'admin-circuit-breakers'`, 4 steps):\n- `cb-1`: Fetch instruments with status — GET `/api/v1/instruments` (admin auth). Description: 'Instruments with trading phase and circuit breaker config. View on Admin → Circuit Breakers page (/dashboard/circuit-breakers)'\n- `cb-2`: Set circuit breaker — PUT `/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker` (admin auth). Body: `{ upper_limit_pct: 10, lower_limit_pct: 10, cooldown_minutes: 5, reference_price: '325.50' }`. Description: 'Configure price limits for wheat. View on Admin → Circuit Breakers page'\n- `cb-3`: Halt instrument — POST `/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt` (admin auth). Description: 'Halt trading on wheat futures. View on Admin → Market Phase page (/dashboard/market-phase)'\n- `cb-4`: Resume instrument — POST `/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume` (admin auth). Description: 'Resume trading on wheat futures. View on Admin → Market Phase page'\n\n**Section 13 — System Monitoring** (`id: 'admin-monitoring'`, 4 steps):\n- `mon-1`: Fetch admin health — GET `/api/v1/admin/health` (admin auth). Description: 'Aggregated service health status. View on Admin → System Health page (/dashboard/monitoring)'\n- `mon-2`: Fetch compliance alerts — GET `/api/v1/compliance/alerts` (admin auth). Description: 'Active compliance alerts. View on Admin → Compliance page'\n- `mon-3`: Fetch audit trail — GET `/api/v1/compliance/audit-trail` (admin auth). Description: 'Recent system audit events'\n- `mon-4`: Fetch warehouse facilities — GET `/api/v1/warehouse/facilities` (admin auth). Description: 'Warehouse facility registry and capacity. View on Admin → Warehouse page (/dashboard/warehouse)'\n\n**Implementation details:**\n1. Add the 5 new section constants to `src/demo-runner/src/data/sections.ts` after `adminOps` and before `readiness`.\n2. Update `allSections` array to include all 14 sections (8 original step sections + 5 new + readiness checklist last).\n3. Use `okValidator` for GET endpoints. For POST/PUT, accept 200-299 as PASS.\n4. For the circuit breaker PUT body, use a function: `body: () => ({ upper_limit_pct: 10, lower_limit_pct: 10, cooldown_minutes: 5, reference_price: '325.50' })`\n5. For settlement trigger, use `extractState: (body) => { const b = body as Record<string, unknown>; return { settlement_cycle_id: b.cycle_id || b.id }; }`\n\n**Update tests** — Edit `src/demo-runner/src/__tests__/sections.test.ts`:\n- Change 'has 9 sections' → 'has 14 sections' (update count to 14)\n- Change 'last section is a checklist' assertion to still check the last section\n- Change 'first 8 sections have steps' → 'first 13 sections have steps' (update loop to 13)\n- Add new test: verify each new section has the expected number of steps (admin-orderbook: 4, admin-positions: 4, admin-settlement: 3, admin-circuit-breakers: 4, admin-monitoring: 4)\n- Add test: verify admin sections use auth headers (steps with headers function should return Authorization header when state has admin_token)\n\n**Rebuild:** After changes, run `cd src/demo-runner && npm install && npm run build && npm test` to verify everything passes.\n\nWrite handoff/T065.md on completion with: summary, updated section count, step count, test count, decisions made.",
+      "agent_role": "coder",
+      "phase": 9,
+      "dependencies": [
+        "T059",
+        "T061",
+        "T063",
+        "T064"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 8,
+      "status": "done",
+      "worktree_branch": "feature/T065-demo-runner-admin-sections",
+      "started_at": "2026-03-29T10:51:54Z",
+      "finished_at": "2026-03-29T10:54:02Z"
+    },
+    {
+      "id": "T066",
+      "title": "Demo Runner Integration Test (Post-Admin Sections)",
+      "description": "Run integration test for the demo-runner SPA after adding admin dashboard sections (T065). Verify:\n- src/demo-runner/ builds successfully: cd src/demo-runner && npm install && npm run build\n- Unit tests pass: npm test\n- TypeScript compiles with zero errors (npx tsc --noEmit)\n- The allSections array now has 14 sections (13 step sections + 1 checklist)\n- Total step count increased (was ~32, should now be ~51 with 19 new steps)\n- All step IDs are unique (no collisions between old and new sections)\n- All new admin sections have auth headers where required\n- Coverage meets 60%+ floor on business logic (services/, contexts/, types/, hooks/)\n- Build output is a reasonable size (<500KB gzipped)\n- All existing Go services and other frontend SPAs still compile and pass tests (regression check)\n\nNode.js v22.22.0 is at /usr/bin/node, npm 10.9.4 at /usr/bin/npm. Ensure PATH includes /usr/bin.\n\nWrite handoff/integration-run-<timestamp>.md.",
+      "agent_role": "test_writer",
+      "phase": 9,
+      "dependencies": [
+        "T065"
+      ],
+      "blockedBy": [
+        "T065"
+      ],
+      "estimate_minutes": 5,
+      "status": "done",
+      "worktree_branch": "feature/T066-demo-runner-admin-integration",
+      "started_at": "2026-03-29T10:55:11Z",
+      "finished_at": "2026-03-29T11:00:01Z"
     }
   ]
 }
