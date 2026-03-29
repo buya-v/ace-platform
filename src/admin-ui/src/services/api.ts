@@ -103,17 +103,30 @@ export function fetchHealth(signal?: AbortSignal) {
 }
 
 // Participants
-export function fetchParticipants(params?: { status?: string; page?: number; limit?: number }, signal?: AbortSignal) {
+export async function fetchParticipants(params?: { status?: string; page?: number; limit?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set('status', params.status);
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
   const query = qs.toString();
-  return apiFetch<import('../types').ApiResponse<import('../types').Participant[]>>(
+  const raw = await apiFetch<Record<string, unknown>>(
     `/participants${query ? `?${query}` : ''}`,
     {},
     signal,
   );
+  // Normalize: compliance service returns { applications: [...] } with different field names
+  const rawItems = (raw as any).data ?? (raw as any).applications ?? [];
+  const items = rawItems.map((a: Record<string, unknown>) => ({
+    id: a.ApplicationID ?? a.id ?? '',
+    name: a.LegalName ?? a.entity_name ?? a.name ?? '',
+    email: (a.Contact as Record<string, unknown>)?.Email ?? a.email ?? '',
+    organization: a.TradingName ?? a.organization ?? '',
+    kyc_status: a.Status ?? a.status ?? a.kyc_status ?? 'PENDING',
+    risk_score: a.risk_score ?? 0,
+    submitted_at: a.CreatedAt ?? a.submitted_at ?? a.created_at ?? '',
+    updated_at: a.UpdatedAt ?? a.updated_at ?? '',
+  }));
+  return { data: items, pagination: (raw as any).pagination } as import('../types').ApiResponse<import('../types').Participant[]>;
 }
 
 export function fetchParticipant(id: string, signal?: AbortSignal) {
