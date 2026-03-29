@@ -60,34 +60,34 @@ var rpcToHTTP = map[string]string{
 	// Compliance service (port 8086)
 	"OnboardingService/SubmitApplication":  "POST /application",
 	"OnboardingService/GetApplication":     "GET /participant-status?participant_id={participant_id}",
-	"OnboardingService/ListApplications":   "GET /api/v1/users",
+	"OnboardingService/ListApplications":   "GET /applications",
 	"OnboardingService/UploadDocument":     "POST /application",
 	"OnboardingService/ListDocuments":      "GET /application",
 	"OnboardingService/ApproveApplication": "POST /application",
 	"OnboardingService/RejectApplication":  "POST /application",
 	"ComplianceService/GetStatus":          "GET /participant-status",
-	"ScreeningService/ScreenParticipant":   "GET /participant-status",
+	"ScreeningService/ScreenParticipant":   "POST /participant-status",
 	"ScreeningService/GetScreeningResult":  "GET /participant-status",
-	"ScreeningService/BatchScreen":         "GET /participant-status",
-	"ScreeningService/ResolveMatch":        "GET /participant-status",
+	"ScreeningService/BatchScreen":         "POST /participant-status",
+	"ScreeningService/ResolveMatch":        "POST /participant-status",
 	"ScreeningService/GetRiskScore":        "GET /risk-score",
 	"ComplianceAdminService/ListAlerts":           "GET /alerts",
-	"ComplianceAdminService/ResolveAlert":         "GET /participant-status",
-	"ComplianceAdminService/GetAuditTrail":        "GET /participant-status",
-	"ComplianceAdminService/FileSAR":              "GET /participant-status",
-	"ComplianceAdminService/SuspendParticipant":   "GET /participant-status",
-	"ComplianceAdminService/ReinstateParticipant": "GET /participant-status",
+	"ComplianceAdminService/ResolveAlert":         "POST /alerts",
+	"ComplianceAdminService/GetAuditTrail":        "GET /audit-trail",
+	"ComplianceAdminService/FileSAR":              "POST /alerts",
+	"ComplianceAdminService/SuspendParticipant":   "POST /participant-status",
+	"ComplianceAdminService/ReinstateParticipant": "POST /participant-status",
 
-	// Market data service (port 8087) — healthz only, return stub
-	"MarketDataService/GetCandles": "GET /healthz",
-	"MarketDataService/GetTicker":  "GET /healthz",
-	"MarketDataService/GetTrades":  "GET /healthz",
+	// Market data service (port 8087)
+	"MarketDataService/GetCandles": "GET /candles",
+	"MarketDataService/GetTicker":  "GET /ticker",
+	"MarketDataService/GetTrades":  "GET /trades",
 
-	// Warehouse service (port 8088) — healthz only, return stub
-	"WarehouseService/IssueReceipt":  "GET /healthz",
-	"WarehouseService/PledgeReceipt": "GET /healthz",
-	"WarehouseService/CreateDelivery":"GET /healthz",
-	"WarehouseService/GetInventory":  "GET /healthz",
+	// Warehouse service (port 8088)
+	"WarehouseService/IssueReceipt":   "POST /receipts",
+	"WarehouseService/PledgeReceipt":  "POST /receipts/pledge",
+	"WarehouseService/CreateDelivery": "POST /deliveries",
+	"WarehouseService/GetInventory":   "GET /inventory",
 }
 
 // HTTPBackendClient forwards requests to backend services over HTTP.

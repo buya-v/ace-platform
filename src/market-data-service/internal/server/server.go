@@ -2,10 +2,12 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -168,7 +170,7 @@ func (s *Server) IsReady() bool {
 	return atomic.LoadInt32(&s.ready) == 1
 }
 
-// StartHealthServer starts the HTTP health check server.
+// StartHealthServer starts the HTTP health check and data query server.
 func (s *Server) StartHealthServer() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +185,88 @@ func (s *Server) StartHealthServer() error {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte("not ready"))
 		}
+	})
+
+	// --- Data query endpoints ---
+
+	mux.HandleFunc("/candles", func(w http.ResponseWriter, r *http.Request) {
+		instrumentID := r.URL.Query().Get("instrument_id")
+		if instrumentID == "" {
+			http.Error(w, `{"error":"instrument_id required"}`, http.StatusBadRequest)
+			return
+		}
+		intervalStr := r.URL.Query().Get("interval")
+		interval := types.Interval1m
+		switch intervalStr {
+		case "5m":
+			interval = types.Interval5m
+		case "15m":
+			interval = types.Interval15m
+		case "1h":
+			interval = types.Interval1h
+		case "4h":
+			interval = types.Interval4h
+		case "1d":
+			interval = types.Interval1d
+		}
+		limitStr := r.URL.Query().Get("limit")
+		limit := 100
+		if limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+				limit = v
+			}
+		}
+		candles := s.GetCandles(instrumentID, interval, time.Time{}, time.Time{}, limit)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"instrument_id": instrumentID,
+			"interval":      interval.String(),
+			"candles":        candles,
+			"count":          len(candles),
+		})
+	})
+
+	mux.HandleFunc("/ticker", func(w http.ResponseWriter, r *http.Request) {
+		instrumentID := r.URL.Query().Get("instrument_id")
+		if instrumentID == "" {
+			http.Error(w, `{"error":"instrument_id required"}`, http.StatusBadRequest)
+			return
+		}
+		tick, ok := s.GetTicker(instrumentID)
+		if !ok {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"instrument_id": instrumentID,
+				"symbol":        "",
+				"last_price":    "0",
+				"volume_24h":    0,
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tick)
+	})
+
+	mux.HandleFunc("/trades", func(w http.ResponseWriter, r *http.Request) {
+		instrumentID := r.URL.Query().Get("instrument_id")
+		if instrumentID == "" {
+			http.Error(w, `{"error":"instrument_id required"}`, http.StatusBadRequest)
+			return
+		}
+		limitStr := r.URL.Query().Get("limit")
+		limit := 50
+		if limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+				limit = v
+			}
+		}
+		trades := s.GetTrades(instrumentID, limit, 0, time.Time{}, time.Time{})
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"instrument_id": instrumentID,
+			"trades":        trades,
+			"count":         len(trades),
+		})
 	})
 
 	addr := fmt.Sprintf("%s:%d", s.config.BindAddress, s.config.HealthPort)
