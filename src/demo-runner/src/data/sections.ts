@@ -412,6 +412,213 @@ const adminOps: Section = {
   ],
 };
 
+const adminOrderbook: Section = {
+  id: 'admin-orderbook',
+  title: 'Order Book (Admin View)',
+  steps: [
+    {
+      id: 'ob-1',
+      title: 'Fetch Instrument List',
+      description: 'Lists all tradeable instruments. View on Admin → Order Book page (/dashboard/orderbook)',
+      method: 'GET',
+      url: '/api/v1/instruments/list',
+      validateResponse: okValidator,
+    },
+    {
+      id: 'ob-2',
+      title: 'Fetch Order Book for Wheat',
+      description: 'Shows bid/ask depth for wheat futures. View on Admin → Order Book page',
+      method: 'GET',
+      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/book',
+      validateResponse: okValidator,
+    },
+    {
+      id: 'ob-3',
+      title: 'Fetch Last Trade',
+      description: 'Most recent trade execution. View on Admin → Order Book page',
+      method: 'GET',
+      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest',
+      validateResponse: okValidator,
+    },
+    {
+      id: 'ob-4',
+      title: 'Fetch Market Trades',
+      description: 'Trade tape from market data service. View on Admin → Order Book page',
+      method: 'GET',
+      url: '/api/v1/market-data/trades/WHT-HRW-2026M07-UB',
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+const adminPositions: Section = {
+  id: 'admin-positions',
+  title: 'Positions & Risk',
+  steps: [
+    {
+      id: 'pos-1',
+      title: 'Fetch Clearing Positions',
+      description: 'All open positions across participants. View on Admin → Positions page (/dashboard/positions)',
+      method: 'GET',
+      url: '/api/v1/clearing/positions',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'pos-2',
+      title: 'Fetch Netting Obligations',
+      description: 'Netting obligations for settled trades. View on Admin → Positions page',
+      method: 'GET',
+      url: '/api/v1/clearing/netting',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'pos-3',
+      title: 'Fetch Portfolio Margin',
+      description: 'Portfolio-level margin requirements. View on Admin → Risk Overview page (/dashboard/risk)',
+      method: 'GET',
+      url: '/api/v1/margin',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'pos-4',
+      title: 'Fetch Margin Calls',
+      description: 'Outstanding margin calls. View on Admin → Margin Calls page (/dashboard/margin)',
+      method: 'GET',
+      url: '/api/v1/margin/calls',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+const adminSettlement: Section = {
+  id: 'admin-settlement',
+  title: 'Settlement',
+  steps: [
+    {
+      id: 'stl-1',
+      title: 'Fetch Settlement Cycles',
+      description: 'Settlement cycle history and status. View on Admin → Settlement page (/dashboard/settlement)',
+      method: 'GET',
+      url: '/api/v1/settlement/cycles',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'stl-2',
+      title: 'Trigger Settlement Cycle',
+      description: 'Initiates a new settlement cycle. View on Admin → Settlement page',
+      method: 'POST',
+      url: '/api/v1/settlement/cycle',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: (status) => (status >= 200 && status < 300) ? 'PASS' : 'FAIL',
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        return { settlement_cycle_id: b.cycle_id || b.id };
+      },
+    },
+    {
+      id: 'stl-3',
+      title: 'Verify Settlement Cycle',
+      description: 'Confirm new cycle appears. View on Admin → Settlement page',
+      method: 'GET',
+      url: '/api/v1/settlement/cycles',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+const adminCircuitBreakers: Section = {
+  id: 'admin-circuit-breakers',
+  title: 'Circuit Breakers',
+  steps: [
+    {
+      id: 'cb-1',
+      title: 'Fetch Instruments with Status',
+      description: 'Instruments with trading phase and circuit breaker config. View on Admin → Circuit Breakers page (/dashboard/circuit-breakers)',
+      method: 'GET',
+      url: '/api/v1/instruments',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'cb-2',
+      title: 'Set Circuit Breaker',
+      description: 'Configure price limits for wheat. View on Admin → Circuit Breakers page',
+      method: 'PUT',
+      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker',
+      headers: (state) => authHeader(state, 'admin'),
+      body: () => ({ upper_limit_pct: 10, lower_limit_pct: 10, cooldown_minutes: 5, reference_price: '325.50' }),
+      validateResponse: (status) => (status >= 200 && status < 300) ? 'PASS' : 'FAIL',
+    },
+    {
+      id: 'cb-3',
+      title: 'Halt Instrument',
+      description: 'Halt trading on wheat futures. View on Admin → Market Phase page (/dashboard/market-phase)',
+      method: 'POST',
+      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: (status) => (status >= 200 && status < 300) ? 'PASS' : 'FAIL',
+    },
+    {
+      id: 'cb-4',
+      title: 'Resume Instrument',
+      description: 'Resume trading on wheat futures. View on Admin → Market Phase page',
+      method: 'POST',
+      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: (status) => (status >= 200 && status < 300) ? 'PASS' : 'FAIL',
+    },
+  ],
+};
+
+const adminMonitoring: Section = {
+  id: 'admin-monitoring',
+  title: 'System Monitoring',
+  steps: [
+    {
+      id: 'mon-1',
+      title: 'Fetch Admin Health',
+      description: 'Aggregated service health status. View on Admin → System Health page (/dashboard/monitoring)',
+      method: 'GET',
+      url: '/api/v1/admin/health',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'mon-2',
+      title: 'Fetch Compliance Alerts',
+      description: 'Active compliance alerts. View on Admin → Compliance page',
+      method: 'GET',
+      url: '/api/v1/compliance/alerts',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'mon-3',
+      title: 'Fetch Audit Trail',
+      description: 'Recent system audit events',
+      method: 'GET',
+      url: '/api/v1/compliance/audit-trail',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'mon-4',
+      title: 'Fetch Warehouse Facilities',
+      description: 'Warehouse facility registry and capacity. View on Admin → Warehouse page (/dashboard/warehouse)',
+      method: 'GET',
+      url: '/api/v1/warehouse/facilities',
+      headers: (state) => authHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
 const readinessItems: ChecklistItem[] = [
   { id: 'sec-1', category: 'Security', description: 'TLS termination configured on gateway', status: 'Not Ready' },
   { id: 'sec-2', category: 'Security', description: 'JWT signing keys rotated and stored in secrets manager', status: 'Not Ready' },
@@ -446,6 +653,11 @@ export const allSections: AnySection[] = [
   marketData,
   compliance,
   adminOps,
+  adminOrderbook,
+  adminPositions,
+  adminSettlement,
+  adminCircuitBreakers,
+  adminMonitoring,
   readiness,
 ];
 
