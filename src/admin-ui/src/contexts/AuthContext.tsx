@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: (claims.sub as string) ?? '',
         email: (claims.email as string) ?? email,
         name: (claims.name as string) ?? email,
-        roles: (claims.roles as string[]) ?? [],
+        roles: (claims.roles as string[]) ?? (claims.role ? [claims.role as string] : []),
         participant_id: (claims.participant_id as string) ?? null,
       };
       setAccessToken(accessToken);
