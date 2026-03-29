@@ -44,10 +44,12 @@ func main() {
 	rt := router.New()
 	h.RegisterRoutes(rt)
 
-	// Register WebSocket routes
+	// Register WebSocket routes (both path-param and query-param styles)
 	wsHandler := websocket.NewHandler()
 	rt.Handle("GET", "/api/v1/ws/trades/{instrument_id}", wsHandler.TradesHandler)
+	rt.Handle("GET", "/api/v1/ws/trades", wsHandler.TradesHandler)
 	rt.Handle("GET", "/api/v1/ws/book/{instrument_id}", wsHandler.BookHandler)
+	rt.Handle("GET", "/api/v1/ws/book", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/executions", wsHandler.ExecutionsHandler)
 
 	// Configure public paths (no auth required)
@@ -63,8 +65,7 @@ func main() {
 		PublicPrefixes: []string{
 			"/api/v1/instruments/",
 			"/api/v1/market-data/",
-			"/api/v1/ws/trades/",
-			"/api/v1/ws/book/",
+			"/api/v1/ws/",
 		},
 	}
 
