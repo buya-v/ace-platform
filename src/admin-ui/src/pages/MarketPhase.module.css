@@ -1,0 +1,84 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.haltAllBtn {
+  padding: 10px 20px;
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.haltAllBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.actionBtns {
+  display: flex;
+  gap: 8px;
+}
+
+.haltBtn {
+  padding: 4px 12px;
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.resumeBtn {
+  padding: 4px 12px;
+  background: var(--accent-green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.disabledBtn {
+  padding: 4px 12px;
+  background: var(--text-muted);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: not-allowed;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.progress {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.progressBar {
+  height: 4px;
+  background: var(--border-primary);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent-red);
+  transition: width 0.3s ease;
+}

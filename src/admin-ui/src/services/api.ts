@@ -180,6 +180,14 @@ export function resumeTrading(instrumentId: string) {
   return apiFetch<void>(`/admin/instruments/${instrumentId}/resume`, { method: 'POST' });
 }
 
+export function haltInstrument(id: string, signal?: AbortSignal) {
+  return apiFetch<void>(`/admin/instruments/${id}/halt`, { method: 'POST' }, signal);
+}
+
+export function resumeInstrument(id: string, signal?: AbortSignal) {
+  return apiFetch<void>(`/admin/instruments/${id}/resume`, { method: 'POST' }, signal);
+}
+
 // Warehouse
 export function fetchWarehouseReceipts(params?: { status?: string; page?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();

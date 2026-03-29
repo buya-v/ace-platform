@@ -85,7 +85,7 @@ export interface InstrumentControl {
   last_price: string;
   upper_limit: string;
   lower_limit: string;
-  status: 'TRADING' | 'HALTED' | 'PRE_OPEN';
+  status: 'TRADING' | 'HALTED' | 'PRE_OPEN' | 'AUCTION';
   daily_volume: number;
 }
 
