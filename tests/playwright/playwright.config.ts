@@ -7,6 +7,8 @@ export default defineConfig({
   use: {
     baseURL: 'https://demo.ace.asla.mn',
     ignoreHTTPSErrors: true,
+    screenshot: 'on',
   },
+  outputDir: './test-results',
   reporter: [['list'], ['html', { open: 'never' }]],
 });
