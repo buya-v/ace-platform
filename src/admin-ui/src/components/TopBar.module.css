@@ -76,6 +76,23 @@
   background: currentColor;
 }
 
+.printBtn {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.printBtn:hover {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary);
+}
+
 .clock {
   color: var(--text-muted);
   font-family: var(--font-mono);
