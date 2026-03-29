@@ -37,9 +37,9 @@ var rpcToHTTP = map[string]string{
 	"OrderService/ModifyOrder":    "POST /orders",
 	"AdminService/GetCircuitBreakers":  "GET /circuit-breakers",
 	"MarketDataService/ListInstruments":"GET /instruments",
-	"MarketDataService/GetOrderBook":  "GET /book",
-	"MarketDataService/GetOrderBookL3":"GET /book",
-	"MarketDataService/GetLastTrade":  "GET /trades/latest",
+	"MarketDataService/GetOrderBook":  "GET /book/{instrument_id}",
+	"MarketDataService/GetOrderBookL3":"GET /book/{instrument_id}",
+	"MarketDataService/GetLastTrade":  "GET /trades/latest/{instrument_id}",
 
 	// Clearing engine (port 8082)
 	"ClearingService/GetPositions":   "GET /positions",
@@ -58,7 +58,7 @@ var rpcToHTTP = map[string]string{
 
 	// Compliance service (port 8086)
 	"OnboardingService/SubmitApplication":  "POST /application",
-	"OnboardingService/GetApplication":     "GET /application",
+	"OnboardingService/GetApplication":     "GET /participant-status?participant_id={participant_id}",
 	"OnboardingService/ListApplications":   "GET /application",
 	"OnboardingService/UploadDocument":     "POST /application",
 	"OnboardingService/ListDocuments":      "GET /application",
@@ -125,19 +125,38 @@ func (c *HTTPBackendClient) Forward(req *BackendRequest) (*BackendResponse, erro
 	httpMethod := parts[0]
 	path := parts[1]
 
-	// Substitute path params
+	// Track which query keys were consumed as path params
+	consumed := make(map[string]bool)
+
+	// Substitute path params (check both PathParams and Query since router
+	// puts path params into query string)
 	for k, v := range req.PathParams {
-		path = strings.ReplaceAll(path, "{"+k+"}", v)
+		if strings.Contains(path, "{"+k+"}") {
+			path = strings.ReplaceAll(path, "{"+k+"}", v)
+			consumed[k] = true
+		}
+	}
+	for k, v := range req.Query {
+		if strings.Contains(path, "{"+k+"}") {
+			path = strings.ReplaceAll(path, "{"+k+"}", v)
+			consumed[k] = true
+		}
 	}
 
-	// Build query string
+	// Build query string from remaining (unconsumed) params
 	targetURL := baseURL + path
-	if len(req.Query) > 0 {
-		qparts := []string{}
-		for k, v := range req.Query {
+	qparts := []string{}
+	for k, v := range req.Query {
+		if !consumed[k] {
 			qparts = append(qparts, k+"="+v)
 		}
-		targetURL += "?" + strings.Join(qparts, "&")
+	}
+	if len(qparts) > 0 {
+		if strings.Contains(targetURL, "?") {
+			targetURL += "&" + strings.Join(qparts, "&")
+		} else {
+			targetURL += "?" + strings.Join(qparts, "&")
+		}
 	}
 
 	// Build HTTP request
