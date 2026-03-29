@@ -28,6 +28,17 @@ var rpcToHTTP = map[string]string{
 	"AuthService/ChangePassword":     "POST /api/v1/register",
 	"AuthService/RequestPasswordReset": "POST /api/v1/register",
 
+	// Matching engine / Order service (port 8081)
+	"OrderService/SubmitOrder":    "POST /orders",
+	"OrderService/CancelOrder":    "DELETE /orders",
+	"OrderService/GetOrder":       "GET /orders",
+	"OrderService/GetOpenOrders":  "GET /orders",
+	"OrderService/CancelAllOrders":"DELETE /orders",
+	"OrderService/ModifyOrder":    "POST /orders",
+	"MarketDataService/GetOrderBook":  "GET /book",
+	"MarketDataService/GetOrderBookL3":"GET /book",
+	"MarketDataService/GetLastTrade":  "GET /trades/latest",
+
 	// Clearing engine (port 8082)
 	"ClearingService/GetPositions":   "GET /positions",
 	"ClearingService/GetPosition":    "GET /positions",

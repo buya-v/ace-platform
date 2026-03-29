@@ -10,10 +10,14 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -217,7 +221,8 @@ func (s *Server) IsReady() bool {
 	return atomic.LoadInt32(&s.ready) == 1
 }
 
-// StartHealthServer starts the HTTP health check server for Kubernetes probes.
+// StartHealthServer starts the HTTP health check server for Kubernetes probes
+// and the REST API for order management.
 func (s *Server) StartHealthServer() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -234,9 +239,303 @@ func (s *Server) StartHealthServer() error {
 		}
 	})
 
+	// --- REST API endpoints ---
+	mux.HandleFunc("/orders", s.handleOrders)
+	mux.HandleFunc("/book/", s.handleGetBook)
+	mux.HandleFunc("/book", s.handleGetBook)
+	mux.HandleFunc("/trades/latest/", s.handleGetLastTrade)
+	mux.HandleFunc("/trades/latest", s.handleGetLastTrade)
+
 	addr := fmt.Sprintf("%s:%d", s.config.BindAddress, s.config.HealthPort)
-	log.Printf("Health server listening on %s", addr)
+	log.Printf("Health/API server listening on %s", addr)
 	return http.ListenAndServe(addr, mux)
+}
+
+// handleOrders dispatches POST /orders (submit) and DELETE /orders (cancel).
+func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodPost:
+		s.handleSubmitOrder(w, r)
+	case http.MethodDelete:
+		s.handleCancelOrder(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+	}
+}
+
+// submitOrderJSON is the JSON request body for POST /orders.
+type submitOrderJSON struct {
+	InstrumentID string `json:"instrument_id"`
+	AccountID    string `json:"account_id"`
+	Side         string `json:"side"`
+	Type         string `json:"type"`
+	Quantity     string `json:"quantity"`
+	Price        string `json:"price"`
+	OrderID      string `json:"order_id"`
+	TimeInForce  string `json:"time_in_force"`
+}
+
+func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to read body"})
+		return
+	}
+
+	var req submitOrderJSON
+	if err := json.Unmarshal(body, &req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+
+	// Parse side
+	side := parseSide(req.Side)
+
+	// Parse order type
+	orderType := parseOrderType(req.Type)
+
+	// Parse quantity (accept both string and number in JSON)
+	qty, _ := strconv.ParseUint(req.Quantity, 10, 64)
+	if qty == 0 {
+		// Try parsing as float for values like "10"
+		if f, err := strconv.ParseFloat(req.Quantity, 64); err == nil && f > 0 {
+			qty = uint64(f)
+		}
+	}
+
+	// Parse time in force
+	tif := parseTIF(req.TimeInForce)
+
+	// Use account_id from body, or fall back to x-user-id / x-participant-id header
+	accountID := req.AccountID
+	if accountID == "" {
+		accountID = r.Header.Get("X-Participant-Id")
+	}
+	if accountID == "" {
+		accountID = r.Header.Get("X-User-Id")
+	}
+	if accountID == "" {
+		accountID = "anonymous"
+	}
+
+	report, err := s.SubmitOrder(SubmitOrderRequest{
+		OrderID:     req.OrderID,
+		InstrumentID: req.InstrumentID,
+		AccountID:   accountID,
+		Side:        side,
+		OrderType:   orderType,
+		TimeInForce: tif,
+		Price:       req.Price,
+		Quantity:    qty,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(execReportToJSON(report))
+}
+
+func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
+	orderID := r.URL.Query().Get("order_id")
+	instrumentID := r.URL.Query().Get("instrument_id")
+	accountID := r.URL.Query().Get("account_id")
+	if accountID == "" {
+		accountID = r.Header.Get("X-Participant-Id")
+	}
+
+	if orderID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "order_id is required"})
+		return
+	}
+	if instrumentID == "" {
+		instrumentID = "WHT-HRW-2026M07-UB" // default instrument
+	}
+
+	report, err := s.CancelOrder(instrumentID, orderID, accountID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(execReportToJSON(report))
+}
+
+// handleGetBook handles GET /book/{instrument_id}.
+func (s *Server) handleGetBook(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	// Extract instrument_id from URL path: /book/{instrument_id}
+	instrumentID := strings.TrimPrefix(r.URL.Path, "/book/")
+	if instrumentID == "" {
+		instrumentID = r.URL.Query().Get("instrument_id")
+	}
+	if instrumentID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "instrument_id is required"})
+		return
+	}
+
+	depthStr := r.URL.Query().Get("depth")
+	var depth uint32 = 10
+	if depthStr != "" {
+		if d, err := strconv.ParseUint(depthStr, 10, 32); err == nil {
+			depth = uint32(d)
+		}
+	}
+
+	snap, err := s.GetOrderBookSnapshot(instrumentID, depth)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	resp := map[string]interface{}{
+		"instrument_id":    snap.InstrumentID,
+		"last_trade_price": snap.LastTradePrice.String(),
+		"state":            int(snap.State),
+		"bids":             priceLevelsToJSON(snap.Bids),
+		"asks":             priceLevelsToJSON(snap.Asks),
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// handleGetLastTrade handles GET /trades/latest/{instrument_id}.
+func (s *Server) handleGetLastTrade(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	// Extract instrument_id from URL path: /trades/latest/{instrument_id}
+	instrumentID := strings.TrimPrefix(r.URL.Path, "/trades/latest/")
+	if instrumentID == "" {
+		instrumentID = r.URL.Query().Get("instrument_id")
+	}
+	if instrumentID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "instrument_id is required"})
+		return
+	}
+
+	trade, err := s.GetLastTrade(instrumentID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(tradeToJSON(trade))
+}
+
+// --- JSON helpers ---
+
+func parseSide(s string) types.Side {
+	switch strings.ToUpper(s) {
+	case "BUY":
+		return types.SideBuy
+	case "SELL":
+		return types.SideSell
+	default:
+		return types.SideBuy
+	}
+}
+
+func parseOrderType(s string) types.OrderType {
+	switch strings.ToUpper(s) {
+	case "LIMIT":
+		return types.OrderTypeLimit
+	case "MARKET":
+		return types.OrderTypeMarket
+	case "STOP_LIMIT":
+		return types.OrderTypeStopLimit
+	case "STOP_MARKET":
+		return types.OrderTypeStopMarket
+	default:
+		return types.OrderTypeLimit
+	}
+}
+
+func parseTIF(s string) types.TimeInForce {
+	switch strings.ToUpper(s) {
+	case "DAY":
+		return types.TIFDay
+	case "GTC":
+		return types.TIFGTC
+	case "GTD":
+		return types.TIFGTD
+	case "IOC":
+		return types.TIFIOC
+	case "FOK":
+		return types.TIFFOK
+	default:
+		return types.TIFGTC
+	}
+}
+
+func execReportToJSON(r types.ExecutionReport) map[string]interface{} {
+	return map[string]interface{}{
+		"order_id":        r.OrderID,
+		"id":              r.OrderID,
+		"exec_id":         r.ExecID,
+		"client_order_id": r.ClientOrderID,
+		"exec_type":       r.ExecType,
+		"order_status":    r.OrderStatus.String(),
+		"side":            r.Side.String(),
+		"instrument_id":   r.InstrumentID,
+		"price":           r.Price.String(),
+		"quantity":        r.Quantity,
+		"last_qty":        r.LastQty,
+		"last_price":      r.LastPrice.String(),
+		"cumulative_qty":  r.CumulativeQty,
+		"leaves_qty":      r.LeavesQty,
+		"trade_id":        r.TradeID,
+		"account_id":      r.AccountID,
+	}
+}
+
+func tradeToJSON(t types.Trade) map[string]interface{} {
+	return map[string]interface{}{
+		"trade_id":       t.TradeID,
+		"instrument_id":  t.InstrumentID,
+		"buy_order_id":   t.BuyOrderID,
+		"sell_order_id":  t.SellOrderID,
+		"price":          t.Price.String(),
+		"quantity":       t.Quantity,
+		"aggressor_side": t.AggressorSide.String(),
+		"executed_at":    t.ExecutedAt.Format(time.RFC3339Nano),
+	}
+}
+
+func priceLevelsToJSON(levels []PriceLevel) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(levels))
+	for i, l := range levels {
+		result[i] = map[string]interface{}{
+			"price":       l.Price.String(),
+			"quantity":    l.Quantity,
+			"order_count": l.OrderCount,
+		}
+	}
+	return result
 }
 
 // GRPCAddr returns the address the gRPC server should bind to.
