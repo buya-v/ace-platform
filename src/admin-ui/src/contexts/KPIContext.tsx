@@ -8,6 +8,7 @@ interface KPIContextValue {
   health: HealthResponse | null;
   marginStats: MarginCallStats | null;
   isLoading: boolean;
+  refresh: () => void;
 }
 
 const KPIContext = createContext<KPIContextValue | null>(null);
@@ -28,10 +29,16 @@ export function KPIProvider({ children }: { children: React.ReactNode }) {
     isAdmin,
   );
 
+  const refresh = () => {
+    healthPoll.refresh();
+    marginPoll.refresh();
+  };
+
   const value: KPIContextValue = {
     health: healthPoll.data as HealthResponse | null,
     marginStats: marginPoll.data,
     isLoading: healthPoll.isLoading || marginPoll.isLoading,
+    refresh,
   };
 
   return (
