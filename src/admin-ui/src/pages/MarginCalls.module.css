@@ -88,3 +88,22 @@
   font-weight: 600;
   color: var(--text-primary);
 }
+
+.deadlineExpired {
+  color: var(--accent-red);
+  font-weight: 700;
+}
+
+.deadlineUrgent {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+.deadlineWarning {
+  color: var(--accent-yellow);
+  font-weight: 600;
+}
+
+.deadlineSafe {
+  color: var(--accent-green);
+}

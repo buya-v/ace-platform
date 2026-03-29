@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchSettlementCycles } from '../services/api';
 import { SettlementCycle } from '../types';
@@ -8,7 +8,15 @@ import styles from './SettlementStatus.module.css';
 
 const PHASES = ['OPEN', 'NETTING', 'SETTLING', 'COMPLETED'] as const;
 
+export function formatCurrency(value: string | number): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '$0.00';
+  return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 export function SettlementStatusPage() {
+  const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
+
   const { data } = usePolling(
     (signal) => fetchSettlementCycles({}, signal),
     15000,
@@ -24,8 +32,12 @@ export function SettlementStatusPage() {
     { key: 'started_at', header: 'Started', sortable: true, render: (row) => new Date(row.started_at).toLocaleString() },
     { key: 'completed_at', header: 'Completed', sortable: true, render: (row) => row.completed_at ? new Date(row.completed_at).toLocaleString() : '\u2014' },
     { key: 'total_settlements', header: 'Settlements', align: 'right', mono: true, sortable: true },
-    { key: 'total_value', header: 'Total Value', align: 'right', mono: true },
+    { key: 'total_value', header: 'Total Value', align: 'right', mono: true, render: (row) => formatCurrency(row.total_value) },
   ];
+
+  const toggleExpand = (cycleId: string) => {
+    setExpandedCycleId(prev => prev === cycleId ? null : cycleId);
+  };
 
   return (
     <div>
@@ -39,7 +51,7 @@ export function SettlementStatusPage() {
             <div><strong>Started:</strong> {new Date(activeCycle.started_at).toLocaleString()}</div>
             <div><strong>Expected:</strong> {new Date(activeCycle.expected_completion).toLocaleString()}</div>
             <div><strong>Settlements:</strong> {activeCycle.total_settlements}</div>
-            <div><strong>Total Value:</strong> {activeCycle.total_value}</div>
+            <div><strong>Total Value:</strong> {formatCurrency(activeCycle.total_value)}</div>
           </div>
         </div>
       )}
@@ -49,12 +61,43 @@ export function SettlementStatusPage() {
       )}
 
       <h2>Settlement History</h2>
-      <DataGrid
-        columns={columns}
-        data={history}
-        keyField="id"
-        emptyMessage="No settlement history"
-      />
+      <div className={styles.historyList}>
+        {history.length === 0 && (
+          <div className={styles.noActive}>No settlement history</div>
+        )}
+        {history.map(cycle => (
+          <div key={cycle.id}>
+            <div
+              className={styles.historyRow}
+              onClick={() => toggleExpand(cycle.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpand(cycle.id); }}
+            >
+              <span className={`${styles.expandIcon} ${expandedCycleId === cycle.id ? styles.expandIconOpen : ''}`}>&#9654;</span>
+              <span className={styles.historyId}>{cycle.id}</span>
+              <StatusBadge status={cycle.phase} />
+              <span className={styles.historyDate}>{new Date(cycle.started_at).toLocaleString()}</span>
+              <span className={styles.historyDate}>{cycle.completed_at ? new Date(cycle.completed_at).toLocaleString() : '\u2014'}</span>
+              <span className={styles.historyValue}>{cycle.total_settlements}</span>
+              <span className={styles.historyValue}>{formatCurrency(cycle.total_value)}</span>
+            </div>
+            <div className={`${styles.detailPanel} ${expandedCycleId === cycle.id ? styles.detailPanelOpen : ''}`}>
+              <div className={styles.detailContent}>
+                <h3>Cycle Details</h3>
+                <div className={styles.detailGrid}>
+                  <div><strong>Cycle ID:</strong> {cycle.id}</div>
+                  <div><strong>Phase:</strong> {cycle.phase}</div>
+                  <div><strong>Started:</strong> {new Date(cycle.started_at).toLocaleString()}</div>
+                  <div><strong>Completed:</strong> {cycle.completed_at ? new Date(cycle.completed_at).toLocaleString() : '\u2014'}</div>
+                  <div><strong>Total Settlements:</strong> {cycle.total_settlements}</div>
+                  <div><strong>Total Value:</strong> {formatCurrency(cycle.total_value)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

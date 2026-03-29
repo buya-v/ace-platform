@@ -18,32 +18,62 @@
 
 .distribution {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
   font-size: 13px;
   color: var(--text-primary);
+  min-width: 280px;
 }
 
 .distItem {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
-.distDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
+.distLabel {
+  width: 64px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
-.dotCRITICAL { background: var(--accent-red); }
-.dotHIGH { background: var(--accent-orange); }
-.dotMEDIUM { background: var(--accent-yellow); }
-.dotLOW { background: var(--accent-green); }
+.distBarTrack {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.distBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+  min-width: 2px;
+}
+
+.barCRITICAL { background: var(--accent-red); }
+.barHIGH { background: var(--accent-orange); }
+.barMEDIUM { background: var(--accent-yellow); }
+.barLOW { background: var(--accent-green); }
+
+.distCount {
+  min-width: 20px;
+  text-align: right;
+  font-weight: 600;
+}
 
 .distPct {
   color: var(--text-secondary);
+  min-width: 40px;
 }
+
+.severityIconCritical { color: var(--accent-red); display: flex; }
+.severityIconHigh { color: var(--accent-orange); display: flex; }
+.severityIconMedium { color: var(--accent-yellow); display: flex; }
+.severityIconLow { color: var(--accent-green); display: flex; }
 
 .alertList {
   display: flex;
@@ -57,6 +87,7 @@
   padding: 16px;
   border: 1px solid var(--border-primary);
   border-left: 4px solid transparent;
+  cursor: pointer;
 }
 
 .critical {
@@ -115,6 +146,48 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
+}
+
+.notesPanel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.notesPanelOpen {
+  max-height: 200px;
+  transition: max-height 0.3s ease-in;
+}
+
+.notesContent {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-primary);
+  margin-top: 12px;
+}
+
+.notesLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.notesTextarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.notesTextarea::placeholder {
+  color: var(--text-muted);
 }
 
 .empty {

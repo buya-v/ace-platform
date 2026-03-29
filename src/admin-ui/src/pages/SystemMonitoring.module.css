@@ -3,6 +3,24 @@
   border-radius: var(--radius-md);
   font-weight: 600;
   margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bannerText {
+  flex: 1;
+}
+
+.bannerStats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.bannerStats strong {
+  font-weight: 700;
 }
 
 .overallBanner[data-status="healthy"] {
@@ -64,4 +82,38 @@
   color: var(--text-secondary);
   display: inline-block;
   width: 60px;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uptimeBarWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.uptimeBarTrack {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.uptimeBarFill {
+  height: 100%;
+  background: var(--accent-green);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.uptimeBarLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 40px;
 }

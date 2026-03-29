@@ -1,16 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchMarginCalls, fetchMarginCallStats, triggerMarginCalculation } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
+import { Sparkline } from '../components/Sparkline';
 import { MarginCall } from '../types';
 import styles from './MarginCalls.module.css';
+
+const MAX_UTIL_HISTORY = 20;
+
+function formatDeadline(deadline: string): { text: string; className: string } {
+  const now = Date.now();
+  const deadlineMs = new Date(deadline).getTime();
+  const diff = deadlineMs - now;
+
+  if (diff <= 0) return { text: 'EXPIRED', className: styles.deadlineExpired };
+
+  const hours = diff / (1000 * 60 * 60);
+  const totalMins = Math.floor(diff / (1000 * 60));
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  const text = h > 0 ? `${h}h ${m}m remaining` : `${m}m remaining`;
+
+  if (hours < 1) return { text, className: styles.deadlineUrgent };
+  if (hours < 4) return { text, className: styles.deadlineWarning };
+  return { text, className: styles.deadlineSafe };
+}
+
+export { formatDeadline };
 
 export function MarginCallsPage() {
   const [showTrigger, setShowTrigger] = useState(false);
   const [triggerParticipant, setTriggerParticipant] = useState('');
   const [triggerInstrument, setTriggerInstrument] = useState('');
+  const utilizationHistory = useRef<Map<string, number[]>>(new Map());
 
   const calls = usePolling(
     (signal) => fetchMarginCalls(signal),
@@ -24,6 +48,18 @@ export function MarginCallsPage() {
 
   const marginCalls = calls.data?.data ?? [];
 
+  // Update utilization history on each poll
+  for (const mc of marginCalls) {
+    const required = parseFloat(mc.required_margin) || 1;
+    const current = parseFloat(mc.current_margin) || 0;
+    const pct = Math.min((current / required) * 100, 100);
+    const key = mc.id;
+    const history = utilizationHistory.current.get(key) ?? [];
+    history.push(pct);
+    if (history.length > MAX_UTIL_HISTORY) history.shift();
+    utilizationHistory.current.set(key, history);
+  }
+
   const columns: Column<MarginCall>[] = [
     { key: 'participant_name', header: 'Participant', sortable: true },
     { key: 'instrument_id', header: 'Instrument', sortable: true },
@@ -32,7 +68,15 @@ export function MarginCallsPage() {
     { key: 'shortfall', header: 'Shortfall', align: 'right', mono: true },
     { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'issued_at', header: 'Issued', sortable: true, render: (row) => new Date(row.issued_at).toLocaleString() },
-    { key: 'deadline', header: 'Deadline', sortable: true, render: (row) => new Date(row.deadline).toLocaleString() },
+    {
+      key: 'deadline',
+      header: 'Deadline',
+      sortable: true,
+      render: (row) => {
+        const { text, className } = formatDeadline(row.deadline);
+        return <span className={className}>{text}</span>;
+      },
+    },
   ];
 
   return (
@@ -80,6 +124,7 @@ export function MarginCallsPage() {
             const required = parseFloat(mc.required_margin) || 1;
             const current = parseFloat(mc.current_margin) || 0;
             const pct = Math.min((current / required) * 100, 100);
+            const history = utilizationHistory.current.get(mc.id) ?? [];
             return (
               <div key={mc.id} className={styles.barRow}>
                 <span className={styles.barLabel}>{mc.participant_name}</span>
@@ -90,6 +135,14 @@ export function MarginCallsPage() {
                   />
                 </div>
                 <span className={styles.barPct}>{pct.toFixed(1)}%</span>
+                {history.length > 1 && (
+                  <Sparkline
+                    data={history}
+                    color={pct < 80 ? 'var(--accent-green)' : pct < 100 ? 'var(--accent-yellow)' : 'var(--accent-red)'}
+                    width={80}
+                    height={20}
+                  />
+                )}
               </div>
             );
           })}
