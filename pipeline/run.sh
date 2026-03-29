@@ -79,16 +79,19 @@ run_planner() {
   log_section "Phase 1: Planning"
   log_info "Running Planner Agent..."
 
-  local context
-  context="$(build_planner_context "$requirement")"
+  # Write context to temp file to avoid MAX_ARG_STRLEN (128KB per-arg limit)
+  local context_file
+  context_file="$(mktemp "${TMPDIR:-/tmp}/planner-context.XXXXXX")"
+  build_planner_context "$requirement" > "$context_file"
 
   _claude -p \
     --append-system-prompt "$(cat "${PROJECT_ROOT}/pipeline/prompts/planner.md")" \
     --tools "Read,Write,Edit,Glob,Grep" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$BUDGET_PER_AGENT" \
-    "$context"
+    < "$context_file"
 
+  rm -f "$context_file"
   log_success "Planner complete — tasks.json updated"
   echo ""
   log_info "Task summary after planning:"
@@ -116,12 +119,19 @@ run_worker() {
     test_writer) prompt_file="${PROJECT_ROOT}/pipeline/prompts/test-writer.md" ;;
   esac
 
+  # Write context to temp file to avoid MAX_ARG_STRLEN (128KB per-arg limit)
+  local context_file
+  context_file="$(mktemp "${TMPDIR:-/tmp}/worker-context.XXXXXX")"
+  echo "$context" > "$context_file"
+
   (cd "$wt_path" && _claude -p \
     --append-system-prompt "$(cat "$prompt_file")" \
     --tools "Read,Write,Edit,Bash,Glob,Grep" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$BUDGET_PER_AGENT" \
-    "$context")
+    < "$context_file")
+
+  rm -f "$context_file"
 
   task_set_status "$task_id" "done"
   task_set_finished "$task_id"
@@ -133,14 +143,19 @@ run_reviewer() {
   log_info "Running Reviewer for $task_id..."
 
   local context
-  context="$(build_reviewer_context "$task_id")"
+  # Write context to temp file to avoid MAX_ARG_STRLEN (128KB per-arg limit)
+  local context_file
+  context_file="$(mktemp "${TMPDIR:-/tmp}/reviewer-context.XXXXXX")"
+  build_reviewer_context "$task_id" > "$context_file"
 
   _claude -p \
     --append-system-prompt "$(cat "${PROJECT_ROOT}/pipeline/prompts/reviewer.md")" \
     --tools "Read,Write,Glob,Grep" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$BUDGET_PER_AGENT" \
-    "$context"
+    < "$context_file"
+
+  rm -f "$context_file"
 
   # Check the verdict
   local review_file="${HANDOFF_DIR}/${task_id}-review.md"
