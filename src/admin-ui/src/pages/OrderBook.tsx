@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
+import { useWebSocket, WebSocketStatus } from '../hooks/useWebSocket';
 import {
   fetchInstrumentList,
   fetchOrderBook,
@@ -39,6 +40,26 @@ interface TradeRow {
 
 const DEFAULT_INSTRUMENT = 'WHT-HRW-2026M07-UB';
 
+function WsStatusDot({ status }: { status: WebSocketStatus }) {
+  const color =
+    status === 'connected' ? 'var(--accent-green, #3fb950)'
+    : status === 'connecting' ? 'var(--accent-yellow, #d29922)'
+    : 'var(--accent-red, #f85149)';
+  const title =
+    status === 'connected' ? 'WebSocket connected'
+    : status === 'connecting' ? 'WebSocket connecting'
+    : status === 'error' ? 'WebSocket error'
+    : 'WebSocket disconnected';
+  return (
+    <span
+      className={styles.wsDot}
+      style={{ background: color }}
+      title={title}
+      data-testid="ws-status-dot"
+    />
+  );
+}
+
 export function OrderBookPage() {
   const [instrumentId, setInstrumentId] = useState(DEFAULT_INSTRUMENT);
   const [instruments, setInstruments] = useState<string[]>([]);
@@ -66,11 +87,19 @@ export function OrderBookPage() {
     return () => controller.abort();
   }, []);
 
-  // Poll order book every 2s
+  // WebSocket for real-time order book updates
+  const ws = useWebSocket<BookData>('/book/' + instrumentId);
+  const wsConnected = ws.status === 'connected';
+
+  // Poll order book every 2s as fallback when WS is not connected
   const book = usePolling<BookData>(
     useCallback((signal: AbortSignal) => fetchOrderBook(instrumentId, signal), [instrumentId]),
     2000,
+    !wsConnected,
   );
+
+  // Use WS data when connected, otherwise fall back to polling data
+  const bookData = wsConnected ? ws.data : book.data;
 
   // Poll ticker every 5s
   const ticker = usePolling<TickerData>(
@@ -86,14 +115,14 @@ export function OrderBookPage() {
 
   // Parse bids/asks
   const bids: BookLevel[] = useMemo(() => {
-    const raw = book.data?.bids;
+    const raw = bookData?.bids;
     return Array.isArray(raw) ? raw : [];
-  }, [book.data]);
+  }, [bookData]);
 
   const asks: BookLevel[] = useMemo(() => {
-    const raw = book.data?.asks;
+    const raw = bookData?.asks;
     return Array.isArray(raw) ? raw : [];
-  }, [book.data]);
+  }, [bookData]);
 
   // Cumulative volumes
   const bidsCumulative = useMemo(() => {
@@ -204,6 +233,7 @@ export function OrderBookPage() {
               <option key={id} value={id}>{id}</option>
             ))}
           </select>
+          <WsStatusDot status={ws.status} />
         </div>
         <div className={styles.tickerStats}>
           <div className={styles.tickerItem}>

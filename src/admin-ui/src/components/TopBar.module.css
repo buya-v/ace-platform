@@ -76,6 +76,24 @@
   background: currentColor;
 }
 
+.wsConnected {
+  composes: statusPill;
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+}
+
+.wsConnecting {
+  composes: statusPill;
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
+}
+
+.wsDisconnected {
+  composes: statusPill;
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-secondary);
+}
+
 .clock {
   color: var(--text-muted);
   font-family: var(--font-mono);
