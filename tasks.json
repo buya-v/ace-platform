@@ -1,7 +1,7 @@
 {
   "feature": "ACE Platform — Agriculture Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-03-28T17:19:10Z",
+  "last_updated": "2026-03-29T10:31:13Z",
   "phases": [
     {
       "id": 0,
@@ -821,6 +821,70 @@
       "worktree_branch": "feature/T060-demo-runner-integration-test",
       "started_at": "2026-03-28T17:16:43Z",
       "finished_at": "2026-03-28T17:19:10Z"
+    },
+    {
+      "id": "T061",
+      "title": "Admin UI — CSV/PDF Export Utility",
+      "description": "Add CSV export and print/PDF support to the admin dashboard at `src/admin-ui/`.\n\nNode.js v22 at /usr/bin/node, npm at /usr/bin/npm. Run: export PATH=/usr/bin:$PATH before npm commands.\n\n**1. CSV Export utility** — Create `src/admin-ui/src/utils/export.ts`:\n- `exportToCSV(columns: {key: string; header: string}[], data: Record<string, unknown>[], filename: string): void`\n- Build CSV string from columns/data (handle commas and quotes in values by wrapping in double-quotes and escaping internal quotes)\n- Create a Blob with type `text/csv;charset=utf-8;`, create an object URL, create a temporary `<a>` element with `download` attribute set to `filename`, click it programmatically, then revoke the URL\n- Export the function as a named export\n\n**2. Print stylesheet** — Create `src/admin-ui/src/styles/print.css`:\n- `@media print` rules that: hide the sidebar (`nav` / `.sidebar`), hide the topbar, show only `.content` / `main` area with a white/light background, remove box shadows and dark backgrounds, ensure tables print cleanly with borders\n- Link this stylesheet in `src/admin-ui/index.html` via `<link rel=\"stylesheet\" href=\"/src/styles/print.css\" media=\"print\" />`\n\n**3. Print/PDF button in TopBar** — Edit `src/admin-ui/src/components/TopBar.tsx`:\n- Add a 'Print / PDF' button (use a printer icon or text) in the right section of the TopBar that calls `window.print()` on click\n- Style it consistently with the existing TopBar design (dark theme, small button)\n\n**4. Tests** — Add tests in `src/admin-ui/src/__tests__/export.test.ts`:\n- Test CSV string generation with various data (empty, single row, values with commas/quotes)\n- Test that exportToCSV creates and clicks a download link (mock URL.createObjectURL, document.createElement)\n- Target 80%+ coverage on export.ts\n\nVerify with: cd src/admin-ui && npm install && npm run build && npm test\n\nWrite handoff/T061.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T050"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 8,
+      "status": "done",
+      "worktree_branch": "feature/T061-csv-pdf-export",
+      "started_at": "2026-03-29T10:21:14Z",
+      "finished_at": "2026-03-29T10:24:41Z"
+    },
+    {
+      "id": "T062",
+      "title": "Admin UI — WebSocket Real-Time Hook",
+      "description": "Add WebSocket connectivity to the admin dashboard at `src/admin-ui/` for real-time data updates.\n\nNode.js v22 at /usr/bin/node, npm at /usr/bin/npm. Run: export PATH=/usr/bin:$PATH before npm commands.\n\n**1. useWebSocket hook** — Create `src/admin-ui/src/hooks/useWebSocket.ts`:\n- `useWebSocket(path: string, options?: { enabled?: boolean })` — returns `{ data: T | null, status: 'connecting' | 'connected' | 'disconnected' | 'error', reconnectCount: number }`\n- Build full URL from `window.__ACE_CONFIG__.WS_BASE_URL` (already defined in index.html as `ws://localhost:8080/api/v1/ws`) + path\n- Auto-connect on mount when `enabled` is true (default true)\n- Auto-reconnect with exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s. Reset backoff on successful connection.\n- Parse incoming messages as JSON and update `data` state\n- Clean up WebSocket on unmount or when path/enabled changes\n- Handle connection errors gracefully (set status to 'error')\n\n**2. Update OrderBook page** — Edit `src/admin-ui/src/pages/OrderBook.tsx`:\n- Import and use `useWebSocket` for order book updates: `useWebSocket<BookData>('/book/' + instrumentId)`\n- Keep the existing `usePolling` as a fallback — if WS is connected, use WS data; if disconnected, fall back to polling\n- Add a small WS status indicator next to the instrument selector (green dot = connected, yellow = connecting, red = disconnected)\n\n**3. WS connection status in TopBar** — Edit `src/admin-ui/src/components/TopBar.tsx`:\n- Add a WebSocket connection status indicator in the right section (a small badge showing 'WS: Connected' / 'WS: Disconnected')\n- Use a shared state or context to track WS status from the OrderBook page, or simply add a standalone WS health check that pings the gateway WS endpoint\n- Style consistently with existing status indicators in TopBar\n\n**4. Tests** — Add tests in `src/admin-ui/src/__tests__/useWebSocket.test.ts`:\n- Mock the WebSocket global to test: connection, message parsing, auto-reconnect on close, exponential backoff timing, cleanup on unmount\n- Test status transitions: connecting → connected → disconnected → reconnecting\n- Target 70%+ coverage on the hook\n\nVerify with: cd src/admin-ui && npm install && npm run build && npm test\n\nWrite handoff/T062.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T050"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "rejected",
+      "worktree_branch": "feature/T062-websocket-hook",
+      "started_at": "2026-03-29T10:21:14Z",
+      "finished_at": "2026-03-29T10:25:18Z"
+    },
+    {
+      "id": "T063",
+      "title": "Admin UI — Keyboard Shortcuts",
+      "description": "Add global keyboard shortcuts to the admin dashboard at `src/admin-ui/`.\n\nNode.js v22 at /usr/bin/node, npm at /usr/bin/npm. Run: export PATH=/usr/bin:$PATH before npm commands.\n\n**1. useKeyboardShortcuts hook** — Create `src/admin-ui/src/hooks/useKeyboardShortcuts.ts`:\n- Global `keydown` event listener registered on mount, cleaned up on unmount\n- Ignore shortcuts when focus is inside `<input>`, `<textarea>`, or `<select>` elements (check `event.target.tagName`)\n- Shortcuts (all use Ctrl/Meta modifier except Esc and ?):\n  - `Ctrl+1` → navigate to `/dashboard` (Overview)\n  - `Ctrl+2` → navigate to `/dashboard/monitoring` (System Health)\n  - `Ctrl+3` → navigate to `/dashboard/orderbook` (Order Book)\n  - `Ctrl+4` → navigate to `/dashboard/positions` (Positions)\n  - `Ctrl+5` → navigate to `/dashboard/risk` (Risk Overview)\n  - `Ctrl+6` → navigate to `/dashboard/margin` (Margin Calls)\n  - `Ctrl+7` → navigate to `/dashboard/settlement` (Settlement)\n  - `Ctrl+8` → navigate to `/dashboard/circuit-breakers` (Circuit Breakers)\n  - `Ctrl+9` → navigate to `/dashboard/warehouse` (Warehouse)\n  - `Ctrl+R` → call a provided `onRefresh` callback (prevent default browser refresh)\n  - `Ctrl+E` → call a provided `onExport` callback\n  - `Escape` → call a provided `onEscape` callback (close modals)\n  - `?` (no modifier, Shift+/) → toggle help overlay visibility\n- Accept a config object: `{ onRefresh?: () => void, onExport?: () => void, onEscape?: () => void, navigate: (path: string) => void }`\n- Return `{ showHelp: boolean, setShowHelp: (v: boolean) => void }`\n\n**2. ShortcutHelp overlay** — Create `src/admin-ui/src/components/ShortcutHelp.tsx` + `ShortcutHelp.module.css`:\n- Dark semi-transparent modal overlay (centered, max-width 500px)\n- Title: 'Keyboard Shortcuts'\n- Two-column list: shortcut key (monospace, styled badge) | description\n- List all shortcuts defined above\n- Close button (X) in top-right corner, also closes on Escape\n- Animate in/out with CSS opacity transition\n\n**3. Register in DashboardLayout** — Edit `src/admin-ui/src/pages/DashboardLayout.tsx`:\n- Import and call `useKeyboardShortcuts` in `DashboardInner` component\n- Wire `navigate` to `useNavigate()` from react-router\n- Wire `onEscape` to close any open modals (or no-op if none)\n- Wire `onRefresh` to trigger a page reload or KPI refresh\n- Wire `onExport` to call `exportToCSV` if T061 is available, or no-op\n- Render `<ShortcutHelp>` conditionally based on `showHelp` state\n\n**4. Tests** — Add tests in `src/admin-ui/src/__tests__/keyboard-shortcuts.test.ts`:\n- Test that Ctrl+1 through Ctrl+9 call navigate with correct paths\n- Test that Ctrl+R calls onRefresh and prevents default\n- Test that ? toggles help overlay\n- Test that shortcuts are ignored when focus is in an input\n- Target 80%+ coverage on the hook\n\nVerify with: cd src/admin-ui && npm install && npm run build && npm test\n\nWrite handoff/T063.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T050"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T063-keyboard-shortcuts",
+      "started_at": "2026-03-29T10:21:14Z",
+      "finished_at": "2026-03-29T10:24:43Z"
+    },
+    {
+      "id": "T064",
+      "title": "Admin UI — Market Phase Control Page",
+      "description": "Add a Market Phase Control page to the admin dashboard at `src/admin-ui/` for managing instrument trading states.\n\nNode.js v22 at /usr/bin/node, npm at /usr/bin/npm. Run: export PATH=/usr/bin:$PATH before npm commands.\n\n**1. MarketPhase page** — Create `src/admin-ui/src/pages/MarketPhase.tsx` + `MarketPhase.module.css`:\n- Fetch instrument list from `GET /api/v1/instruments/list` (use existing `fetchInstrumentList` from `src/admin-ui/src/services/api.ts`)\n- Display a table/grid of all instruments with columns: Instrument ID, Name/Description, Current Phase (TRADING / HALTED / PRE_OPEN / AUCTION), Last Updated\n- Phase shown as a colored StatusBadge (green=TRADING, red=HALTED, yellow=PRE_OPEN, blue=AUCTION) — reuse existing `StatusBadge` component\n- Each row has Halt/Resume button (toggles based on current state):\n  - If TRADING → show 'Halt' button (red) → calls `POST /api/v1/admin/instruments/{id}/halt`\n  - If HALTED → show 'Resume' button (green) → calls `POST /api/v1/admin/instruments/{id}/resume`\n  - Other states → buttons disabled\n- Clicking Halt/Resume opens the existing `ConfirmDialog` component (already at `src/admin-ui/src/components/ConfirmDialog.tsx`) asking 'Are you sure you want to halt/resume trading for {instrument}?'\n- **Emergency 'Halt All Markets' button** at the top of the page:\n  - Red prominent button\n  - Opens a ConfirmDialog that requires the user to type 'HALT ALL' (exact match) in a text input to confirm\n  - On confirm, calls `POST /api/v1/admin/instruments/{id}/halt` for every currently TRADING instrument\n  - Shows progress indicator while halting\n- Auto-refresh instrument list every 10s using existing `usePolling` hook\n- Add API functions to `src/admin-ui/src/services/api.ts`: `haltInstrument(id: string, signal?: AbortSignal)` and `resumeInstrument(id: string, signal?: AbortSignal)` that POST to the respective endpoints\n\n**2. Route and navigation** — Edit `src/admin-ui/src/App.tsx`:\n- Import `MarketPhasePage` and add route: `<Route path=\"market-phase\" element={<MarketPhasePage />} />`\n- Place inside the admin-only RoleGuard block alongside other operations routes\n\n**3. Sidebar entry** — Edit `src/admin-ui/src/components/Sidebar.tsx`:\n- Add to `operationsNav` array: `{ label: 'Market Phase', path: '/dashboard/market-phase', adminOnly: true, icon: ShieldIcon }` (or create a new icon if appropriate — can reuse an existing icon from `icons.tsx`)\n\n**4. Tests** — Add tests in `src/admin-ui/src/__tests__/market-phase.test.ts`:\n- Test that the 'Halt All' button requires typing 'HALT ALL' to enable confirmation\n- Test halt/resume API function calls\n- Test instrument phase display logic (correct badge color per state)\n- Target 60%+ coverage on business logic\n\nVerify with: cd src/admin-ui && npm install && npm run build && npm test\n\nWrite handoff/T064.md on completion.",
+      "agent_role": "builder",
+      "phase": 7,
+      "dependencies": [
+        "T050"
+      ],
+      "blockedBy": [],
+      "estimate_minutes": 10,
+      "status": "done",
+      "worktree_branch": "feature/T064-market-phase-control",
+      "started_at": "2026-03-29T10:27:28Z",
+      "finished_at": "2026-03-29T10:31:13Z"
     }
   ]
 }

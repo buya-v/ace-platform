@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useKPI } from '../contexts/KPIContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import styles from './TopBar.module.css';
 
 const pageNames: Record<string, string> = {
@@ -23,6 +24,7 @@ export function TopBar() {
   const location = useLocation();
   const { health } = useKPI();
   const [time, setTime] = useState(() => formatTime(new Date()));
+  const wsHealth = useWebSocket('/health', { enabled: true });
 
   useEffect(() => {
     const id = setInterval(() => setTime(formatTime(new Date())), 1000);
@@ -65,6 +67,17 @@ export function TopBar() {
         >
           &#128424; Print / PDF
         </button>
+        <span
+          className={
+            wsHealth.status === 'connected' ? styles.wsConnected
+            : wsHealth.status === 'connecting' ? styles.wsConnecting
+            : styles.wsDisconnected
+          }
+          data-testid="ws-badge"
+        >
+          <span className={styles.statusDot} />
+          {wsHealth.status === 'connected' ? 'WS: Connected' : 'WS: Disconnected'}
+        </span>
         <span className={statusClass}>
           <span className={styles.statusDot} />
           {statusLabel}

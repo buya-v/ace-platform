@@ -28,6 +28,14 @@
   white-space: nowrap;
 }
 
+.wsDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
