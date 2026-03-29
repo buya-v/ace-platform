@@ -53,8 +53,11 @@ server {
     }
 
     # Admin UI
-    location /admin {
-        proxy_pass http://127.0.0.1:13001;
+    location /admin/ {
+        proxy_pass http://127.0.0.1:13001/;
+    }
+    location = /admin {
+        return 301 /admin/;
     }
 
     # Trading Web UI (catch-all)

@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"time"
 )
@@ -23,6 +26,15 @@ func (sw *statusWriter) Write(b []byte) (int, error) {
 	n, err := sw.ResponseWriter.Write(b)
 	sw.size += n
 	return n, err
+}
+
+// Hijack implements http.Hijacker so WebSocket upgrades work through the
+// logging middleware. It delegates to the underlying ResponseWriter.
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := sw.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not support hijacking")
 }
 
 // logEntry is the structured JSON log format.
