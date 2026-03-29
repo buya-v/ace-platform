@@ -12,7 +12,6 @@ map $http_origin $cors_origin {
 
 # ── admin.ace.asla.mn — Admin Dashboard ──────────────────────────────
 server {
-    listen 80;
     server_name admin.ace.asla.mn;
 
     location /api/ {
@@ -46,11 +45,17 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.ace.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.ace.asla.mn/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
 }
 
 # ── trade.ace.asla.mn — Trading Web UI ───────────────────────────────
 server {
-    listen 80;
     server_name trade.ace.asla.mn;
 
     location /api/ {
@@ -84,6 +89,13 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.ace.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.ace.asla.mn/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
 }
 
 # ── ace.asla.mn — API + redirect root to trade ───────────────────────
@@ -157,4 +169,29 @@ server {
     listen 80;
     server_name demo.ace.asla.mn;
     return 301 https://$host$request_uri;
+}
+
+server {
+    if ($host = admin.ace.asla.mn) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    listen 80;
+    server_name admin.ace.asla.mn;
+    return 404; # managed by Certbot
+
+
+}
+server {
+    if ($host = trade.ace.asla.mn) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    listen 80;
+    server_name trade.ace.asla.mn;
+    return 404; # managed by Certbot
+
+
 }

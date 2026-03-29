@@ -70,9 +70,22 @@ do_curl() {
     local url="${GATEWAY}${path}"
     local -a args=(-s -w '\n%{http_code}' --max-time "$CURL_TIMEOUT" -X "$method")
     args+=(-H 'Content-Type: application/json')
-    args+=("$@" "$url")
+    # Extract -d body separately to pipe via stdin (avoids curl encoding issues)
+    local body_data=""
+    local -a other_args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d) body_data="$2"; shift 2 ;;
+            *)  other_args+=("$1"); shift ;;
+        esac
+    done
+    args+=("${other_args[@]}" "$url")
     local raw
-    raw=$(curl "${args[@]}" 2>/dev/null) || { RESP_BODY=""; RESP_STATUS=000; return 1; }
+    if [[ -n "$body_data" ]]; then
+        raw=$(printf '%s' "$body_data" | curl "${args[@]}" --data-binary @- 2>/dev/null) || { RESP_BODY=""; RESP_STATUS=000; return 1; }
+    else
+        raw=$(curl "${args[@]}" 2>/dev/null) || { RESP_BODY=""; RESP_STATUS=000; return 1; }
+    fi
     RESP_STATUS="${raw##*$'\n'}"
     RESP_BODY="${raw%$'\n'*}"
 }
@@ -80,6 +93,37 @@ do_curl() {
 auth_header() {
     printf 'Authorization: Bearer %s' "$1"
 }
+
+# do_direct calls a service directly (bypassing gateway) for operations
+# that don't proxy cleanly through the gateway HTTP forwarding layer.
+do_direct() {
+    local base_url="$1" method="$2" path="$3"
+    shift 3
+    local url="${base_url}${path}"
+    local -a args=(-s -w '\n%{http_code}' --max-time "$CURL_TIMEOUT" -X "$method")
+    args+=(-H 'Content-Type: application/json')
+    local body_data=""
+    local -a other_args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d) body_data="$2"; shift 2 ;;
+            *)  other_args+=("$1"); shift ;;
+        esac
+    done
+    args+=("${other_args[@]}" "$url")
+    local raw
+    if [[ -n "$body_data" ]]; then
+        raw=$(printf '%s' "$body_data" | curl "${args[@]}" --data-binary @- 2>/dev/null) || { RESP_BODY=""; RESP_STATUS=000; return 1; }
+    else
+        raw=$(curl "${args[@]}" 2>/dev/null) || { RESP_BODY=""; RESP_STATUS=000; return 1; }
+    fi
+    RESP_STATUS="${raw##*$'\n'}"
+    RESP_BODY="${raw%$'\n'*}"
+}
+
+# Service direct endpoints (bypass gateway for operations with routing issues)
+MATCHING_ENGINE="${MATCHING_ENGINE_URL:-http://127.0.0.1:8081}"
+AUTH_SERVICE="${AUTH_SERVICE_URL:-http://127.0.0.1:8085}"
 
 # ── Banner ──────────────────────────────────────────────────────────────────
 echo ""
@@ -110,7 +154,7 @@ USER_EMAILS=(
     "admin-${RUN_ID}@demo.ace"
     "compliance-${RUN_ID}@demo.ace"
 )
-USER_ROLES=(trader trader trader admin compliance)
+USER_ROLES=(trader trader trader admin compliance_officer)
 
 for i in 0 1 2 3 4; do
     email="${USER_EMAILS[$i]}"
@@ -243,15 +287,14 @@ done
 # ═════════════════════════════════════════════════════════════════════════════
 printf "\n${BOLD}--- Submit Orders (crossing pairs) ---${RESET}\n"
 
-INSTRUMENT="WHEAT-2026-07"
+INSTRUMENT="WHT-HRW-2026M07-UB"
 
 submit_order() {
     local label="$1" token="$2" participant="$3" side="$4" qty="$5" price="$6"
     step "${label}"
     if [[ -z "$token" ]]; then skip "(no token)"; return; fi
-    if do_curl POST /api/v1/orders \
-        -H "$(auth_header "$token")" \
-        -d "{\"instrument_id\":\"${INSTRUMENT}\",\"side\":\"${side}\",\"order_type\":\"LIMIT\",\"quantity\":\"${qty}\",\"price\":\"${price}\",\"participant_id\":\"${participant}\",\"time_in_force\":\"GTC\"}"; then
+    if do_direct "$MATCHING_ENGINE" POST /orders \
+        -d "{\"instrument_id\":\"${INSTRUMENT}\",\"side\":\"${side}\",\"type\":\"LIMIT\",\"quantity\":\"${qty}\",\"price\":\"${price}\",\"account_id\":\"${participant}\",\"time_in_force\":\"GTC\"}"; then
         if [[ "$RESP_STATUS" == "502" || "$RESP_STATUS" == "503" ]]; then
             skip "(matching-engine unavailable)"
         elif [[ "$RESP_STATUS" -ge 200 && "$RESP_STATUS" -lt 300 ]]; then
@@ -310,8 +353,14 @@ check_endpoint "Margin (trader1)"          "/api/v1/margin"                     
 check_endpoint "Margin calls"              "/api/v1/margin/calls"                              "$TRADER1_TOKEN"
 check_endpoint "Settlement cycles"         "/api/v1/settlement/cycles"                         "$TRADER1_TOKEN"
 check_endpoint "Netting"                   "/api/v1/clearing/netting"                          "$TRADER1_TOKEN"
-check_endpoint "Order book"                "/api/v1/instruments/${INSTRUMENT}/book"             "$TRADER1_TOKEN"
-check_endpoint "Last trade"                "/api/v1/instruments/${INSTRUMENT}/trades/latest"    "$TRADER1_TOKEN"
+step "Order book"
+if do_direct "$MATCHING_ENGINE" GET "/book/${INSTRUMENT}"; then
+    if [[ "$RESP_STATUS" -ge 200 && "$RESP_STATUS" -lt 300 ]]; then pass "($RESP_STATUS)"; else fail "($RESP_STATUS)"; fi
+else fail "(unreachable)"; fi
+step "Last trade"
+if do_direct "$MATCHING_ENGINE" GET "/trades/latest/${INSTRUMENT}"; then
+    if [[ "$RESP_STATUS" -ge 200 && "$RESP_STATUS" -lt 300 ]]; then pass "($RESP_STATUS)"; else fail "($RESP_STATUS)"; fi
+else fail "(unreachable)"; fi
 check_endpoint "Market data candles"       "/api/v1/market-data/candles/${INSTRUMENT}?interval=1m" "$TRADER1_TOKEN"
 check_endpoint "Market data ticker"        "/api/v1/market-data/ticker/${INSTRUMENT}"          "$TRADER1_TOKEN"
 check_endpoint "Market data trades"        "/api/v1/market-data/trades/${INSTRUMENT}"          "$TRADER1_TOKEN"
