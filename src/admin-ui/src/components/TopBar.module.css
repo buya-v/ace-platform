@@ -1,0 +1,84 @@
+.topbar {
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-5);
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.breadcrumb {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.breadcrumbSep {
+  color: var(--text-muted);
+}
+
+.breadcrumbCurrent {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statusHealthy {
+  composes: statusPill;
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+}
+
+.statusDegraded {
+  composes: statusPill;
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
+}
+
+.statusUnhealthy {
+  composes: statusPill;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
+}
+
+.statusUnknown {
+  composes: statusPill;
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-secondary);
+}
+
+.statusDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.clock {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+  font-size: 12px;
+}
