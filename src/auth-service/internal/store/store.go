@@ -190,3 +190,13 @@ func (s *InMemoryStore) MarkPKCEUsed(authCode string) error {
 	c.Used = true
 	return nil
 }
+
+func (s *InMemoryStore) ListUsers() []*types.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	users := make([]*types.User, 0, len(s.users))
+	for _, u := range s.users {
+		users = append(users, u)
+	}
+	return users
+}

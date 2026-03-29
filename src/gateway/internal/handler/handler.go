@@ -230,7 +230,7 @@ func (h *Handler) GetApplication(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
-	h.forward(w, r, "compliance-service", "OnboardingService/ListApplications")
+	h.forward(w, r, "auth-service", "AuthService/ListUsers")
 }
 
 func (h *Handler) UploadDocument(w http.ResponseWriter, r *http.Request) {

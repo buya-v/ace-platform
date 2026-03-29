@@ -23,6 +23,7 @@ var rpcToHTTP = map[string]string{
 	"AuthService/CreateAPIKey":       "POST /api/v1/apikey/create",
 	"AuthService/ValidateAPIKey":     "POST /api/v1/apikey/validate",
 	"AuthService/RevokeAPIKey":       "POST /api/v1/apikey/revoke",
+	"AuthService/ListUsers":          "GET /api/v1/users",
 	"AuthService/Logout":             "POST /api/v1/session/revoke",
 	"AuthService/GetProfile":         "POST /api/v1/token/validate",
 	"AuthService/ChangePassword":     "POST /api/v1/register",
@@ -59,7 +60,7 @@ var rpcToHTTP = map[string]string{
 	// Compliance service (port 8086)
 	"OnboardingService/SubmitApplication":  "POST /application",
 	"OnboardingService/GetApplication":     "GET /participant-status?participant_id={participant_id}",
-	"OnboardingService/ListApplications":   "GET /healthz",
+	"OnboardingService/ListApplications":   "GET /api/v1/users",
 	"OnboardingService/UploadDocument":     "POST /application",
 	"OnboardingService/ListDocuments":      "GET /application",
 	"OnboardingService/ApproveApplication": "POST /application",

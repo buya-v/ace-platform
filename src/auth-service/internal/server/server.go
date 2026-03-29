@@ -61,6 +61,7 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/api/v1/apikey/create", s.handler.CreateAPIKey)
 	mux.HandleFunc("/api/v1/apikey/validate", s.handler.ValidateAPIKey)
 	mux.HandleFunc("/api/v1/apikey/revoke", s.handler.RevokeAPIKey)
+	mux.HandleFunc("/api/v1/users", s.handler.ListUsers)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)
 	return http.ListenAndServe(addr, mux)

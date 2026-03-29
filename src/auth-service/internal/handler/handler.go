@@ -382,6 +382,18 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
+func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	users := h.service.ListUsers()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data": users,
+	})
+}
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -45,6 +45,8 @@ type Store interface {
 	StorePKCEChallenge(challenge *types.PKCEChallenge) error
 	GetPKCEChallenge(authCode string) (*types.PKCEChallenge, error)
 	MarkPKCEUsed(authCode string) error
+
+	ListUsers() []*types.User
 }
 
 type Service struct {
@@ -241,6 +243,23 @@ func (s *Service) RevokeAPIKey(keyID, userID string) error {
 // ListAPIKeys returns all active API keys for a user.
 func (s *Service) ListAPIKeys(userID string) ([]*types.APIKey, error) {
 	return s.store.ListAPIKeysByUser(userID)
+}
+
+// ListUsers returns all users with passwords stripped.
+func (s *Service) ListUsers() []map[string]interface{} {
+	users := s.store.ListUsers()
+	result := make([]map[string]interface{}, 0, len(users))
+	for _, u := range users {
+		result = append(result, map[string]interface{}{
+			"id":          u.ID,
+			"email":       u.Email,
+			"role":        u.Role,
+			"status":      "APPROVED",
+			"entity_name": u.Email,
+			"created_at":  u.CreatedAt,
+		})
+	}
+	return result
 }
 
 // ValidateToken validates a JWT and returns the claims.
