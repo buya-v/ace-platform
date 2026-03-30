@@ -8,15 +8,12 @@ map $http_origin $cors_origin {
     "https://admin.garudax.asla.mn" "https://admin.garudax.asla.mn";
     "https://trade.garudax.asla.mn" "https://trade.garudax.asla.mn";
     "https://demo.garudax.asla.mn" "https://demo.garudax.asla.mn";
-    "https://ace.asla.mn" "https://ace.asla.mn";
-    "https://admin.ace.asla.mn" "https://admin.ace.asla.mn";
-    "https://trade.ace.asla.mn" "https://trade.ace.asla.mn";
-    "https://demo.ace.asla.mn" "https://demo.ace.asla.mn";
 }
 
 # ── admin.garudax.asla.mn — Admin Dashboard ──────────────────────────────
 server {
-    server_name admin.garudax.asla.mn admin.ace.asla.mn;
+    # Primary + legacy alias (remove legacy after DNS cutover)
+    server_name admin.garudax.asla.mn  *.ace.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -51,8 +48,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/admin.ace.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/admin.ace.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
@@ -60,7 +57,7 @@ server {
 
 # ── trade.garudax.asla.mn — Trading Web UI ───────────────────────────────
 server {
-    server_name trade.garudax.asla.mn trade.ace.asla.mn;
+    server_name trade.garudax.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -95,8 +92,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/admin.ace.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/admin.ace.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
@@ -104,7 +101,7 @@ server {
 
 # ── garudax.asla.mn — API + redirect root to trade ───────────────────────
 server {
-    server_name garudax.asla.mn ace.asla.mn;
+    server_name garudax.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -137,15 +134,15 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/ace.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/ace.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/garudax.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/garudax.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
 # ── demo.garudax.asla.mn — Demo Runner ───────────────────────────────────
 server {
-    server_name demo.garudax.asla.mn demo.ace.asla.mn;
+    server_name demo.garudax.asla.mn;
 
     location / {
         proxy_pass http://127.0.0.1:13002;
@@ -156,8 +153,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/demo.ace.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/demo.ace.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/demo.garudax.asla.mn/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/demo.garudax.asla.mn/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
@@ -165,36 +162,36 @@ server {
 # HTTP → HTTPS redirects (managed by Certbot — only for domains with SSL)
 server {
     listen 80;
-    server_name garudax.asla.mn ace.asla.mn;
+    server_name garudax.asla.mn;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 80;
-    server_name demo.garudax.asla.mn demo.ace.asla.mn;
+    server_name demo.garudax.asla.mn;
     return 301 https://$host$request_uri;
 }
 
 server {
-    if ($host ~ ^admin\.(garudax|ace)\.asla\.mn$) {
+    if ($host ~ ^admin\.garudax\.asla\.mn$) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
 
 
     listen 80;
-    server_name admin.garudax.asla.mn admin.ace.asla.mn;
+    server_name admin.garudax.asla.mn;
     return 404; # managed by Certbot
 
 
 }
 server {
-    if ($host ~ ^trade\.(garudax|ace)\.asla\.mn$) {
+    if ($host ~ ^trade\.garudax\.asla\.mn$) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
 
 
     listen 80;
-    server_name trade.garudax.asla.mn trade.ace.asla.mn;
+    server_name trade.garudax.asla.mn;
     return 404; # managed by Certbot
 
 

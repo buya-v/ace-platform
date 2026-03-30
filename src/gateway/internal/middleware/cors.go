@@ -21,6 +21,11 @@ func DefaultCORSConfig() *CORSConfig {
 		"https://admin.garudax.asla.mn",
 		"https://trade.garudax.asla.mn",
 		"https://demo.garudax.asla.mn",
+		// Legacy domains (transition period)
+		"https://ace.asla.mn",
+		"https://admin.ace.asla.mn",
+		"https://trade.ace.asla.mn",
+		"https://demo.ace.asla.mn",
 	}
 
 	// Allow additional origins from environment (comma-separated).

@@ -9,10 +9,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "ace-platform-tfstate"
+    bucket         = "garudax-platform-tfstate"
     key            = "infrastructure/terraform.tfstate"
     region         = "eu-west-1"  # Out-of-band from primary region
-    dynamodb_table = "ace-platform-tflock"
+    dynamodb_table = "garudax-platform-tflock"
     encrypt        = true
   }
 }

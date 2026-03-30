@@ -259,17 +259,17 @@ SELECT add_retention_policy('market_data.ohlcv_15m', INTERVAL '1 year');
 -- ============================================================
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ace_marketdata_svc') THEN
-        CREATE ROLE ace_marketdata_svc WITH LOGIN;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'garudax_marketdata_svc') THEN
+        CREATE ROLE garudax_marketdata_svc WITH LOGIN;
     END IF;
 END
 $$;
 
-GRANT USAGE ON SCHEMA market_data TO ace_marketdata_svc;
-GRANT SELECT, INSERT ON market_data.trades TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_1m TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_5m TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_15m TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_1h TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_4h TO ace_marketdata_svc;
-GRANT SELECT ON market_data.ohlcv_1d TO ace_marketdata_svc;
+GRANT USAGE ON SCHEMA market_data TO garudax_marketdata_svc;
+GRANT SELECT, INSERT ON market_data.trades TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_1m TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_5m TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_15m TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_1h TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_4h TO garudax_marketdata_svc;
+GRANT SELECT ON market_data.ohlcv_1d TO garudax_marketdata_svc;

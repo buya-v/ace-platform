@@ -80,6 +80,6 @@ CREATE INDEX idx_cb_events_instrument ON exchange.circuit_breaker_events(instrum
 CREATE INDEX idx_cb_events_time ON exchange.circuit_breaker_events(halted_at);
 
 -- Grant access to exchange service role
-GRANT SELECT, INSERT ON exchange.instruments TO ace_exchange_svc;
-GRANT SELECT, INSERT ON exchange.execution_reports TO ace_exchange_svc;
-GRANT SELECT, INSERT, UPDATE ON exchange.circuit_breaker_events TO ace_exchange_svc;
+GRANT SELECT, INSERT ON exchange.instruments TO garudax_exchange_svc;
+GRANT SELECT, INSERT ON exchange.execution_reports TO garudax_exchange_svc;
+GRANT SELECT, INSERT, UPDATE ON exchange.circuit_breaker_events TO garudax_exchange_svc;

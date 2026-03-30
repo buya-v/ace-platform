@@ -198,14 +198,14 @@ CREATE INDEX idx_sar_alert ON compliance.sar_filings(alert_id) WHERE alert_id IS
 CREATE INDEX idx_sar_filed ON compliance.sar_filings(filed_at);
 
 -- Grant access to compliance service role
-GRANT SELECT, INSERT, UPDATE ON compliance.kyc_applications TO ace_compliance_svc;
-GRANT SELECT, INSERT, UPDATE ON compliance.kyc_documents TO ace_compliance_svc;
-GRANT SELECT, INSERT ON compliance.screening_results TO ace_compliance_svc;
-GRANT SELECT, INSERT, UPDATE ON compliance.screening_matches TO ace_compliance_svc;
-GRANT SELECT, INSERT ON compliance.risk_scores TO ace_compliance_svc;
-GRANT SELECT, INSERT, UPDATE ON compliance.monitoring_alerts TO ace_compliance_svc;
-GRANT SELECT, INSERT ON compliance.sar_filings TO ace_compliance_svc;
+GRANT SELECT, INSERT, UPDATE ON compliance.kyc_applications TO garudax_compliance_svc;
+GRANT SELECT, INSERT, UPDATE ON compliance.kyc_documents TO garudax_compliance_svc;
+GRANT SELECT, INSERT ON compliance.screening_results TO garudax_compliance_svc;
+GRANT SELECT, INSERT, UPDATE ON compliance.screening_matches TO garudax_compliance_svc;
+GRANT SELECT, INSERT ON compliance.risk_scores TO garudax_compliance_svc;
+GRANT SELECT, INSERT, UPDATE ON compliance.monitoring_alerts TO garudax_compliance_svc;
+GRANT SELECT, INSERT ON compliance.sar_filings TO garudax_compliance_svc;
 
 -- Exchange service gets read-only access to participant compliance status
-GRANT SELECT ON compliance.kyc_applications TO ace_exchange_svc;
-GRANT SELECT ON compliance.risk_scores TO ace_exchange_svc;
+GRANT SELECT ON compliance.kyc_applications TO garudax_exchange_svc;
+GRANT SELECT ON compliance.risk_scores TO garudax_exchange_svc;

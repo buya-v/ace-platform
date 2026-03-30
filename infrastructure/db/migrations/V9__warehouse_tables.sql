@@ -205,25 +205,25 @@ GROUP BY f.facility_id, f.facility_code, f.total_capacity, f.capacity_unit;
 -- Grant warehouse service role access
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ace_warehouse_svc') THEN
-        CREATE ROLE ace_warehouse_svc LOGIN;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'garudax_warehouse_svc') THEN
+        CREATE ROLE garudax_warehouse_svc LOGIN;
     END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA warehouse TO ace_warehouse_svc;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA warehouse TO ace_warehouse_svc;
-GRANT SELECT ON warehouse.current_inventory TO ace_warehouse_svc;
-GRANT SELECT ON warehouse.facility_utilization TO ace_warehouse_svc;
+GRANT USAGE ON SCHEMA warehouse TO garudax_warehouse_svc;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA warehouse TO garudax_warehouse_svc;
+GRANT SELECT ON warehouse.current_inventory TO garudax_warehouse_svc;
+GRANT SELECT ON warehouse.facility_utilization TO garudax_warehouse_svc;
 
 -- Read-only role for reporting
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ace_warehouse_ro') THEN
-        CREATE ROLE ace_warehouse_ro LOGIN;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'garudax_warehouse_ro') THEN
+        CREATE ROLE garudax_warehouse_ro LOGIN;
     END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA warehouse TO ace_warehouse_ro;
-GRANT SELECT ON ALL TABLES IN SCHEMA warehouse TO ace_warehouse_ro;
-GRANT SELECT ON warehouse.current_inventory TO ace_warehouse_ro;
-GRANT SELECT ON warehouse.facility_utilization TO ace_warehouse_ro;
+GRANT USAGE ON SCHEMA warehouse TO garudax_warehouse_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA warehouse TO garudax_warehouse_ro;
+GRANT SELECT ON warehouse.current_inventory TO garudax_warehouse_ro;
+GRANT SELECT ON warehouse.facility_utilization TO garudax_warehouse_ro;

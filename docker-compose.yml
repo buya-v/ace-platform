@@ -330,7 +330,6 @@ services:
       MARGIN_ENGINE_ADDR: margin-engine:50053
       SETTLEMENT_ENGINE_ADDR: settlement-engine:50054
       AUTH_SERVICE_ADDR: auth-service:50055
-      CORS_ALLOWED_ORIGINS: "https://garudax.asla.mn,https://admin.garudax.asla.mn,https://trade.garudax.asla.mn,https://demo.garudax.asla.mn"
       COMPLIANCE_SERVICE_ADDR: compliance-service:50056
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
