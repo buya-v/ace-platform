@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: auth-service
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: auth-service
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,13 +15,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: auth-service
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       serviceAccountName: auth-service
       terminationGracePeriodSeconds: 30
       containers:
         - name: auth-service
-          image: ace-platform/auth-service:latest
+          image: garudax-platform/auth-service:latest
           ports:
             - name: grpc
               containerPort: 50055
@@ -33,9 +33,9 @@ spec:
             - configMapRef:
                 name: service-discovery
             - secretRef:
-                name: ace-db-credentials
+                name: garudax-db-credentials
             - secretRef:
-                name: ace-jwt-signing-key
+                name: garudax-jwt-signing-key
                 optional: true
           readinessProbe:
             httpGet:

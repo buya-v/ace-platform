@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // IDGenerator generates unique IDs for margin calls.

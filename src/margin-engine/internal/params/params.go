@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // PriceScenario defines a single SPAN price scan point.

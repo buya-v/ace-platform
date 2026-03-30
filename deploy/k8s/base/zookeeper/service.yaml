@@ -2,10 +2,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: zookeeper
-  namespace: ace-infra
+  namespace: garudax-infra
   labels:
     app.kubernetes.io/name: zookeeper
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   type: ClusterIP
   selector:
@@ -20,10 +20,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: zookeeper-headless
-  namespace: ace-infra
+  namespace: garudax-infra
   labels:
     app.kubernetes.io/name: zookeeper
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   type: ClusterIP
   clusterIP: None

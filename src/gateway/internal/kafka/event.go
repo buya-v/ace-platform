@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Event is the standard ACE event envelope. Every message published to any
-// ACE Kafka topic uses this structure.
+// Event is the standard GarudaX event envelope. Every message published to any
+// GarudaX Kafka topic uses this structure.
 type Event struct {
 	ID            string          `json:"id"`
 	Type          string          `json:"type"`

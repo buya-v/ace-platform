@@ -35,7 +35,7 @@
 
 ## 1. Overview
 
-The ACE Admin Dashboard is a single-page application for exchange operators and compliance officers to monitor, manage, and control the Agriculture Commodity Exchange platform. It consumes the gateway's REST API (`/api/v1/`) and provides real-time visibility into system health, participant status, margin calls, settlements, circuit breakers, warehouse receipts, and compliance alerts.
+The GarudaX Admin Dashboard is a single-page application for exchange operators and compliance officers to monitor, manage, and control the AI Powered Commodity Exchange platform. It consumes the gateway's REST API (`/api/v1/`) and provides real-time visibility into system health, participant status, margin calls, settlements, circuit breakers, warehouse receipts, and compliance alerts.
 
 ### Design Principles
 
@@ -158,7 +158,7 @@ Users without either role are redirected to the trading UI or shown an "unauthor
 The sidebar renders only links the user's role permits. Structure:
 
 ```
-[ACE Admin Logo]
+[GarudaX Admin Logo]
 
 Overview              /dashboard
 ──────────────────────
@@ -352,7 +352,7 @@ function useServiceHealth(pollInterval: number = 15000) {
 
 ### 7.1 System Monitoring
 
-**Purpose:** Real-time health dashboard for all 9 ACE platform services.
+**Purpose:** Real-time health dashboard for all 9 GarudaX platform services.
 
 **Data Source:** Each service exposes a `/healthz` endpoint on its health HTTP port.
 
@@ -762,10 +762,10 @@ Vite produces a static SPA bundle served by:
 ### 12.2 Environment Configuration
 
 ```ts
-// src/config.ts — loaded at runtime from window.__ACE_CONFIG__
+// src/config.ts — loaded at runtime from window.__GARUDAX_CONFIG__
 interface AppConfig {
-  API_BASE_URL: string;        // e.g., "https://api.ace.mn/api/v1"
-  WS_BASE_URL: string;         // e.g., "wss://api.ace.mn/api/v1/ws"
+  API_BASE_URL: string;        // e.g., "https://api.garudax.mn/api/v1"
+  WS_BASE_URL: string;         // e.g., "wss://api.garudax.mn/api/v1/ws"
   HEALTH_POLL_INTERVAL: number; // default: 15000
   AUTH_TOKEN_REFRESH_BUFFER: number; // seconds before expiry to refresh, default: 60
 }

@@ -9,7 +9,7 @@ export function Sidebar() {
 
   return (
     <nav className={styles.sidebar}>
-      <div className={styles.logo}>ACE Demo Runner</div>
+      <div className={styles.logo}>GarudaX Demo Runner</div>
       <ul className={styles.list}>
         {allSections.map((section) => {
           const isActive = state.activeSectionId === section.id;

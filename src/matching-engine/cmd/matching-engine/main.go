@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/ace-platform/matching-engine/internal/engine"
-	"github.com/ace-platform/matching-engine/internal/server"
-	"github.com/ace-platform/matching-engine/internal/store"
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/engine"
+	"github.com/garudax-platform/matching-engine/internal/server"
+	"github.com/garudax-platform/matching-engine/internal/store"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 // seqIDGen is a simple sequential ID generator for development.
@@ -27,7 +27,7 @@ func (g *seqIDGen) NewID() string {
 }
 
 func main() {
-	log.Println("ACE Matching Engine starting...")
+	log.Println("GarudaX Matching Engine starting...")
 
 	cfg := server.ConfigFromEnv()
 	idGen := &seqIDGen{}
@@ -78,7 +78,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Matching Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
+	log.Printf("GarudaX Matching Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort, cfg.DirectPodComms)
 
 	// Wait for shutdown signal

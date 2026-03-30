@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/types"
 )
 
 type seqIDGen struct {

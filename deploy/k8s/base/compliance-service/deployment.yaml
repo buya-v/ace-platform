@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: compliance-service
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: compliance-service
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,13 +15,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: compliance-service
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       serviceAccountName: compliance-service
       terminationGracePeriodSeconds: 30
       containers:
         - name: compliance-service
-          image: ace-platform/compliance-service:latest
+          image: garudax-platform/compliance-service:latest
           ports:
             - name: grpc
               containerPort: 50056
@@ -33,9 +33,9 @@ spec:
             - configMapRef:
                 name: service-discovery
             - secretRef:
-                name: ace-db-credentials
+                name: garudax-db-credentials
             - secretRef:
-                name: ace-jwt-signing-key
+                name: garudax-jwt-signing-key
                 optional: true
           readinessProbe:
             httpGet:

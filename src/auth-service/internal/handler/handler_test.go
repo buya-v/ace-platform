@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/auth-service/internal/auth"
-	"github.com/ace-platform/auth-service/internal/store"
+	"github.com/garudax-platform/auth-service/internal/auth"
+	"github.com/garudax-platform/auth-service/internal/store"
 )
 
 func newTestHandler() *AuthHandler {

@@ -5,8 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ace-platform/compliance-service/internal/onboarding"
-	"github.com/ace-platform/compliance-service/internal/types"
+	"github.com/garudax-platform/compliance-service/internal/onboarding"
+	"github.com/garudax-platform/compliance-service/internal/types"
 )
 
 var idCounter uint64

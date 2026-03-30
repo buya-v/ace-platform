@@ -1,5 +1,5 @@
-# ACE Platform — Clearing Service (Java/Kotlin)
-# Build: docker build -t ace-clearing-service ./src/clearing-service
+# GarudaX Platform — Clearing Service (Java/Kotlin)
+# Build: docker build -t garudax-clearing-service ./src/clearing-service
 
 FROM eclipse-temurin:21-jdk AS builder
 WORKDIR /app

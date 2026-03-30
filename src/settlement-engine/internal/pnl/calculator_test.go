@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
-	"github.com/ace-platform/settlement-engine/internal/valuation"
+	"github.com/garudax-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/valuation"
 )
 
 func setupPriceStore(t *testing.T) (*valuation.Store, time.Time) {

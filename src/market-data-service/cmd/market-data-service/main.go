@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/server"
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/server"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 func main() {
-	log.Println("ACE Market Data Service starting...")
+	log.Println("GarudaX Market Data Service starting...")
 
 	cfg := server.ConfigFromEnv()
 	srv := server.NewServer(cfg)
@@ -73,7 +73,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Market Data Service ready (gRPC=%s, health=%s:%d)",
+	log.Printf("GarudaX Market Data Service ready (gRPC=%s, health=%s:%d)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort)
 
 	// Wait for shutdown signal

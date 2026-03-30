@@ -104,7 +104,7 @@ export const Trading: React.FC = () => {
     <div className={styles.layout}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.logo}>ACE</span>
+          <span className={styles.logo}>GarudaX</span>
           <InstrumentSelector
             selected={state.selectedInstrument}
             onSelect={selectInstrument}

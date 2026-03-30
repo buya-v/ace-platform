@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Topics used by the ACE platform.
+// Topics used by the GarudaX platform.
 const (
 	TopicTradesExecuted        = "ace.trades.executed"
 	TopicClearingNovated       = "ace.clearing.novated"

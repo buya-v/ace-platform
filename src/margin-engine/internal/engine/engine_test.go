@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/margin-engine/internal/params"
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/params"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 type testIDGen struct {

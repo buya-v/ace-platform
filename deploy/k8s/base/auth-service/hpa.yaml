@@ -2,10 +2,10 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: auth-service
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: auth-service
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

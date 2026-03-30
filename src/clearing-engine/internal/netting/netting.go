@@ -3,7 +3,7 @@ package netting
 import (
 	"time"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // Service performs multilateral netting of clearing obligations.

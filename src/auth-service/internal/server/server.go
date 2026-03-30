@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/ace-platform/auth-service/internal/handler"
+	"github.com/garudax-platform/auth-service/internal/handler"
 )
 
 type Server struct {

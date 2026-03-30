@@ -1,4 +1,4 @@
-module github.com/ace-platform/auth-service
+module github.com/garudax-platform/auth-service
 
 go 1.22.0
 

@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
-    baseURL: 'https://demo.ace.asla.mn',
+    baseURL: 'https://demo.garudax.asla.mn',
     ignoreHTTPSErrors: true,
     screenshot: 'on',
   },

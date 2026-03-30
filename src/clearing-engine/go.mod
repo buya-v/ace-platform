@@ -1,3 +1,3 @@
-module github.com/ace-platform/clearing-engine
+module github.com/garudax-platform/clearing-engine
 
 go 1.22.0

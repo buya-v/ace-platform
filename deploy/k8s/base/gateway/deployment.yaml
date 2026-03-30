@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gateway
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: gateway
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,13 +15,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: gateway
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       serviceAccountName: gateway
       terminationGracePeriodSeconds: 30
       containers:
         - name: gateway
-          image: ace-platform/gateway:latest
+          image: garudax-platform/gateway:latest
           ports:
             - name: http
               containerPort: 8080
@@ -33,7 +33,7 @@ spec:
             - configMapRef:
                 name: service-discovery
             - secretRef:
-                name: ace-jwt-signing-key
+                name: garudax-jwt-signing-key
           readinessProbe:
             httpGet:
               path: /healthz

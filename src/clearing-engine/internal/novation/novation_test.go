@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 type testIDGen struct{ counter uint64 }

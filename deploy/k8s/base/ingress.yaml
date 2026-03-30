@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ace-platform-ingress
-  namespace: ace
+  name: garudax-platform-ingress
+  namespace: garudax
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -14,20 +14,20 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - ace.asla.mn
-      secretName: ace-asla-mn-tls
+        - garudax.asla.mn
+      secretName: garudax-asla-mn-tls
     - hosts:
-        - admin.ace.asla.mn
-      secretName: admin-ace-asla-mn-tls
+        - admin.garudax.asla.mn
+      secretName: admin-garudax-asla-mn-tls
     - hosts:
-        - trade.ace.asla.mn
-      secretName: trade-ace-asla-mn-tls
+        - trade.garudax.asla.mn
+      secretName: trade-garudax-asla-mn-tls
     - hosts:
-        - demo.ace.asla.mn
-      secretName: demo-ace-asla-mn-tls
+        - demo.garudax.asla.mn
+      secretName: demo-garudax-asla-mn-tls
   rules:
-    # ── ace.asla.mn — API + redirect root to trade ────────────────────
-    - host: ace.asla.mn
+    # ── garudax.asla.mn — API + redirect root to trade ────────────────────
+    - host: garudax.asla.mn
       http:
         paths:
           - path: /api/
@@ -51,8 +51,8 @@ spec:
                 name: gateway
                 port:
                   number: 8080
-    # ── admin.ace.asla.mn — Admin Dashboard ───────────────────────────
-    - host: admin.ace.asla.mn
+    # ── admin.garudax.asla.mn — Admin Dashboard ───────────────────────────
+    - host: admin.garudax.asla.mn
       http:
         paths:
           - path: /api/
@@ -69,8 +69,8 @@ spec:
                 name: admin-ui
                 port:
                   number: 3001
-    # ── trade.ace.asla.mn — Trading Web UI ────────────────────────────
-    - host: trade.ace.asla.mn
+    # ── trade.garudax.asla.mn — Trading Web UI ────────────────────────────
+    - host: trade.garudax.asla.mn
       http:
         paths:
           - path: /api/
@@ -87,8 +87,8 @@ spec:
                 name: web-ui
                 port:
                   number: 3000
-    # ── demo.ace.asla.mn — Demo Runner ────────────────────────────────
-    - host: demo.ace.asla.mn
+    # ── demo.garudax.asla.mn — Demo Runner ────────────────────────────────
+    - host: demo.garudax.asla.mn
       http:
         paths:
           - path: /

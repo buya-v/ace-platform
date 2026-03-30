@@ -8,11 +8,11 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/ace-platform/clearing-engine/internal/engine"
-	"github.com/ace-platform/clearing-engine/internal/novation"
-	"github.com/ace-platform/clearing-engine/internal/server"
-	"github.com/ace-platform/clearing-engine/internal/store"
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/engine"
+	"github.com/garudax-platform/clearing-engine/internal/novation"
+	"github.com/garudax-platform/clearing-engine/internal/server"
+	"github.com/garudax-platform/clearing-engine/internal/store"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 type seqIDGen struct {
@@ -25,7 +25,7 @@ func (g *seqIDGen) NewID() string {
 }
 
 func main() {
-	log.Println("ACE Clearing Engine starting...")
+	log.Println("GarudaX Clearing Engine starting...")
 
 	cfg := server.ConfigFromEnv()
 	idGen := &seqIDGen{}
@@ -53,7 +53,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Clearing Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
+	log.Printf("GarudaX Clearing Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort, cfg.DirectPodComms)
 
 	_ = os.Getenv("MATCHING_ENGINE_ADDR") // Will be used for trade subscription

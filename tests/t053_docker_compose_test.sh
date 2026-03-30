@@ -119,7 +119,7 @@ check_grep "kafkadata volume defined" "^  kafkadata:"
 
 # ─── Network ─────────────────────────────────────────────────────────
 echo "--- Network ---"
-check_grep "ace-network defined" "^  ace-network:"
+check_grep "garudax-network defined" "^  garudax-network:"
 check_grep "bridge driver" "driver: bridge"
 
 # ─── Environment variables ──────────────────────────────────────────

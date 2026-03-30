@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: settlement-engine
-  namespace: ace-exchange
+  namespace: garudax-exchange
   labels:
     app.kubernetes.io/name: settlement-engine
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,13 +15,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: settlement-engine
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       serviceAccountName: settlement-engine
       terminationGracePeriodSeconds: 30
       containers:
         - name: settlement-engine
-          image: ace-platform/settlement-engine:latest
+          image: garudax-platform/settlement-engine:latest
           ports:
             - name: grpc
               containerPort: 50054
@@ -33,9 +33,9 @@ spec:
             - configMapRef:
                 name: service-discovery
             - secretRef:
-                name: ace-db-credentials
+                name: garudax-db-credentials
             - secretRef:
-                name: ace-jwt-signing-key
+                name: garudax-jwt-signing-key
                 optional: true
           readinessProbe:
             httpGet:

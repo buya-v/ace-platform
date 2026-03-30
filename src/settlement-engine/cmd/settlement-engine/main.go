@@ -8,11 +8,11 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/ace-platform/settlement-engine/internal/engine"
-	"github.com/ace-platform/settlement-engine/internal/payment"
-	"github.com/ace-platform/settlement-engine/internal/server"
-	"github.com/ace-platform/settlement-engine/internal/types"
-	"github.com/ace-platform/settlement-engine/internal/valuation"
+	"github.com/garudax-platform/settlement-engine/internal/engine"
+	"github.com/garudax-platform/settlement-engine/internal/payment"
+	"github.com/garudax-platform/settlement-engine/internal/server"
+	"github.com/garudax-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/valuation"
 )
 
 type seqIDGen struct {
@@ -25,7 +25,7 @@ func (g *seqIDGen) NewID() string {
 }
 
 func main() {
-	log.Println("ACE Settlement Engine starting...")
+	log.Println("GarudaX Settlement Engine starting...")
 
 	cfg := server.ConfigFromEnv()
 	priceStore := valuation.NewStore()
@@ -55,7 +55,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Settlement Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
+	log.Printf("GarudaX Settlement Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort, cfg.DirectPodComms)
 
 	sigCh := make(chan os.Signal, 1)

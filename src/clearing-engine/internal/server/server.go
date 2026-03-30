@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/ace-platform/clearing-engine/internal/engine"
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/engine"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // Server wraps the clearing engine with health checks and a listener

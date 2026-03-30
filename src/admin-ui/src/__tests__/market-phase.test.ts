@@ -92,7 +92,7 @@ describe('MarketPhase — API functions', () => {
   beforeEach(() => {
     setAccessToken(null);
     (globalThis as Record<string, unknown>).window = {
-      __ACE_CONFIG__: { API_BASE_URL: 'http://test-api/api/v1' },
+      __GARUDAX_CONFIG__: { API_BASE_URL: 'http://test-api/api/v1' },
     };
   });
 

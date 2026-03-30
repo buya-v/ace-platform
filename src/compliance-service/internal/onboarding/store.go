@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/compliance-service/internal/types"
+	"github.com/garudax-platform/compliance-service/internal/types"
 )
 
 // Store defines the persistence interface for onboarding data.

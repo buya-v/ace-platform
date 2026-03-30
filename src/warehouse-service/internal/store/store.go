@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ace-platform/warehouse-service/internal/types"
+	"github.com/garudax-platform/warehouse-service/internal/types"
 )
 
 // Store provides thread-safe in-memory storage for all warehouse entities.

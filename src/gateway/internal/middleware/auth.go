@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ace-platform/gateway/internal/auth"
-	"github.com/ace-platform/gateway/internal/types"
+	"github.com/garudax-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/types"
 )
 
 type contextKey string

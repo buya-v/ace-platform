@@ -3,7 +3,7 @@ package settlement
 import (
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/types"
 )
 
 // Generator creates settlement instructions from P&L records.

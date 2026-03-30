@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# ACE Platform — Demo Smoke Test Script
+# GarudaX Platform — Demo Smoke Test Script
 # Automates the full demo flow: registration, auth, KYC, trading, post-trade.
 # Exit 0 if all checks pass, exit 1 if any fail.
 #
 # Usage:
-#   GATEWAY_URL=https://ace.asla.mn ./scripts/demo.sh
+#   GATEWAY_URL=https://garudax.asla.mn ./scripts/demo.sh
 #   ./scripts/demo.sh --help
 
 set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────────────────────
-GATEWAY_URL="${GATEWAY_URL:-https://ace.asla.mn}"
+GATEWAY_URL="${GATEWAY_URL:-https://garudax.asla.mn}"
 GATEWAY_URL="${GATEWAY_URL%/}"  # strip trailing slash
 CURL_TIMEOUT="${CURL_TIMEOUT:-10}"
 
@@ -38,13 +38,13 @@ declare -a RESULTS=()  # "step_name|status|time_ms"
 # ── Help ─────────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<'USAGE'
-ACE Platform Demo Smoke Test
+GarudaX Platform Demo Smoke Test
 
 Usage:
   ./scripts/demo.sh [--help]
 
 Environment variables:
-  GATEWAY_URL    Base URL of the ACE gateway (default: https://ace.asla.mn)
+  GATEWAY_URL    Base URL of the GarudaX gateway (default: https://garudax.asla.mn)
   CURL_TIMEOUT   Timeout in seconds for HTTP calls (default: 10)
 
 Behaviour:
@@ -126,7 +126,7 @@ do_curl() {
 
 # ── Banner ───────────────────────────────────────────────────────────────────
 echo ""
-printf "${BOLD}ACE Platform — Demo Smoke Test${RESET}\n"
+printf "${BOLD}GarudaX Platform — Demo Smoke Test${RESET}\n"
 printf "Gateway: ${CYAN}%s${RESET}\n" "$GATEWAY_URL"
 printf "Run ID:  ${CYAN}%s${RESET}\n" "$RUN_ID"
 echo ""

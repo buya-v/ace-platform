@@ -1,11 +1,11 @@
-# ACE Platform — Demo Runbook
+# GarudaX Platform — Demo Runbook
 
-Step-by-step guide for demonstrating and probing the full Agriculture Commodity Exchange platform.
+Step-by-step guide for demonstrating and probing the full AI Powered Commodity Exchange platform.
 
-> **Base URL:** All `curl` commands assume the gateway is on `https://ace.asla.mn`.
-> For local development, replace with `https://ace.asla.mn`.
+> **Base URL:** All `curl` commands assume the gateway is on `https://garudax.asla.mn`.
+> For local development, replace with `https://garudax.asla.mn`.
 >
-> **Demo Runner:** Available at `https://demo.ace.asla.mn` (or `http://localhost:3002` locally).
+> **Demo Runner:** Available at `https://demo.garudax.asla.mn` (or `http://localhost:3002` locally).
 
 ### DNS Setup
 
@@ -13,8 +13,8 @@ To use the production domains, configure DNS A records:
 
 | Domain | Target |
 |---|---|
-| `ace.asla.mn` | Your server/load balancer IP |
-| `demo.ace.asla.mn` | Your server/load balancer IP |
+| `garudax.asla.mn` | Your server/load balancer IP |
+| `demo.garudax.asla.mn` | Your server/load balancer IP |
 
 TLS certificates are automatically provisioned via Let's Encrypt (cert-manager) in Kubernetes,
 or can be configured manually in `infrastructure/nginx/nginx.conf` for Docker Compose deployments.
@@ -74,8 +74,8 @@ Each Go service exposes `/healthz` (liveness) and `/readyz` (readiness) on its h
 
 ```bash
 # Gateway (serves API on 8080, health on 8090 inside container, proxied on 8080)
-curl -s https://ace.asla.mn/healthz | jq .
-# Expected: {"status":"ok","service":"ace-gateway"}
+curl -s https://garudax.asla.mn/healthz | jq .
+# Expected: {"status":"ok","service":"garudax-gateway"}
 
 # Core engines
 curl -s http://localhost:8081/healthz
@@ -104,7 +104,7 @@ curl -s http://localhost:8088/healthz
 # Expected: ok
 ```
 
-> **Note:** The gateway's `/healthz` returns JSON (`{"status":"ok","service":"ace-gateway"}`).
+> **Note:** The gateway's `/healthz` returns JSON (`{"status":"ok","service":"garudax-gateway"}`).
 > The individual services return plain text `ok`.
 
 **One-liner to check all services:**
@@ -122,9 +122,9 @@ done
 
 If built (requires Node.js):
 
-- **Trading Web UI:** https://ace.asla.mn (or http://localhost:3000 locally)
-- **Admin Dashboard:** https://ace.asla.mn/admin (or http://localhost:3001 locally)
-- **Demo Runner:** https://demo.ace.asla.mn (or http://localhost:3002 locally)
+- **Trading Web UI:** https://garudax.asla.mn (or http://localhost:3000 locally)
+- **Admin Dashboard:** https://garudax.asla.mn/admin (or http://localhost:3001 locally)
+- **Demo Runner:** https://demo.garudax.asla.mn (or http://localhost:3002 locally)
 
 > **Note:** The `docker-compose.yml` does not include frontend services. Run them locally:
 > ```bash
@@ -149,7 +149,7 @@ If built (requires Node.js):
 ### 2.1 Register a Trader
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
+curl -s -X POST https://garudax.asla.mn/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "trader1@example.com",
@@ -178,7 +178,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
 ### 2.2 Register a Second Trader (for trading demo later)
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
+curl -s -X POST https://garudax.asla.mn/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "trader2@example.com",
@@ -190,7 +190,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
 ### 2.3 Register an Admin User
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
+curl -s -X POST https://garudax.asla.mn/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
@@ -203,7 +203,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/auth/register \
 
 ```bash
 # Login as trader1
-TRADER1_RESPONSE=$(curl -s -X POST https://ace.asla.mn/api/v1/auth/login \
+TRADER1_RESPONSE=$(curl -s -X POST https://garudax.asla.mn/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "trader1@example.com",
@@ -236,7 +236,7 @@ echo "Token: ${TRADER1_TOKEN:0:20}..."
 **Login as trader2:**
 
 ```bash
-TRADER2_RESPONSE=$(curl -s -X POST https://ace.asla.mn/api/v1/auth/login \
+TRADER2_RESPONSE=$(curl -s -X POST https://garudax.asla.mn/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "trader2@example.com",
@@ -248,7 +248,7 @@ TRADER2_TOKEN=$(echo "$TRADER2_RESPONSE" | jq -r '.AccessToken // .access_token'
 **Login as admin:**
 
 ```bash
-ADMIN_RESPONSE=$(curl -s -X POST https://ace.asla.mn/api/v1/auth/login \
+ADMIN_RESPONSE=$(curl -s -X POST https://garudax.asla.mn/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
@@ -260,7 +260,7 @@ ADMIN_TOKEN=$(echo "$ADMIN_RESPONSE" | jq -r '.AccessToken // .access_token')
 ### 2.5 Submit KYC / Participant Onboarding Application
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/participants \
+curl -s -X POST https://garudax.asla.mn/api/v1/participants \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TRADER1_TOKEN" \
   -d '{
@@ -284,7 +284,7 @@ PARTICIPANT_ID="<id from response>"
 ### 2.6 Admin Approves KYC Application
 
 ```bash
-curl -s -X POST "https://ace.asla.mn/api/v1/participants/${PARTICIPANT_ID}/approve" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/participants/${PARTICIPANT_ID}/approve" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{}' | jq .
@@ -295,7 +295,7 @@ curl -s -X POST "https://ace.asla.mn/api/v1/participants/${PARTICIPANT_ID}/appro
 **Verify:**
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/participants/${PARTICIPANT_ID}" \
+curl -s "https://garudax.asla.mn/api/v1/participants/${PARTICIPANT_ID}" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
@@ -318,7 +318,7 @@ This is configured via the `INSTRUMENTS` environment variable in `docker-compose
 ### 3.2 Submit a Limit Buy Order
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/orders \
+curl -s -X POST https://garudax.asla.mn/api/v1/orders \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TRADER1_TOKEN" \
   -d '{
@@ -359,7 +359,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/orders \
 ### 3.3 Submit a Matching Limit Sell Order (from second account)
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/orders \
+curl -s -X POST https://garudax.asla.mn/api/v1/orders \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TRADER2_TOKEN" \
   -d '{
@@ -393,11 +393,11 @@ curl -s -X POST https://ace.asla.mn/api/v1/orders \
 
 ```bash
 # Level 2 order book (aggregated by price)
-curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book" \
+curl -s "https://garudax.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 
 # Level 3 order book (individual orders)
-curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book/l3" \
+curl -s "https://garudax.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book/l3" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -406,7 +406,7 @@ curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book/l3" \
 ### 3.5 View Last Trade
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest" \
+curl -s "https://garudax.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -415,7 +415,7 @@ curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest
 ### 3.6 List Open Orders
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/orders" \
+curl -s "https://garudax.asla.mn/api/v1/orders" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -425,7 +425,7 @@ curl -s "https://ace.asla.mn/api/v1/orders" \
 
 ```bash
 # First, place a new order that won't match
-curl -s -X POST https://ace.asla.mn/api/v1/orders \
+curl -s -X POST https://garudax.asla.mn/api/v1/orders \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TRADER1_TOKEN" \
   -d '{
@@ -439,7 +439,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/orders \
 
 # Save the order_id from the response, then cancel:
 ORDER_ID="<order_id from response>"
-curl -s -X DELETE "https://ace.asla.mn/api/v1/orders/${ORDER_ID}" \
+curl -s -X DELETE "https://garudax.asla.mn/api/v1/orders/${ORDER_ID}" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -458,7 +458,7 @@ curl -s -X DELETE "https://ace.asla.mn/api/v1/orders/${ORDER_ID}" \
 After a trade executes, the clearing engine novates the trade into buyer/seller positions.
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/clearing/positions" \
+curl -s "https://garudax.asla.mn/api/v1/clearing/positions" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -479,14 +479,14 @@ curl -s "https://ace.asla.mn/api/v1/clearing/positions" \
 ### 4.2 View Position for Specific Instrument
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/clearing/positions/WHT-HRW-2026M07-UB" \
+curl -s "https://garudax.asla.mn/api/v1/clearing/positions/WHT-HRW-2026M07-UB" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
 ### 4.3 View Netting Obligations
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/clearing/netting" \
+curl -s "https://garudax.asla.mn/api/v1/clearing/netting" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -495,7 +495,7 @@ curl -s "https://ace.asla.mn/api/v1/clearing/netting" \
 ### 4.4 View Margin Requirements
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/margin" \
+curl -s "https://garudax.asla.mn/api/v1/margin" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -504,7 +504,7 @@ curl -s "https://ace.asla.mn/api/v1/margin" \
 ### 4.5 Calculate Margin (explicit)
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/margin/calculate \
+curl -s -X POST https://garudax.asla.mn/api/v1/margin/calculate \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TRADER1_TOKEN" \
   -d '{}' | jq .
@@ -513,7 +513,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/margin/calculate \
 ### 4.6 View Margin Calls
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/margin/calls" \
+curl -s "https://garudax.asla.mn/api/v1/margin/calls" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -521,11 +521,11 @@ curl -s "https://ace.asla.mn/api/v1/margin/calls" \
 
 ```bash
 # View existing settlement cycles
-curl -s "https://ace.asla.mn/api/v1/settlement/cycles" \
+curl -s "https://garudax.asla.mn/api/v1/settlement/cycles" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 
 # View a specific cycle
-curl -s "https://ace.asla.mn/api/v1/settlement/cycles/{cycle_id}" \
+curl -s "https://garudax.asla.mn/api/v1/settlement/cycles/{cycle_id}" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
@@ -591,11 +591,11 @@ grpcurl -plaintext -d '{
 ```bash
 grpcurl -plaintext -d '{
   "receipt_id": "<receipt_id>",
-  "pledged_to": "ACE-CCP"
+  "pledged_to": "GarudaX-CCP"
 }' localhost:50058 WarehouseService/PledgeReceipt
 ```
 
-**Expected:** Receipt status changes to `PLEDGED`, `pledged_to: "ACE-CCP"`.
+**Expected:** Receipt status changes to `PLEDGED`, `pledged_to: "GarudaX-CCP"`.
 
 ### 5.4 Initiate Delivery
 
@@ -636,7 +636,7 @@ grpcurl -plaintext -d '{
 ### 6.1 Get Order Book via Gateway
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book" \
+curl -s "https://garudax.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -645,7 +645,7 @@ curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/book" \
 ### 6.2 Get Last Trade
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest" \
+curl -s "https://garudax.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest" \
   -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
 ```
 
@@ -653,7 +653,7 @@ curl -s "https://ace.asla.mn/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest
 
 ```bash
 # Using websocat (or wscat):
-websocat "wss://ace.asla.mn/api/v1/ws/trades/WHT-HRW-2026M07-UB"
+websocat "wss://garudax.asla.mn/api/v1/ws/trades/WHT-HRW-2026M07-UB"
 ```
 
 **Expected:** Each trade produces a JSON message:
@@ -672,13 +672,13 @@ websocat "wss://ace.asla.mn/api/v1/ws/trades/WHT-HRW-2026M07-UB"
 ### 6.4 WebSocket: Live Order Book Updates
 
 ```bash
-websocat "wss://ace.asla.mn/api/v1/ws/book/WHT-HRW-2026M07-UB"
+websocat "wss://garudax.asla.mn/api/v1/ws/book/WHT-HRW-2026M07-UB"
 ```
 
 ### 6.5 WebSocket: Execution Reports (authenticated)
 
 ```bash
-websocat "wss://ace.asla.mn/api/v1/ws/executions"
+websocat "wss://garudax.asla.mn/api/v1/ws/executions"
 ```
 
 > **Note:** Market-data-service (OHLCV candles, ticker data) is accessed via gRPC on port 50057.
@@ -698,7 +698,7 @@ websocat "wss://ace.asla.mn/api/v1/ws/executions"
 ### 7.1 Screen a Participant
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/screening/check \
+curl -s -X POST https://garudax.asla.mn/api/v1/screening/check \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
@@ -722,7 +722,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/screening/check \
 ### 7.2 Batch Screening
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/screening/batch \
+curl -s -X POST https://garudax.asla.mn/api/v1/screening/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
@@ -734,7 +734,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/screening/batch \
 ### 7.3 Get Risk Score
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/risk-scores/${PARTICIPANT_ID}" \
+curl -s "https://garudax.asla.mn/api/v1/risk-scores/${PARTICIPANT_ID}" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
@@ -743,21 +743,21 @@ curl -s "https://ace.asla.mn/api/v1/risk-scores/${PARTICIPANT_ID}" \
 ### 7.4 View Compliance Alerts
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/compliance/alerts" \
+curl -s "https://garudax.asla.mn/api/v1/compliance/alerts" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
 ### 7.5 View Audit Trail
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/compliance/audit-trail" \
+curl -s "https://garudax.asla.mn/api/v1/compliance/audit-trail" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
 ### 7.6 File a Suspicious Activity Report (SAR)
 
 ```bash
-curl -s -X POST https://ace.asla.mn/api/v1/compliance/sar \
+curl -s -X POST https://garudax.asla.mn/api/v1/compliance/sar \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
@@ -770,7 +770,7 @@ curl -s -X POST https://ace.asla.mn/api/v1/compliance/sar \
 ### 7.7 Suspend a Participant
 
 ```bash
-curl -s -X POST "https://ace.asla.mn/api/v1/compliance/participants/${PARTICIPANT_ID}/suspend" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/compliance/participants/${PARTICIPANT_ID}/suspend" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"reason": "Pending investigation"}' | jq .
@@ -784,7 +784,7 @@ To trigger a margin call:
 2. **Move the market against the position** — submit sell orders at progressively lower prices ($540, $530, $520) from another account, causing mark-to-market losses.
 3. **Check margin calls:**
    ```bash
-   curl -s "https://ace.asla.mn/api/v1/margin/calls" \
+   curl -s "https://garudax.asla.mn/api/v1/margin/calls" \
      -H "Authorization: Bearer $TRADER1_TOKEN" | jq .
    ```
 4. When mark-to-market loss exceeds maintenance margin, a margin call is generated.
@@ -795,7 +795,7 @@ The matching-engine supports circuit breakers to halt trading when prices move b
 
 ```bash
 # Set circuit breaker for an instrument (admin only)
-curl -s -X PUT "https://ace.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker" \
+curl -s -X PUT "https://garudax.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
@@ -826,32 +826,32 @@ The admin dashboard (if running) provides:
 
 ```bash
 # Halt
-curl -s -X POST "https://ace.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 
 # Resume
-curl -s -X POST "https://ace.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
 ### 8.3 Bust a Trade (error trade correction)
 
 ```bash
-curl -s -X POST "https://ace.asla.mn/api/v1/admin/trades/{trade_id}/bust" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/admin/trades/{trade_id}/bust" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
 ### 8.4 Disable a Participant from Trading
 
 ```bash
-curl -s -X POST "https://ace.asla.mn/api/v1/admin/participants/{participant_id}/disable" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/admin/participants/{participant_id}/disable" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 
 ### 8.5 Mass Cancel All Orders
 
 ```bash
-curl -s -X POST "https://ace.asla.mn/api/v1/admin/mass-cancel" \
+curl -s -X POST "https://garudax.asla.mn/api/v1/admin/mass-cancel" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
@@ -862,7 +862,7 @@ curl -s -X POST "https://ace.asla.mn/api/v1/admin/mass-cancel" \
 ### 8.6 Margin Call Statistics
 
 ```bash
-curl -s "https://ace.asla.mn/api/v1/margin/calls/stats" \
+curl -s "https://garudax.asla.mn/api/v1/margin/calls/stats" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
 

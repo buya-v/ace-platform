@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 // Engine computes and caches ticker summaries per instrument.

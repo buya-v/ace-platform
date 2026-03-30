@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ace-platform/matching-engine/internal/orderbook"
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/orderbook"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 // TradeHandler is called for each trade produced by the engine.

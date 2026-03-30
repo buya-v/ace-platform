@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
-	"github.com/ace-platform/settlement-engine/internal/valuation"
+	"github.com/garudax-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/valuation"
 )
 
 // Calculator computes daily mark-to-market P&L (variation margin) for positions.

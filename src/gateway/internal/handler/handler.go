@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/ace-platform/gateway/internal/middleware"
-	"github.com/ace-platform/gateway/internal/proxy"
-	"github.com/ace-platform/gateway/internal/types"
+	"github.com/garudax-platform/gateway/internal/middleware"
+	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/types"
 )
 
 // Handler manages REST→gRPC translation for all backend services.

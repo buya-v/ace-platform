@@ -45,12 +45,12 @@ pilot:
       memory: 4Gi
   # Tolerate system node taint
   tolerations:
-    - key: "ace-platform/node-role"
+    - key: "garudax-platform/node-role"
       operator: "Equal"
       value: "system"
       effect: "NoSchedule"
   nodeSelector:
-    ace-platform/node-role: system
+    garudax-platform/node-role: system
 
 # Sidecar injector configuration
 sidecarInjectorWebhook:

@@ -35,7 +35,7 @@
 
 ## 1. Overview
 
-The ACE Trading Web UI is a single-page application (SPA) that provides commodity traders with a real-time trading interface for the Agriculture Commodity Exchange. It connects to the ACE API Gateway (`https://api.ace.mn/api/v1/`) for REST operations and WebSocket streams.
+The GarudaX Trading Web UI is a single-page application (SPA) that provides commodity traders with a real-time trading interface for the AI Powered Commodity Exchange. It connects to the GarudaX API Gateway (`https://api.garudax.mn/api/v1/`) for REST operations and WebSocket streams.
 
 ### Design Principles
 
@@ -158,7 +158,7 @@ src/trading-ui/
 └────────┬────────┘  └────────┬─────────┘
          │                    │
          ▼                    ▼
-   ACE API Gateway (https://api.ace.mn/api/v1/)
+   GarudaX API Gateway (https://api.garudax.mn/api/v1/)
 ```
 
 ### Data Flow
@@ -500,7 +500,7 @@ async function apiRequest<T>(
 
 ### Endpoint Mapping
 
-All endpoints are routed through the ACE API Gateway. The gateway translates REST → gRPC to the appropriate backend service.
+All endpoints are routed through the GarudaX API Gateway. The gateway translates REST → gRPC to the appropriate backend service.
 
 | UI Feature | Method | Endpoint | Backend Service | Poll Interval |
 |---|---|---|---|---|
@@ -829,7 +829,7 @@ Each commodity may have multiple active instruments (different delivery months/l
 │  Total: 16,275.00 USD        │  ← computed: price × qty
 │                              │
 │  ┌──────────────────────┐    │
-│  │    PLACE BUY ORDER    │   │  ← colored by side
+│  │    PLGarudaX BUY ORDER    │   │  ← colored by side
 │  └──────────────────────┘    │
 │                              │
 │  Fee estimate: ~2.50 USD     │  ← optional, if fee schedule known

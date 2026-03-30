@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: clearing-engine
-  namespace: ace-exchange
+  namespace: garudax-exchange
   labels:
     app.kubernetes.io/name: clearing-engine
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,13 +15,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: clearing-engine
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       serviceAccountName: clearing-engine
       terminationGracePeriodSeconds: 30
       containers:
         - name: clearing-engine
-          image: ace-platform/clearing-engine:latest
+          image: garudax-platform/clearing-engine:latest
           ports:
             - name: grpc
               containerPort: 50052
@@ -33,9 +33,9 @@ spec:
             - configMapRef:
                 name: service-discovery
             - secretRef:
-                name: ace-db-credentials
+                name: garudax-db-credentials
             - secretRef:
-                name: ace-jwt-signing-key
+                name: garudax-jwt-signing-key
                 optional: true
           readinessProbe:
             httpGet:

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ace-platform/clearing-engine/internal/netting"
-	"github.com/ace-platform/clearing-engine/internal/novation"
-	"github.com/ace-platform/clearing-engine/internal/position"
-	"github.com/ace-platform/clearing-engine/internal/store"
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/netting"
+	"github.com/garudax-platform/clearing-engine/internal/novation"
+	"github.com/garudax-platform/clearing-engine/internal/position"
+	"github.com/garudax-platform/clearing-engine/internal/store"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // TradeHandler is called for each cleared trade with its novation result.

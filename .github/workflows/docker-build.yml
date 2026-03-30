@@ -15,7 +15,7 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
-  IMAGE_PREFIX: ace-platform
+  IMAGE_PREFIX: garudax-platform
 
 permissions:
   id-token: write

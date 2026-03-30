@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/auth"
 )
 
 func newTestValidator() *auth.JWTValidator {

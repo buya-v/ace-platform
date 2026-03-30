@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ace-platform/warehouse-service/internal/service"
-	"github.com/ace-platform/warehouse-service/internal/store"
+	"github.com/garudax-platform/warehouse-service/internal/service"
+	"github.com/garudax-platform/warehouse-service/internal/store"
 )
 
 func TestHealthEndpoints(t *testing.T) {

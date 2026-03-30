@@ -2,10 +2,10 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: matching-engine
-  namespace: ace-exchange
+  namespace: garudax-exchange
   labels:
     app.kubernetes.io/name: matching-engine
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   maxUnavailable: 1
   selector:

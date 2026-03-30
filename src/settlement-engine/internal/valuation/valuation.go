@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/types"
 )
 
 // PriceSource provides settlement prices for instruments.

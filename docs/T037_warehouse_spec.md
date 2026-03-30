@@ -29,7 +29,7 @@
 
 ## 1. Overview
 
-The ACE Warehouse Service manages the lifecycle of Electronic Warehouse Receipts (eWRs) for physical commodity storage, transfer, and delivery on the Agriculture Commodity Exchange of Mongolia. It is the bridge between physical commodities and the exchange's financial trading system.
+The GarudaX Warehouse Service manages the lifecycle of Electronic Warehouse Receipts (eWRs) for physical commodity storage, transfer, and delivery on the AI Powered Commodity Exchange of Mongolia. It is the bridge between physical commodities and the exchange's financial trading system.
 
 ### Design Principles
 
@@ -526,7 +526,7 @@ syntax = "proto3";
 
 package ace.warehouse.v1;
 
-option go_package = "ace-platform/src/warehouse-service/proto/warehousepb";
+option go_package = "garudax-platform/src/warehouse-service/proto/warehousepb";
 
 import "google/protobuf/timestamp.proto";
 

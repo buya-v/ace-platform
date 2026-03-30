@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ace-platform/margin-engine/internal/engine"
-	"github.com/ace-platform/margin-engine/internal/params"
-	"github.com/ace-platform/margin-engine/internal/server"
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/engine"
+	"github.com/garudax-platform/margin-engine/internal/params"
+	"github.com/garudax-platform/margin-engine/internal/server"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 type seqIDGen struct {
@@ -33,7 +33,7 @@ func (c *inMemoryCollateral) GetCollateral(participantID string) types.Decimal {
 }
 
 func main() {
-	log.Println("ACE Margin Engine starting...")
+	log.Println("GarudaX Margin Engine starting...")
 
 	cfg := server.ConfigFromEnv()
 	paramStore := params.NewStore()
@@ -68,7 +68,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Margin Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
+	log.Printf("GarudaX Margin Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort, cfg.DirectPodComms)
 
 	sigCh := make(chan os.Signal, 1)

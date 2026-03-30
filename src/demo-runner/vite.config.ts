@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3002,
     proxy: {
       '/api': {
-        target: process.env.VITE_GATEWAY_URL || 'https://ace.asla.mn',
+        target: process.env.VITE_GATEWAY_URL || 'https://garudax.asla.mn',
         changeOrigin: true,
       },
     },

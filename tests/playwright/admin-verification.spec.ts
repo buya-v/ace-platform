@@ -1,8 +1,8 @@
 /**
- * ACE Admin Dashboard Verification — Playwright E2E Tests
+ * GarudaX Admin Dashboard Verification — Playwright E2E Tests
  *
  * Verifies that demo runbook outcomes (registration, trading) are visible
- * in the admin dashboard at https://ace.asla.mn/admin/.
+ * in the admin dashboard at https://garudax.asla.mn/admin/.
  *
  * Tests run serially: Test 1 sets up demo data, Tests 2-13 verify admin views.
  * The admin UI stores auth tokens in-memory (React state), so after login we
@@ -16,9 +16,9 @@ import { test, expect, type Page } from '@playwright/test';
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEMO_URL = 'https://demo.ace.asla.mn';
-const ADMIN_URL = 'https://ace.asla.mn/admin';
-const ADMIN_EMAIL = 'admin@ace.mn';
+const DEMO_URL = 'https://demo.garudax.asla.mn';
+const ADMIN_URL = 'https://garudax.asla.mn/admin';
+const ADMIN_EMAIL = 'admin@garudax.mn';
 const ADMIN_PASSWORD = 'Adm1n@Pass!';
 const STEP_TIMEOUT = 20_000;
 const NAV_TIMEOUT = 15_000;
@@ -192,8 +192,8 @@ test.describe.serial('Admin Dashboard Verification', () => {
       expect.soft(rowCount, 'Participants grid has at least 3 rows').toBeGreaterThanOrEqual(3);
 
       const pageText = await page.textContent('body') || '';
-      expect.soft(pageText).toContain('trader1@ace.mn');
-      expect.soft(pageText).toContain('trader2@ace.mn');
+      expect.soft(pageText).toContain('trader1@garudax.mn');
+      expect.soft(pageText).toContain('trader2@garudax.mn');
     }
 
     await takeScreenshot(page, 'admin-02-participants.png');

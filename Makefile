@@ -1,4 +1,4 @@
-# ── ACE Platform — Developer Commands ────────────────────────────────
+# ── GarudaX Platform — Developer Commands ────────────────────────────────
 
 .DEFAULT_GOAL := help
 
@@ -12,7 +12,7 @@ up:  ## Start infrastructure services (PostgreSQL, Redis, Kafka, MinIO)
 down:  ## Stop all services
 	docker compose down
 
-logs:  ## Follow logs for all services (use ARGS="ace-postgres" for one service)
+logs:  ## Follow logs for all services (use ARGS="garudax-postgres" for one service)
 	docker compose logs -f $(ARGS)
 
 ps:  ## Show running containers
@@ -25,25 +25,25 @@ clean:  ## Stop services and destroy all volumes (data loss!)
 
 .PHONY: db-shell db-schemas
 
-db-shell:  ## Open psql shell to ace-postgres
-	docker exec -it ace-postgres psql -U ace_admin -d ace_platform
+db-shell:  ## Open psql shell to garudax-postgres
+	docker exec -it garudax-postgres psql -U garudax_admin -d garudax_platform
 
 db-schemas:  ## List database schemas
-	docker exec -it ace-postgres psql -U ace_admin -d ace_platform -c '\dn'
+	docker exec -it garudax-postgres psql -U garudax_admin -d garudax_platform -c '\dn'
 
 # ── Redis ────────────────────────────────────────────────────────────
 
 .PHONY: redis-shell
 
 redis-shell:  ## Open redis-cli shell
-	docker exec -it ace-redis redis-cli
+	docker exec -it garudax-redis redis-cli
 
 # ── Kafka ────────────────────────────────────────────────────────────
 
 .PHONY: kafka-topics
 
 kafka-topics:  ## List Kafka topics
-	docker exec -it ace-kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
+	docker exec -it garudax-kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
 
 # ── Pipeline ─────────────────────────────────────────────────────────
 

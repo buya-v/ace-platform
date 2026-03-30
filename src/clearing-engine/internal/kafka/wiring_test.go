@@ -16,7 +16,7 @@ func TestPublishClearingNovated(t *testing.T) {
 		InstrumentID:        "WHEAT-2026Q3",
 		BuyerParticipantID:  "PART-001",
 		SellerParticipantID: "PART-002",
-		CCPID:               "ACE-CCP",
+		CCPID:               "GarudaX-CCP",
 		Price:               "1850.0000",
 		Quantity:            100,
 		Status:              "NOVATED",

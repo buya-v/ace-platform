@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 func TestCandleStore_StoreAndQuery(t *testing.T) {

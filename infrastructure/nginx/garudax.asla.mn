@@ -1,18 +1,22 @@
-# ACE Platform — subdomain-separated architecture
-# Subdomains: ace.asla.mn (API), trade.ace.asla.mn, admin.ace.asla.mn, demo.ace.asla.mn
+# GarudaX Platform — subdomain-separated architecture
+# Subdomains: garudax.asla.mn (API), trade.garudax.asla.mn, admin.garudax.asla.mn, demo.garudax.asla.mn
 
-# CORS map — allow all ACE subdomains
+# CORS map — allow all GarudaX subdomains
 map $http_origin $cors_origin {
     default "";
+    "https://garudax.asla.mn" "https://garudax.asla.mn";
+    "https://admin.garudax.asla.mn" "https://admin.garudax.asla.mn";
+    "https://trade.garudax.asla.mn" "https://trade.garudax.asla.mn";
+    "https://demo.garudax.asla.mn" "https://demo.garudax.asla.mn";
     "https://ace.asla.mn" "https://ace.asla.mn";
     "https://admin.ace.asla.mn" "https://admin.ace.asla.mn";
     "https://trade.ace.asla.mn" "https://trade.ace.asla.mn";
     "https://demo.ace.asla.mn" "https://demo.ace.asla.mn";
 }
 
-# ── admin.ace.asla.mn — Admin Dashboard ──────────────────────────────
+# ── admin.garudax.asla.mn — Admin Dashboard ──────────────────────────────
 server {
-    server_name admin.ace.asla.mn;
+    server_name admin.garudax.asla.mn admin.ace.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -54,9 +58,9 @@ server {
 
 }
 
-# ── trade.ace.asla.mn — Trading Web UI ───────────────────────────────
+# ── trade.garudax.asla.mn — Trading Web UI ───────────────────────────────
 server {
-    server_name trade.ace.asla.mn;
+    server_name trade.garudax.asla.mn trade.ace.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -98,9 +102,9 @@ server {
 
 }
 
-# ── ace.asla.mn — API + redirect root to trade ───────────────────────
+# ── garudax.asla.mn — API + redirect root to trade ───────────────────────
 server {
-    server_name ace.asla.mn;
+    server_name garudax.asla.mn ace.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
@@ -129,7 +133,7 @@ server {
     location /readyz  { proxy_pass http://127.0.0.1:8080; }
 
     location / {
-        return 301 https://trade.ace.asla.mn$request_uri;
+        return 301 https://trade.garudax.asla.mn$request_uri;
     }
 
     listen 443 ssl; # managed by Certbot
@@ -139,9 +143,9 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# ── demo.ace.asla.mn — Demo Runner ───────────────────────────────────
+# ── demo.garudax.asla.mn — Demo Runner ───────────────────────────────────
 server {
-    server_name demo.ace.asla.mn;
+    server_name demo.garudax.asla.mn demo.ace.asla.mn;
 
     location / {
         proxy_pass http://127.0.0.1:13002;
@@ -161,36 +165,36 @@ server {
 # HTTP → HTTPS redirects (managed by Certbot — only for domains with SSL)
 server {
     listen 80;
-    server_name ace.asla.mn;
+    server_name garudax.asla.mn ace.asla.mn;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 80;
-    server_name demo.ace.asla.mn;
+    server_name demo.garudax.asla.mn demo.ace.asla.mn;
     return 301 https://$host$request_uri;
 }
 
 server {
-    if ($host = admin.ace.asla.mn) {
+    if ($host ~ ^admin\.(garudax|ace)\.asla\.mn$) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
 
 
     listen 80;
-    server_name admin.ace.asla.mn;
+    server_name admin.garudax.asla.mn admin.ace.asla.mn;
     return 404; # managed by Certbot
 
 
 }
 server {
-    if ($host = trade.ace.asla.mn) {
+    if ($host ~ ^trade\.(garudax|ace)\.asla\.mn$) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
 
 
     listen 80;
-    server_name trade.ace.asla.mn;
+    server_name trade.garudax.asla.mn trade.ace.asla.mn;
     return 404; # managed by Certbot
 
 

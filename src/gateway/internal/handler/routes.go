@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/ace-platform/gateway/internal/router"
+	"github.com/garudax-platform/gateway/internal/router"
 )
 
 // RegisterRoutes registers all API routes on the router.

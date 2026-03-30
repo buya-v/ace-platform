@@ -23,4 +23,4 @@ resources:
     memory: 1Gi
 
 nodeSelector:
-  ace-platform/node-role: system
+  garudax-platform/node-role: system

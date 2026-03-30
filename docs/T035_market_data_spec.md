@@ -851,7 +851,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: market-data-service
-  namespace: ace-exchange
+  namespace: garudax-exchange
 spec:
   replicas: 2
   selector:
@@ -866,7 +866,7 @@ spec:
     spec:
       containers:
       - name: market-data-service
-        image: ace-platform/market-data-service:latest
+        image: garudax-platform/market-data-service:latest
         ports:
         - containerPort: 50057
           name: grpc
@@ -883,7 +883,7 @@ spec:
               name: market-data-db-credentials
               key: dsn
         - name: MATCHING_ENGINE_ADDR
-          value: "matching-engine.ace-exchange.svc.cluster.local:50051"
+          value: "matching-engine.garudax-exchange.svc.cluster.local:50051"
         - name: KAFKA_BROKERS
           value: "kafka.ace-infra.svc.cluster.local:9092"
         - name: KAFKA_TOPIC_PREFIX
@@ -914,7 +914,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: market-data-service
-  namespace: ace-exchange
+  namespace: garudax-exchange
 spec:
   selector:
     app: market-data-service

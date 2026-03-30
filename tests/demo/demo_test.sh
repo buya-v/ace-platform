@@ -199,7 +199,7 @@ echo "Test Group: CLI flags"
 
 output=$("$DEMO_SCRIPT" --help 2>&1) || true
 assert_contains "--help prints usage" "GATEWAY_URL" "$output"
-assert_contains "--help prints usage banner" "ACE Platform" "$output"
+assert_contains "--help prints usage banner" "GarudaX Platform" "$output"
 
 exit_code=0
 "$DEMO_SCRIPT" -h >/dev/null 2>&1 || exit_code=$?

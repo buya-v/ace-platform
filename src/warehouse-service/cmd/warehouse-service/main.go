@@ -6,13 +6,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ace-platform/warehouse-service/internal/server"
-	"github.com/ace-platform/warehouse-service/internal/service"
-	"github.com/ace-platform/warehouse-service/internal/store"
+	"github.com/garudax-platform/warehouse-service/internal/server"
+	"github.com/garudax-platform/warehouse-service/internal/service"
+	"github.com/garudax-platform/warehouse-service/internal/store"
 )
 
 func main() {
-	log.Println("ACE Warehouse Service starting...")
+	log.Println("GarudaX Warehouse Service starting...")
 
 	cfg := server.ConfigFromEnv()
 	st := store.NewStore()
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Warehouse Service ready (gRPC=%s, health=%s)",
+	log.Printf("GarudaX Warehouse Service ready (gRPC=%s, health=%s)",
 		lis.Addr().String(), srv.GRPCAddr())
 
 	// Wait for shutdown signal

@@ -3,7 +3,7 @@ package params
 import (
 	"testing"
 
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 func TestDefaultScenariosCount(t *testing.T) {

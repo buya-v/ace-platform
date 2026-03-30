@@ -1,3 +1,3 @@
-module github.com/ace-platform/warehouse-service
+module github.com/garudax-platform/warehouse-service
 
 go 1.22.0

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 func makeObl(participant, instrument string, side types.Side, price int64, qty uint64) types.ClearingObligation {

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# ACE Platform — Data Seed Script
+# GarudaX Platform — Data Seed Script
 # Populates the platform with realistic demo data for the admin dashboard.
 # Registers users, submits orders that cross (generating trades), creates
 # warehouse receipts, and triggers compliance screening events.
 #
 # Usage:
 #   GATEWAY_URL=http://127.0.0.1:8080 ./scripts/seed-data.sh
-#   GATEWAY_URL=https://ace.asla.mn ./scripts/seed-data.sh
+#   GATEWAY_URL=https://garudax.asla.mn ./scripts/seed-data.sh
 
 set -euo pipefail
 
@@ -127,7 +127,7 @@ AUTH_SERVICE="${AUTH_SERVICE_URL:-http://127.0.0.1:8085}"
 
 # ── Banner ──────────────────────────────────────────────────────────────────
 echo ""
-printf "${BOLD}ACE Platform — Data Seed Script${RESET}\n"
+printf "${BOLD}GarudaX Platform — Data Seed Script${RESET}\n"
 printf "Gateway: ${CYAN}%s${RESET}\n" "$GATEWAY"
 printf "Run ID:  ${CYAN}%s${RESET}\n\n" "$RUN_ID"
 

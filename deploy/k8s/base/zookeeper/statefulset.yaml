@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: zookeeper
-  namespace: ace-infra
+  namespace: garudax-infra
   labels:
     app.kubernetes.io/name: zookeeper
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   serviceName: zookeeper-headless
   replicas: 1
@@ -16,7 +16,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: zookeeper
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       terminationGracePeriodSeconds: 30
       containers:

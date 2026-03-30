@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	"github.com/ace-platform/auth-service/internal/types"
+	"github.com/garudax-platform/auth-service/internal/types"
 )
 
 func TestHasPermission(t *testing.T) {

@@ -1,19 +1,19 @@
 openapi: "3.0.3"
 info:
-  title: ACE Platform API
+  title: GarudaX Platform API
   description: |
-    REST API for the Agriculture Commodity Exchange of Mongolia.
+    REST API for the AI Powered Commodity Exchange of Mongolia.
     This gateway translates REST/JSON requests to gRPC calls on backend exchange services.
   version: "1.0.0"
   contact:
-    name: ACE Platform Engineering
+    name: GarudaX Platform Engineering
   license:
     name: Proprietary
 
 servers:
-  - url: https://api.ace.mn/api/v1
+  - url: https://api.garudax.mn/api/v1
     description: Production
-  - url: https://staging-api.ace.mn/api/v1
+  - url: https://staging-api.garudax.mn/api/v1
     description: Staging
 
 tags:

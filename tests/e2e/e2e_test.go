@@ -1,4 +1,4 @@
-// Package e2e provides end-to-end integration tests for the ACE Platform.
+// Package e2e provides end-to-end integration tests for the GarudaX Platform.
 // These tests exercise the full trading flow through the gateway HTTP API.
 //
 // Usage:

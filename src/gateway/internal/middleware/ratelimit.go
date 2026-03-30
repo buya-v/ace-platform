@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/gateway/internal/types"
+	"github.com/garudax-platform/gateway/internal/types"
 )
 
 // RateLimitConfig defines rate limit parameters for an endpoint group.

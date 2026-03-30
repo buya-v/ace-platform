@@ -25,7 +25,7 @@ apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: ace-exchange
+  namespace: garudax-exchange
 spec:
   mtls:
     mode: STRICT
@@ -35,7 +35,7 @@ apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: ace-services
+  namespace: garudax-services
 spec:
   mtls:
     mode: STRICT

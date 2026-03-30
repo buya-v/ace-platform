@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── ACE Platform — AI Development Pipeline Orchestrator ──────────────
+# ── GarudaX Platform — AI Development Pipeline Orchestrator ──────────────
 #
 # Usage:
 #   ./pipeline/run.sh "Build the auth service"
@@ -302,7 +302,7 @@ main() {
     esac
   done
 
-  log_section "ACE Platform — AI Development Pipeline"
+  log_section "GarudaX Platform — AI Development Pipeline"
   log_info "Project root: $PROJECT_ROOT"
   log_info "Mode: $mode | Max parallel: $MAX_PARALLEL | Budget/agent: \$${BUDGET_PER_AGENT}"
 

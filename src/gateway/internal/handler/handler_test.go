@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ace-platform/gateway/internal/auth"
-	"github.com/ace-platform/gateway/internal/middleware"
-	"github.com/ace-platform/gateway/internal/proxy"
-	"github.com/ace-platform/gateway/internal/router"
+	"github.com/garudax-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/middleware"
+	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/router"
 )
 
 // mockClient records forwarded requests and returns canned responses.

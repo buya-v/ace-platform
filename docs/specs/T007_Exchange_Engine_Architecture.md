@@ -28,7 +28,7 @@
 
 ## 1. Overview
 
-The ACE Exchange Engine is the core trading system for the Agriculture Commodity Exchange of Mongolia. It implements a Central Limit Order Book (CLOB) with price-time priority matching for agricultural commodities including grains, oilseeds, livestock, and fiber products.
+The GarudaX Exchange Engine is the core trading system for the AI Powered Commodity Exchange of Mongolia. It implements a Central Limit Order Book (CLOB) with price-time priority matching for agricultural commodities including grains, oilseeds, livestock, and fiber products.
 
 ### Design Principles
 
@@ -229,7 +229,7 @@ Before an order enters the book, the engine validates:
 
 ### 5.1 Price-Time Priority
 
-The ACE exchange uses strict **price-time priority** (also called FIFO):
+The GarudaX exchange uses strict **price-time priority** (also called FIFO):
 
 1. **Price priority**: An order offering a better price is matched first. For buys, higher price has priority. For sells, lower price has priority.
 2. **Time priority**: Among orders at the same price level, the order that arrived first (lowest sequence number) is matched first.

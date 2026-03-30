@@ -11,7 +11,7 @@ const initialState = {
 
 const mockUser = {
   id: 'user-1',
-  email: 'admin@ace.mn',
+  email: 'admin@garudax.mn',
   name: 'Admin User',
   roles: ['admin'],
   participant_id: null,

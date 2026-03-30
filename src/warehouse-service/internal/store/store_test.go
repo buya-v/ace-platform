@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ace-platform/warehouse-service/internal/types"
+	"github.com/garudax-platform/warehouse-service/internal/types"
 )
 
 func setupFacility(t *testing.T, s *Store) *types.Facility {

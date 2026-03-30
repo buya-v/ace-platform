@@ -19,8 +19,8 @@ export const Login: React.FC = () => {
   return (
     <div className={styles.page}>
       <form className={styles.form} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>ACE Trading Platform</h1>
-        <p className={styles.subtitle}>Agriculture Commodity Exchange</p>
+        <h1 className={styles.title}>GarudaX Trading Platform</h1>
+        <p className={styles.subtitle}>AI Powered Commodity Exchange</p>
 
         {state.error && <div className={styles.error}>{state.error}</div>}
 

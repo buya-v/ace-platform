@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ace-platform/matching-engine/internal/engine"
-	"github.com/ace-platform/matching-engine/internal/orderbook"
-	"github.com/ace-platform/matching-engine/internal/store"
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/engine"
+	"github.com/garudax-platform/matching-engine/internal/orderbook"
+	"github.com/garudax-platform/matching-engine/internal/store"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 // Server is the matching engine gRPC server.

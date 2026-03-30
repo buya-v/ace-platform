@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // seqIDGen provides deterministic sequential IDs for testing.

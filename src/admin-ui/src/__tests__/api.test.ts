@@ -6,9 +6,9 @@ describe('apiFetch', () => {
 
   beforeEach(() => {
     setAccessToken(null);
-    // Set up window.__ACE_CONFIG__
+    // Set up window.__GARUDAX_CONFIG__
     (globalThis as Record<string, unknown>).window = {
-      __ACE_CONFIG__: { API_BASE_URL: 'http://test-api/api/v1' },
+      __GARUDAX_CONFIG__: { API_BASE_URL: 'http://test-api/api/v1' },
     };
   });
 

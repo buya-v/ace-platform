@@ -1,8 +1,8 @@
 package scanner
 
 import (
-	"github.com/ace-platform/margin-engine/internal/params"
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/params"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // Scanner implements the SPAN risk scanning algorithm.

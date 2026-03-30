@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // CCP is the central counterparty identifier used in novation.
-const CCP = "ACE-CCP"
+const CCP = "GarudaX-CCP"
 
 // Service performs trade novation — replacing bilateral trades with
 // two CCP-intermediated clearing obligations.

@@ -27,8 +27,8 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-1.amazonaws.com
-  IMAGE_PREFIX: ace-platform
-  EKS_CLUSTER_PREFIX: ace-platform
+  IMAGE_PREFIX: garudax-platform
+  EKS_CLUSTER_PREFIX: garudax-platform
 
 permissions:
   id-token: write
@@ -110,15 +110,15 @@ jobs:
             else
               kubectl set image deployment/${svc} \
                 ${svc}=${ECR_REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG} \
-                -n ace-platform || echo "Deployment ${svc} not found, skipping"
+                -n garudax-platform || echo "Deployment ${svc} not found, skipping"
             fi
 
             # Wait for rollout
             kubectl rollout status deployment/${svc} \
-              -n ace-platform \
+              -n garudax-platform \
               --timeout=300s || {
                 echo "::error::Rollout failed for ${svc}"
-                kubectl rollout undo deployment/${svc} -n ace-platform
+                kubectl rollout undo deployment/${svc} -n garudax-platform
                 exit 1
               }
 
@@ -129,10 +129,10 @@ jobs:
         env:
           ENV: ${{ needs.determine-target.outputs.environment }}
         run: |
-          echo "Checking pod health in ace-platform namespace..."
-          kubectl get pods -n ace-platform -o wide
+          echo "Checking pod health in garudax-platform namespace..."
+          kubectl get pods -n garudax-platform -o wide
           # Fail if any pods are in CrashLoopBackOff
-          UNHEALTHY=$(kubectl get pods -n ace-platform --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
+          UNHEALTHY=$(kubectl get pods -n garudax-platform --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
           if [ -n "$UNHEALTHY" ]; then
             echo "::warning::Unhealthy pods detected: ${UNHEALTHY}"
           fi
@@ -168,9 +168,9 @@ jobs:
             svc=$(basename "$dir")
             kubectl set image deployment/${svc} \
               ${svc}=${ECR_REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG} \
-              -n ace-platform || echo "Deployment ${svc} not found, skipping"
+              -n garudax-platform || echo "Deployment ${svc} not found, skipping"
             kubectl rollout status deployment/${svc} \
-              -n ace-platform \
+              -n garudax-platform \
               --timeout=300s || true
           done
 
@@ -205,12 +205,12 @@ jobs:
             svc=$(basename "$dir")
             kubectl set image deployment/${svc} \
               ${svc}=${ECR_REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG} \
-              -n ace-platform || echo "Deployment ${svc} not found, skipping"
+              -n garudax-platform || echo "Deployment ${svc} not found, skipping"
             kubectl rollout status deployment/${svc} \
-              -n ace-platform \
+              -n garudax-platform \
               --timeout=600s || {
                 echo "::error::Prod rollout failed for ${svc}, rolling back"
-                kubectl rollout undo deployment/${svc} -n ace-platform
+                kubectl rollout undo deployment/${svc} -n garudax-platform
                 exit 1
               }
           done

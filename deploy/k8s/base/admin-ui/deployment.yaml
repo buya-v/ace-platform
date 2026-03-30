@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: admin-ui
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: admin-ui
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   replicas: 1
   selector:
@@ -15,11 +15,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: admin-ui
-        app.kubernetes.io/part-of: ace-platform
+        app.kubernetes.io/part-of: garudax-platform
     spec:
       containers:
         - name: admin-ui
-          image: ace-platform/admin-ui:latest
+          image: garudax-platform/admin-ui:latest
           ports:
             - name: http
               containerPort: 80
@@ -45,4 +45,4 @@ spec:
               cpu: "200m"
           env:
             - name: API_BASE_URL
-              value: "http://gateway.ace-services.svc.cluster.local:8080"
+              value: "http://gateway.garudax-services.svc.cluster.local:8080"

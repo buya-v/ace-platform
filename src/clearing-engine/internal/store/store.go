@@ -3,7 +3,7 @@ package store
 import (
 	"sync"
 
-	"github.com/ace-platform/clearing-engine/internal/types"
+	"github.com/garudax-platform/clearing-engine/internal/types"
 )
 
 // ObligationStore provides append-only storage for clearing obligations.

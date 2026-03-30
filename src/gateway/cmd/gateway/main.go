@@ -10,17 +10,17 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ace-platform/gateway/internal/auth"
-	"github.com/ace-platform/gateway/internal/config"
-	"github.com/ace-platform/gateway/internal/handler"
-	"github.com/ace-platform/gateway/internal/middleware"
-	"github.com/ace-platform/gateway/internal/proxy"
-	"github.com/ace-platform/gateway/internal/router"
-	"github.com/ace-platform/gateway/internal/websocket"
+	"github.com/garudax-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/config"
+	"github.com/garudax-platform/gateway/internal/handler"
+	"github.com/garudax-platform/gateway/internal/middleware"
+	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/router"
+	"github.com/garudax-platform/gateway/internal/websocket"
 )
 
 func main() {
-	log.Println("ACE API Gateway starting...")
+	log.Println("GarudaX API Gateway starting...")
 
 	cfg := config.FromEnv()
 
@@ -156,7 +156,7 @@ func main() {
 
 	go func() {
 		handler.SetReady()
-		log.Printf("ACE API Gateway ready on %s", httpAddr)
+		log.Printf("GarudaX API Gateway ready on %s", httpAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP server error: %v", err)
 		}
@@ -178,5 +178,5 @@ func main() {
 		log.Printf("Health server shutdown error: %v", err)
 	}
 
-	log.Println("ACE API Gateway stopped")
+	log.Println("GarudaX API Gateway stopped")
 }

@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 func TestInMemoryTradeStoreAppendOnly(t *testing.T) {

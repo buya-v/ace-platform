@@ -1,7 +1,7 @@
 package screening
 
 import (
-	"github.com/ace-platform/compliance-service/internal/types"
+	"github.com/garudax-platform/compliance-service/internal/types"
 )
 
 const riskModelVersion = "v1.0"

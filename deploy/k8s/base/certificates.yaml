@@ -31,58 +31,58 @@ spec:
           ingress:
             class: nginx
 ---
-# ── Certificate for ace.asla.mn ─────────────────────────────────────────────
+# ── Certificate for garudax.asla.mn ─────────────────────────────────────────────
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: ace-asla-mn-cert
-  namespace: ace
+  name: garudax-asla-mn-cert
+  namespace: garudax
 spec:
-  secretName: ace-asla-mn-tls
+  secretName: garudax-asla-mn-tls
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - ace.asla.mn
+    - garudax.asla.mn
 ---
-# ── Certificate for admin.ace.asla.mn ───────────────────────────────────────
+# ── Certificate for admin.garudax.asla.mn ───────────────────────────────────────
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: admin-ace-asla-mn-cert
-  namespace: ace
+  name: admin-garudax-asla-mn-cert
+  namespace: garudax
 spec:
-  secretName: admin-ace-asla-mn-tls
+  secretName: admin-garudax-asla-mn-tls
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - admin.ace.asla.mn
+    - admin.garudax.asla.mn
 ---
-# ── Certificate for trade.ace.asla.mn ───────────────────────────────────────
+# ── Certificate for trade.garudax.asla.mn ───────────────────────────────────────
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: trade-ace-asla-mn-cert
-  namespace: ace
+  name: trade-garudax-asla-mn-cert
+  namespace: garudax
 spec:
-  secretName: trade-ace-asla-mn-tls
+  secretName: trade-garudax-asla-mn-tls
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - trade.ace.asla.mn
+    - trade.garudax.asla.mn
 ---
-# ── Certificate for demo.ace.asla.mn ────────────────────────────────────────
+# ── Certificate for demo.garudax.asla.mn ────────────────────────────────────────
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: demo-ace-asla-mn-cert
-  namespace: ace
+  name: demo-garudax-asla-mn-cert
+  namespace: garudax
 spec:
-  secretName: demo-ace-asla-mn-tls
+  secretName: demo-garudax-asla-mn-tls
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - demo.ace.asla.mn
+    - demo.garudax.asla.mn

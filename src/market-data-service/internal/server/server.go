@@ -11,12 +11,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/candle"
-	"github.com/ace-platform/market-data-service/internal/retention"
-	"github.com/ace-platform/market-data-service/internal/store"
-	"github.com/ace-platform/market-data-service/internal/streaming"
-	"github.com/ace-platform/market-data-service/internal/ticker"
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/candle"
+	"github.com/garudax-platform/market-data-service/internal/retention"
+	"github.com/garudax-platform/market-data-service/internal/store"
+	"github.com/garudax-platform/market-data-service/internal/streaming"
+	"github.com/garudax-platform/market-data-service/internal/ticker"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 // Server is the market data service server.

@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/ace-platform/gateway/internal/types"
+	"github.com/garudax-platform/gateway/internal/types"
 )
 
 // BodyLimit limits the size of request bodies.

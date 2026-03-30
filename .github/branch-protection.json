@@ -1,5 +1,5 @@
 {
-  "description": "Branch protection rules for ACE Platform. Apply via GitHub API or UI Settings > Branches.",
+  "description": "Branch protection rules for GarudaX Platform. Apply via GitHub API or UI Settings > Branches.",
   "rules": {
     "main": {
       "required_status_checks": {

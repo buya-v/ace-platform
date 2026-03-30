@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/margin-engine/internal/margin"
-	"github.com/ace-platform/margin-engine/internal/margincall"
-	"github.com/ace-platform/margin-engine/internal/params"
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/margin"
+	"github.com/garudax-platform/margin-engine/internal/margincall"
+	"github.com/garudax-platform/margin-engine/internal/params"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // PositionSource provides positions from the clearing engine.

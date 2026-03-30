@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/ace-platform/margin-engine/internal/engine"
-	"github.com/ace-platform/margin-engine/internal/types"
+	"github.com/garudax-platform/margin-engine/internal/engine"
+	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // Server wraps the margin engine with health checks and HTTP endpoints.

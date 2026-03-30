@@ -1,3 +1,3 @@
-module github.com/ace-platform/margin-engine
+module github.com/garudax-platform/margin-engine
 
 go 1.22.0

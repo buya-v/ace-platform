@@ -6,13 +6,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ace-platform/compliance-service/internal/onboarding"
-	"github.com/ace-platform/compliance-service/internal/screening"
-	"github.com/ace-platform/compliance-service/internal/server"
+	"github.com/garudax-platform/compliance-service/internal/onboarding"
+	"github.com/garudax-platform/compliance-service/internal/screening"
+	"github.com/garudax-platform/compliance-service/internal/server"
 )
 
 func main() {
-	log.Println("ACE Compliance Service starting...")
+	log.Println("GarudaX Compliance Service starting...")
 
 	cfg := server.ConfigFromEnv()
 
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	srv.SetReady()
-	log.Printf("ACE Compliance Service ready (gRPC=%s, health=%s:%d)",
+	log.Printf("GarudaX Compliance Service ready (gRPC=%s, health=%s:%d)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort)
 
 	sigCh := make(chan os.Signal, 1)

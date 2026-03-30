@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ace-platform/matching-engine/internal/engine"
-	"github.com/ace-platform/matching-engine/internal/store"
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/engine"
+	"github.com/garudax-platform/matching-engine/internal/store"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 type testIDGen struct {

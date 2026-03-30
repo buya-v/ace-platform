@@ -43,7 +43,7 @@ export function LoginPage() {
   return (
     <div className={styles.container}>
       <form className={styles.card} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>ACE Admin</h1>
+        <h1 className={styles.title}>GarudaX Admin</h1>
         <p className={styles.subtitle}>Sign in to the admin dashboard</p>
 
         {state.error && <div className={styles.error} role="alert">{state.error}</div>}

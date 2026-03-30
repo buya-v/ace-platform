@@ -2,10 +2,10 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: gateway
-  namespace: ace-services
+  namespace: garudax-services
   labels:
     app.kubernetes.io/name: gateway
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   maxUnavailable: 1
   selector:

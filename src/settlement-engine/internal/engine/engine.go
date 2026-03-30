@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/payment"
-	"github.com/ace-platform/settlement-engine/internal/pnl"
-	"github.com/ace-platform/settlement-engine/internal/settlement"
-	"github.com/ace-platform/settlement-engine/internal/types"
-	"github.com/ace-platform/settlement-engine/internal/valuation"
+	"github.com/garudax-platform/settlement-engine/internal/payment"
+	"github.com/garudax-platform/settlement-engine/internal/pnl"
+	"github.com/garudax-platform/settlement-engine/internal/settlement"
+	"github.com/garudax-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/valuation"
 )
 
 // PositionSource provides positions from the clearing engine.

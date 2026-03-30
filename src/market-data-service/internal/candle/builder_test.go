@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 func mustDecimal(s string) types.Decimal {

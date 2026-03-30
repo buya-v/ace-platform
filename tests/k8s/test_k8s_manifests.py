@@ -1,7 +1,7 @@
 """Tests for Kubernetes deployment manifests.
 
 Validates YAML structure, required fields, port assignments,
-resource limits, and overlay consistency for all ACE platform services.
+resource limits, and overlay consistency for all GarudaX platform services.
 """
 
 import os
@@ -18,14 +18,14 @@ OVERLAYS_DIR = os.path.join(
 
 # Service definitions: name -> (namespace, grpc_port, health_port)
 GRPC_SERVICES = {
-    "matching-engine": ("ace-exchange", 50051, 8081),
-    "clearing-engine": ("ace-exchange", 50052, 8082),
-    "margin-engine": ("ace-exchange", 50053, 8083),
-    "settlement-engine": ("ace-exchange", 50054, 8084),
-    "auth-service": ("ace-services", 50055, 8085),
-    "compliance-service": ("ace-services", 50056, 8086),
-    "market-data-service": ("ace-services", 50057, 8087),
-    "warehouse-service": ("ace-services", 50058, 8088),
+    "matching-engine": ("garudax-exchange", 50051, 8081),
+    "clearing-engine": ("garudax-exchange", 50052, 8082),
+    "margin-engine": ("garudax-exchange", 50053, 8083),
+    "settlement-engine": ("garudax-exchange", 50054, 8084),
+    "auth-service": ("garudax-services", 50055, 8085),
+    "compliance-service": ("garudax-services", 50056, 8086),
+    "market-data-service": ("garudax-services", 50057, 8087),
+    "warehouse-service": ("garudax-services", 50058, 8088),
 }
 
 GATEWAY_PORTS = {"http": 8080, "health": 8090}
@@ -234,7 +234,7 @@ class TestInfraManifests(unittest.TestCase):
         docs = load_yaml(os.path.join(BASE_DIR, "postgres", "statefulset.yaml"))
         ss = docs[0]
         self.assertEqual(ss["kind"], "StatefulSet")
-        self.assertEqual(ss["metadata"]["namespace"], "ace-infra")
+        self.assertEqual(ss["metadata"]["namespace"], "garudax-infra")
         vcts = ss["spec"]["volumeClaimTemplates"]
         self.assertEqual(len(vcts), 1)
         self.assertEqual(
@@ -367,7 +367,7 @@ class TestNamespaces(unittest.TestCase):
     def test_required_namespaces(self):
         docs = load_yaml(os.path.join(BASE_DIR, "namespaces.yaml"))
         ns_names = [d["metadata"]["name"] for d in docs]
-        for ns in ["ace-exchange", "ace-services", "ace-infra"]:
+        for ns in ["garudax-exchange", "garudax-services", "garudax-infra"]:
             self.assertIn(ns, ns_names, f"Missing namespace: {ns}")
 
 
@@ -410,7 +410,7 @@ class TestLabels(unittest.TestCase):
         for svc in list(GRPC_SERVICES.keys()) + ["gateway"]:
             docs = load_yaml(os.path.join(BASE_DIR, svc, "deployment.yaml"))
             labels = docs[0]["metadata"]["labels"]
-            self.assertEqual(labels["app.kubernetes.io/part-of"], "ace-platform")
+            self.assertEqual(labels["app.kubernetes.io/part-of"], "garudax-platform")
 
     def test_selector_matches_template_labels(self):
         for svc in list(GRPC_SERVICES.keys()) + ["gateway"]:
@@ -487,16 +487,16 @@ class TestCrossResourceValidation(unittest.TestCase):
                             )
 
     def test_jwt_secret_in_ace_exchange(self):
-        """ace-exchange namespace must have ace-jwt-signing-key for engine JWT validation."""
+        """garudax-exchange namespace must have garudax-jwt-signing-key for engine JWT validation."""
         self.assertIn(
-            ("ace-jwt-signing-key", "ace-exchange"),
+            ("garudax-jwt-signing-key", "garudax-exchange"),
             self.secrets,
-            "ace-jwt-signing-key missing from ace-exchange namespace",
+            "garudax-jwt-signing-key missing from garudax-exchange namespace",
         )
 
     def test_service_discovery_configmap_per_namespace(self):
-        """service-discovery ConfigMap must exist in both ace-exchange and ace-services."""
-        for ns in ["ace-exchange", "ace-services"]:
+        """service-discovery ConfigMap must exist in both garudax-exchange and garudax-services."""
+        for ns in ["garudax-exchange", "garudax-services"]:
             self.assertIn(
                 ("service-discovery", ns),
                 self.configmaps,

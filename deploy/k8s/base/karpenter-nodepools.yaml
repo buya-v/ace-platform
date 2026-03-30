@@ -7,7 +7,7 @@ spec:
   template:
     metadata:
       labels:
-        ace-platform/node-role: exchange-core
+        garudax-platform/node-role: exchange-core
         karpenter.sh/provisioner: exchange-core-burst
     spec:
       requirements:
@@ -21,7 +21,7 @@ spec:
           operator: In
           values: ["c5.2xlarge", "c5.4xlarge", "c5a.2xlarge", "c5a.4xlarge"]
       taints:
-        - key: ace-platform/exchange-core
+        - key: garudax-platform/exchange-core
           value: "true"
           effect: NoSchedule
       nodeClassRef:
@@ -42,7 +42,7 @@ spec:
   template:
     metadata:
       labels:
-        ace-platform/node-role: app-general
+        garudax-platform/node-role: app-general
         karpenter.sh/provisioner: app-general-burst
     spec:
       requirements:
@@ -73,7 +73,7 @@ spec:
   template:
     metadata:
       labels:
-        ace-platform/node-role: data-pipeline
+        garudax-platform/node-role: data-pipeline
         karpenter.sh/provisioner: data-pipeline-burst
     spec:
       requirements:
@@ -87,7 +87,7 @@ spec:
           operator: In
           values: ["r5.xlarge", "r5.2xlarge", "r5a.xlarge", "r5a.2xlarge"]
       taints:
-        - key: ace-platform/data-pipeline
+        - key: garudax-platform/data-pipeline
           value: "true"
           effect: NoSchedule
       nodeClassRef:
@@ -114,7 +114,7 @@ spec:
         karpenter.sh/discovery: "${CLUSTER_NAME}"
   instanceProfile: "${KARPENTER_INSTANCE_PROFILE}"
   tags:
-    Project: ace-platform
+    Project: garudax-platform
     ManagedBy: karpenter
   blockDeviceMappings:
     - deviceName: /dev/xvda

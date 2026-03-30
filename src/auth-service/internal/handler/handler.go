@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ace-platform/auth-service/internal/auth"
-	"github.com/ace-platform/auth-service/internal/types"
+	"github.com/garudax-platform/auth-service/internal/auth"
+	"github.com/garudax-platform/auth-service/internal/types"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)

@@ -1,7 +1,7 @@
 /**
- * ACE Demo Runner — Comprehensive E2E Playwright Tests
+ * GarudaX Demo Runner — Comprehensive E2E Playwright Tests
  *
- * Tests every section and step of the demo runner at https://demo.ace.asla.mn.
+ * Tests every section and step of the demo runner at https://demo.garudax.asla.mn.
  * Uses soft assertions so individual step failures do not abort the suite.
  * Captures screenshots on failures.
  *

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 // TradeStore provides append-only in-memory storage for trades.

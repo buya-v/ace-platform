@@ -53,7 +53,7 @@ for resource in \
 done
 
 # Verify 5 default node groups
-NODE_GROUP_COUNT=$(grep -c '"ace-platform/node-role"' "$EKS_MAIN" || true)
+NODE_GROUP_COUNT=$(grep -c '"garudax-platform/node-role"' "$EKS_MAIN" || true)
 if [ "$NODE_GROUP_COUNT" -ge 5 ]; then
   pass "5 node groups defined (system, exchange-core, app-general, monitoring, data-pipeline)"
 else
@@ -253,7 +253,7 @@ echo ""
 echo "--- Namespaces ---"
 
 NS_FILE="$REPO_ROOT/deploy/k8s/base/namespaces.yaml"
-for ns in istio-system istio-ingress karpenter ace-exchange ace-services ace-monitoring; do
+for ns in istio-system istio-ingress karpenter garudax-exchange garudax-services garudax-monitoring; do
   if grep -q "name: $ns" "$NS_FILE"; then
     pass "Namespace '$ns' defined"
   else

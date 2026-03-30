@@ -71,7 +71,7 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
           className={styles.statusDot}
           style={{ background: statusColorMap[systemStatus] }}
         />
-        ACE Admin
+        GarudaX Admin
       </div>
 
       <NavLink to="/dashboard" end className={({ isActive }) => isActive ? styles.activeLink : styles.link}>

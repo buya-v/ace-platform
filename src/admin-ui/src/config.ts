@@ -1,6 +1,6 @@
 declare global {
   interface Window {
-    __ACE_CONFIG__?: Partial<AppConfig>;
+    __GARUDAX_CONFIG__?: Partial<AppConfig>;
   }
 }
 
@@ -19,6 +19,6 @@ const defaults: AppConfig = {
 };
 
 export function getConfig(): AppConfig {
-  const runtime = window.__ACE_CONFIG__ ?? {};
+  const runtime = window.__GARUDAX_CONFIG__ ?? {};
   return { ...defaults, ...runtime };
 }

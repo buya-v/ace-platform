@@ -2,10 +2,10 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: matching-engine
-  namespace: ace-exchange
+  namespace: garudax-exchange
   labels:
     app.kubernetes.io/name: matching-engine
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

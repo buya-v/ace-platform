@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: istio-system
   labels:
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
@@ -11,41 +11,41 @@ metadata:
   name: istio-ingress
   labels:
     istio-injection: enabled
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: karpenter
   labels:
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ace-exchange
+  name: garudax-exchange
   labels:
     istio-injection: enabled
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ace-services
+  name: garudax-services
   labels:
     istio-injection: enabled
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ace-infra
+  name: garudax-infra
   labels:
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ace-monitoring
+  name: garudax-monitoring
   labels:
-    app.kubernetes.io/part-of: ace-platform
+    app.kubernetes.io/part-of: garudax-platform

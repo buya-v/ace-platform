@@ -28,7 +28,7 @@
 
 ## 1. Overview
 
-This document specifies the event-driven integration layer for the ACE (Agriculture Commodity Exchange) platform. All inter-service asynchronous communication flows through Apache Kafka. The design provides:
+This document specifies the event-driven integration layer for the GarudaX (AI Powered Commodity Exchange) platform. All inter-service asynchronous communication flows through Apache Kafka. The design provides:
 
 - **Loose coupling** — services produce and consume events without direct RPC dependencies
 - **Durability** — events are persisted to Kafka and replayable within the retention window
@@ -58,7 +58,7 @@ ace.{domain}.{event-type}
 ```
 
 Rules:
-- **`ace`** — fixed namespace prefix for all ACE platform events
+- **`ace`** — fixed namespace prefix for all GarudaX platform events
 - **`{domain}`** — the owning service's business domain (not the service name): `trades`, `clearing`, `margin`, `settlement`, `compliance`, `market-data`, `warehouse`, `auth`
 - **`{event-type}`** — past-tense verb describing what happened: `executed`, `novated`, `call-issued`, `completed`, `status-changed`, `trade-ingested`, `receipt-pledged`, `delivery-completed`, `user-registered`
 - Hyphens separate multi-word segments within a level
@@ -77,7 +77,7 @@ ace.dlq.trades.executed
 
 ## 3. Event Envelope Schema
 
-Every event published to any ACE topic MUST use this envelope. The `payload` field contains the event-specific data.
+Every event published to any GarudaX topic MUST use this envelope. The `payload` field contains the event-specific data.
 
 ```json
 {
@@ -277,7 +277,7 @@ Produced by **clearing-engine** after successful novation. Mirrors `types.Cleari
     "instrument_id": "WHEAT-2026Q3",
     "buyer_participant_id": "PART-001",
     "seller_participant_id": "PART-002",
-    "ccp_id": "ACE-CCP",
+    "ccp_id": "GarudaX-CCP",
     "price": "1850.0000",
     "quantity": 100,
     "status": "NOVATED",

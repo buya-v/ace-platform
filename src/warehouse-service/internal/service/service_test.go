@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ace-platform/warehouse-service/internal/store"
-	"github.com/ace-platform/warehouse-service/internal/types"
+	"github.com/garudax-platform/warehouse-service/internal/store"
+	"github.com/garudax-platform/warehouse-service/internal/types"
 )
 
 // helper creates a service with a fresh store and a pre-registered active facility.

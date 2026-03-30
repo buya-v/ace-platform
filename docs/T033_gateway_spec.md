@@ -29,12 +29,12 @@
 
 ## 1. Overview
 
-The ACE API Gateway is the single public-facing HTTP entry point for the Agriculture Commodity Exchange platform. It translates REST/JSON requests into gRPC calls to backend services and exposes WebSocket streams for real-time market data.
+The GarudaX API Gateway is the single public-facing HTTP entry point for the AI Powered Commodity Exchange platform. It translates REST/JSON requests into gRPC calls to backend services and exposes WebSocket streams for real-time market data.
 
 ### Design Principles
 
 - **Thin translation layer**: The gateway contains no business logic. It validates JWTs, enforces rate limits, translates REST↔gRPC, and forwards. All domain logic lives in the backend services.
-- **Unified API surface**: Clients interact with one base URL (`https://api.ace.mn/api/v1/`) regardless of which backend service handles the request.
+- **Unified API surface**: Clients interact with one base URL (`https://api.garudax.mn/api/v1/`) regardless of which backend service handles the request.
 - **Zero-dependency Go module**: Following the established pattern (matching-engine, clearing-engine, etc.), the gateway is a standalone Go service with no shared library dependencies.
 - **Connection pooling**: Maintains persistent gRPC connections to all backend services for low-latency forwarding.
 
@@ -472,9 +472,9 @@ All WebSocket messages are JSON. Server→client messages have a consistent enve
 ### 7.4 WebSocket Query Parameters
 
 ```
-ws://api.ace.mn/api/v1/ws/book/WHT-HRW-2026M07-UB?snapshot_first=true&depth=10
-ws://api.ace.mn/api/v1/ws/trades/WHT-HRW-2026M07-UB?since_sequence=12000
-ws://api.ace.mn/api/v1/ws/executions?token=<JWT>
+ws://api.garudax.mn/api/v1/ws/book/WHT-HRW-2026M07-UB?snapshot_first=true&depth=10
+ws://api.garudax.mn/api/v1/ws/trades/WHT-HRW-2026M07-UB?since_sequence=12000
+ws://api.garudax.mn/api/v1/ws/executions?token=<JWT>
 ```
 
 ### 7.5 Reconnection

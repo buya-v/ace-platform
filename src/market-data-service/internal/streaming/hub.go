@@ -4,7 +4,7 @@ package streaming
 import (
 	"sync"
 
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 // CandleSubscription receives candle updates.

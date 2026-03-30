@@ -1,11 +1,11 @@
-# ACE Platform — Agriculture Commodity Exchange
+# GarudaX Platform — AI Powered Commodity Exchange
 ## Project Knowledge Base
 
 ---
 
 ## 1. PROJECT OVERVIEW
 
-**Project name:** Agriculture Commodity Exchange (ACE)
+**Project name:** AI Powered Commodity Exchange (GarudaX)
 **Platform type:** Full-scale commodity exchange — physical delivery + financial settlement
 **Target market:** Mongolia (Ulaanbaatar, MNT currency)
 **Delivery method:** AI agent-driven development, 9 phases, 18 calendar weeks

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ace-platform/settlement-engine/internal/types"
+	"github.com/garudax-platform/settlement-engine/internal/types"
 )
 
 // Gateway defines the interface for processing settlement payments.

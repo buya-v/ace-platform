@@ -1,4 +1,4 @@
-# ACE Platform — Agriculture Commodity Exchange
+# GarudaX Platform — AI Powered Commodity Exchange
 
 Full-scale commodity exchange for Mongolia — physical delivery + financial settlement.
 
@@ -23,7 +23,7 @@ See [`docs/adr/`](docs/adr/) for Architecture Decision Records.
 ## Repository Structure
 
 ```
-ace-platform/
+garudax-platform/
 ├── CLAUDE.md                    # AI pipeline memory + learned patterns
 ├── AiX_Project_Knowledge.md     # Project knowledge base (all phases/tasks)
 ├── tasks.json                   # Current task graph (machine-readable)
@@ -101,7 +101,7 @@ The learning loop means plans improve as the codebase grows.
 
 ```bash
 # Clone
-git clone <repo-url> && cd ace-platform
+git clone <repo-url> && cd garudax-platform
 
 # Check current task state
 cat tasks.json | jq '.tasks[] | select(.status != "done") | {id, title, status}'
@@ -116,4 +116,4 @@ cat tasks.json | jq '.tasks[] | select(.status != "done") | {id, title, status}'
 
 ## License
 
-Proprietary — Agriculture Commodity Exchange Platform
+Proprietary — AI Powered Commodity Exchange Platform

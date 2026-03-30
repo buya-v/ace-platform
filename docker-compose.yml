@@ -15,28 +15,28 @@ services:
 
   postgres:
     image: timescale/timescaledb:latest-pg15
-    container_name: ace-postgres
+    container_name: garudax-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ace}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ace_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-ace}
+      POSTGRES_USER: ${POSTGRES_USER:-garudax}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-garudax_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-garudax}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infrastructure/db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ace}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-garudax}"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
     networks:
-      - ace-network
+      - garudax-network
 
   redis:
     image: redis:7-alpine
-    container_name: ace-redis
+    container_name: garudax-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -45,11 +45,11 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - ace-network
+      - garudax-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: ace-zookeeper
+    container_name: garudax-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -63,11 +63,11 @@ services:
       retries: 10
       start_period: 15s
     networks:
-      - ace-network
+      - garudax-network
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: ace-kafka
+    container_name: garudax-kafka
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -90,7 +90,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - ace-network
+      - garudax-network
 
   # ─── Exchange Core (engines) ───────────────────────────────────────
 
@@ -98,7 +98,7 @@ services:
     build:
       context: ./src/matching-engine
       dockerfile: Dockerfile
-    container_name: ace-matching-engine
+    container_name: garudax-matching-engine
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,13 +116,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   clearing-engine:
     build:
       context: ./src/clearing-engine
       dockerfile: Dockerfile
-    container_name: ace-clearing-engine
+    container_name: garudax-clearing-engine
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,13 +142,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   margin-engine:
     build:
       context: ./src/margin-engine
       dockerfile: Dockerfile
-    container_name: ace-margin-engine
+    container_name: garudax-margin-engine
     depends_on:
       postgres:
         condition: service_healthy
@@ -168,13 +168,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   settlement-engine:
     build:
       context: ./src/settlement-engine
       dockerfile: Dockerfile
-    container_name: ace-settlement-engine
+    container_name: garudax-settlement-engine
     depends_on:
       postgres:
         condition: service_healthy
@@ -194,7 +194,7 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   # ─── Supporting Services ───────────────────────────────────────────
 
@@ -202,7 +202,7 @@ services:
     build:
       context: ./src/auth-service
       dockerfile: Dockerfile
-    container_name: ace-auth-service
+    container_name: garudax-auth-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -212,12 +212,12 @@ services:
       <<: *common-env
       GRPC_PORT: "50055"
       HEALTH_PORT: "8085"
-      AUTH_JWT_SIGNING_KEY: ${AUTH_JWT_SIGNING_KEY:-ace-dev-jwt-signing-key-change-in-production}
+      AUTH_JWT_SIGNING_KEY: ${AUTH_JWT_SIGNING_KEY:-garudax-dev-jwt-signing-key-change-in-production}
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_USER: ${POSTGRES_USER:-ace}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-ace_dev_password}
-      DB_NAME: ${POSTGRES_DB:-ace}
+      DB_USER: ${POSTGRES_USER:-garudax}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-garudax_dev_password}
+      DB_NAME: ${POSTGRES_DB:-garudax}
       DB_SSL_MODE: disable
     ports:
       - "50055:50055"
@@ -226,13 +226,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   compliance-service:
     build:
       context: ./src/compliance-service
       dockerfile: Dockerfile
-    container_name: ace-compliance-service
+    container_name: garudax-compliance-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -249,13 +249,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   market-data-service:
     build:
       context: ./src/market-data-service
       dockerfile: Dockerfile
-    container_name: ace-market-data-service
+    container_name: garudax-market-data-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -273,13 +273,13 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   warehouse-service:
     build:
       context: ./src/warehouse-service
       dockerfile: Dockerfile
-    container_name: ace-warehouse-service
+    container_name: garudax-warehouse-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -296,7 +296,7 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8088/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   # ─── API Gateway ───────────────────────────────────────────────────
 
@@ -304,7 +304,7 @@ services:
     build:
       context: ./src/gateway
       dockerfile: Dockerfile
-    container_name: ace-gateway
+    container_name: garudax-gateway
     depends_on:
       auth-service:
         condition: service_healthy
@@ -322,7 +322,7 @@ services:
       <<: *common-env
       HTTP_PORT: "8080"
       HEALTH_PORT: "8090"
-      JWT_SECRET: ${AUTH_JWT_SIGNING_KEY:-ace-dev-jwt-signing-key-change-in-production}
+      JWT_SECRET: ${AUTH_JWT_SIGNING_KEY:-garudax-dev-jwt-signing-key-change-in-production}
       JWT_ISSUER: "none"
       JWT_AUDIENCE: "none"
       MATCHING_ENGINE_ADDR: matching-engine:50051
@@ -330,6 +330,7 @@ services:
       MARGIN_ENGINE_ADDR: margin-engine:50053
       SETTLEMENT_ENGINE_ADDR: settlement-engine:50054
       AUTH_SERVICE_ADDR: auth-service:50055
+      CORS_ALLOWED_ORIGINS: "https://garudax.asla.mn,https://admin.garudax.asla.mn,https://trade.garudax.asla.mn,https://demo.garudax.asla.mn"
       COMPLIANCE_SERVICE_ADDR: compliance-service:50056
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
@@ -339,7 +340,7 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/healthz"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   # ─── Frontend UIs ──────────────────────────────────────────────────
 
@@ -347,40 +348,40 @@ services:
     build:
       context: ./src/web-ui
       dockerfile: Dockerfile
-    container_name: ace-web-ui
+    container_name: garudax-web-ui
     ports:
       - "${WEB_UI_PORT:-13000}:3000"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   admin-ui:
     build:
       context: ./src/admin-ui
       dockerfile: Dockerfile
-    container_name: ace-admin-ui
+    container_name: garudax-admin-ui
     ports:
       - "${ADMIN_UI_PORT:-13001}:3001"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   demo-runner:
     build:
       context: ./src/demo-runner
       dockerfile: Dockerfile
-    container_name: ace-demo-runner
+    container_name: garudax-demo-runner
     ports:
       - "${DEMO_PORT:-13002}:3002"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3002/"]
       <<: *healthcheck-http
     networks:
-      - ace-network
+      - garudax-network
 
   # ─── Reverse Proxy ────────────────────────────────────────────────
 
@@ -388,7 +389,7 @@ services:
   # To enable: uncomment and ensure ports 80/443 are available
   # nginx:
   #   image: nginx:alpine
-  #   container_name: ace-nginx
+  #   container_name: garudax-nginx
   #   ports:
   #     - "80:80"
   #     - "443:443"
@@ -402,5 +403,5 @@ volumes:
     driver: local
 
 networks:
-  ace-network:
+  garudax-network:
     driver: bridge

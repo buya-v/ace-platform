@@ -7,11 +7,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://api.ace.mn',
+        target: 'https://api.garudax.mn',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'wss://api.ace.mn',
+        target: 'wss://api.garudax.mn',
         ws: true,
         changeOrigin: true,
       },

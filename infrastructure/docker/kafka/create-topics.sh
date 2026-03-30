@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# ── ACE Platform — Kafka Topic Bootstrap ─────────────────────────────
-# Runs once via ace-kafka-init container after ace-kafka is healthy.
+# ── GarudaX Platform — Kafka Topic Bootstrap ─────────────────────────────
+# Runs once via garudax-kafka-init container after garudax-kafka is healthy.
 
-BOOTSTRAP="ace-kafka:9092"
+BOOTSTRAP="garudax-kafka:9092"
 
-echo "=== ACE Platform: Creating Kafka topics ==="
+echo "=== GarudaX Platform: Creating Kafka topics ==="
 
 # Wait for broker to be fully ready
 sleep 5
@@ -51,5 +51,5 @@ create_topic "warehouse-receipts"  3   2592000000   # 30 days
 create_topic "notifications"       3   604800000    # 7 days
 
 echo ""
-echo "=== ACE Platform: All Kafka topics created ==="
+echo "=== GarudaX Platform: All Kafka topics created ==="
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --list

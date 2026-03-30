@@ -3,8 +3,8 @@ package service
 import (
 	"fmt"
 
-	"github.com/ace-platform/warehouse-service/internal/store"
-	"github.com/ace-platform/warehouse-service/internal/types"
+	"github.com/garudax-platform/warehouse-service/internal/store"
+	"github.com/garudax-platform/warehouse-service/internal/types"
 )
 
 // WarehouseService implements the business logic for the warehouse domain.

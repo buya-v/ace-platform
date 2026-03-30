@@ -32,4 +32,4 @@ resources:
   - zookeeper/
 
 commonLabels:
-  app.kubernetes.io/managed-by: ace-platform
+  app.kubernetes.io/managed-by: garudax-platform

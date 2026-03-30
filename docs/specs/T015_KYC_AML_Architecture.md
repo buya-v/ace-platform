@@ -28,7 +28,7 @@
 
 ## 1. Overview
 
-The ACE Compliance Service implements KYC (Know Your Customer) and AML (Anti-Money Laundering) workflows for the Agriculture Commodity Exchange of Mongolia. Every participant must pass identity verification, document validation, watchlist screening, and risk assessment before they can trade.
+The GarudaX Compliance Service implements KYC (Know Your Customer) and AML (Anti-Money Laundering) workflows for the AI Powered Commodity Exchange of Mongolia. Every participant must pass identity verification, document validation, watchlist screening, and risk assessment before they can trade.
 
 ### Design Principles
 

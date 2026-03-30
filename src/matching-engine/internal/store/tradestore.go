@@ -3,7 +3,7 @@ package store
 import (
 	"sync"
 
-	"github.com/ace-platform/matching-engine/internal/types"
+	"github.com/garudax-platform/matching-engine/internal/types"
 )
 
 // TradeStore provides append-only storage for trades.

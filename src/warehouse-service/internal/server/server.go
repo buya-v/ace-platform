@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/ace-platform/warehouse-service/internal/service"
-	"github.com/ace-platform/warehouse-service/internal/types"
+	"github.com/garudax-platform/warehouse-service/internal/service"
+	"github.com/garudax-platform/warehouse-service/internal/types"
 )
 
 // Server is the warehouse service gRPC server.

@@ -4,8 +4,8 @@ package retention
 import (
 	"time"
 
-	"github.com/ace-platform/market-data-service/internal/store"
-	"github.com/ace-platform/market-data-service/internal/types"
+	"github.com/garudax-platform/market-data-service/internal/store"
+	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
 // Rule defines a retention rule for a candle interval.
