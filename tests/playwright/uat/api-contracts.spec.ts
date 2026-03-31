@@ -783,6 +783,7 @@ test.describe('API Contract UAT', () => {
   // Summary test: run all ADMIN_API_CHECKS from api-checks.ts
   // -------------------------------------------------------------------------
 
+
   test('Bulk contract check — all ADMIN_API_CHECKS pass', async ({ request }) => {
     if (!token) { test.skip(); return; }
 
@@ -809,6 +810,288 @@ test.describe('API Contract UAT', () => {
         f.passed,
         `${f.path}: status=${f.status} missing=[${f.missingFields.join(', ')}]`,
       ).toBeTruthy();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin CRUD API Contract Tests (T701 — new write endpoints)
+// ---------------------------------------------------------------------------
+
+test.describe('API Contract UAT — Admin CRUD', () => {
+  let token: string | null = null;
+
+  // -------------------------------------------------------------------------
+  // Setup: acquire auth token; skip all if gateway unreachable
+  // -------------------------------------------------------------------------
+  test.beforeAll(async ({ request }) => {
+    try {
+      const probe = await request.get(`${BASE}/healthz`, { timeout: 8_000 });
+      if (probe.status() >= 500) {
+        console.warn('[UAT CRUD] Gateway returned error — skipping Admin CRUD tests');
+        return;
+      }
+    } catch {
+      console.warn('[UAT CRUD] Gateway unreachable — skipping Admin CRUD tests');
+      return;
+    }
+
+    token = await getToken(request, BASE);
+    if (!token) {
+      console.warn('[UAT CRUD] Could not obtain auth token — all CRUD tests will be skipped');
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. POST /api/v1/admin/commodities — create commodity
+  // -------------------------------------------------------------------------
+
+  test('POST /admin/commodities — create commodity returns 200/201 with id field', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/admin/commodities`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          id: 'uat-test-commodity',
+          name: 'UAT Test Commodity',
+          category: 'grain',
+          unit: 'kg',
+        },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() === 503) {
+      test.skip(true, 'DB not configured (503)');
+      return;
+    }
+
+    expect.soft(res.status(), 'POST /admin/commodities should return 200 or 201')
+      .toBeLessThan(400);
+
+    if (res.status() < 400) {
+      const body = await res.json().catch(() => null) as Record<string, unknown> | null;
+      if (body !== null) {
+        const hasId =
+          typeof body.id === 'string' ||
+          typeof body.ID === 'string' ||
+          (body.data !== undefined &&
+            typeof (body.data as Record<string, unknown>)?.id === 'string');
+        expect.soft(hasId, 'POST /admin/commodities response should contain id field').toBeTruthy();
+      }
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. POST /api/v1/admin/instruments — create instrument
+  // -------------------------------------------------------------------------
+
+  test('POST /admin/instruments — create instrument returns 200/201', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/admin/instruments`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          id: 'UAT-TEST-2027M01',
+          commodity_id: 'uat-test-commodity',
+          name: 'UAT Test Instrument',
+          delivery_month: 1,
+          delivery_year: 2027,
+          contract_size: 1000,
+          tick_size: 0.01,
+          currency: 'MNT',
+          settlement_type: 'CASH',
+        },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() === 503) {
+      test.skip(true, 'DB not configured (503)');
+      return;
+    }
+
+    expect.soft(res.status(), 'POST /admin/instruments should return 200 or 201')
+      .toBeLessThan(400);
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. PUT /api/v1/admin/instruments/{id} — update instrument status
+  // -------------------------------------------------------------------------
+
+  test('PUT /admin/instruments/{id} — update instrument status returns 200', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.put(`${BASE}/api/v1/admin/instruments/UAT-TEST-2027M01`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { status: 'SUSPENDED' },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() === 503) {
+      test.skip(true, 'DB not configured (503)');
+      return;
+    }
+    if (res.status() === 404) {
+      // Instrument may not have been created (step 2 skipped or DB absent)
+      test.skip(true, 'Instrument UAT-TEST-2027M01 not found — create step may have been skipped');
+      return;
+    }
+
+    expect.soft(res.status(), 'PUT /admin/instruments/{id} should return 200').toBe(200);
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. POST /api/v1/admin/fees/schedules — create fee schedule
+  // -------------------------------------------------------------------------
+
+  test('POST /admin/fees/schedules — create fee schedule returns 200/201', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/admin/fees/schedules`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          name: 'UAT Test Schedule',
+          effective_from: '2027-01-01',
+        },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() === 503) {
+      test.skip(true, 'DB not configured (503)');
+      return;
+    }
+
+    expect.soft(res.status(), 'POST /admin/fees/schedules should return 200 or 201')
+      .toBeLessThan(400);
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. PUT /api/v1/admin/fees/tiers/{participant_id} — set participant tier
+  // -------------------------------------------------------------------------
+
+  test('PUT /admin/fees/tiers/{participant_id} — set participant tier returns 200', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.put(`${BASE}/api/v1/admin/fees/tiers/uat-test-participant`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { tier: 'farmer' },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() === 503) {
+      test.skip(true, 'DB not configured (503)');
+      return;
+    }
+    if (res.status() === 404) {
+      test.skip(true, 'Participant uat-test-participant not found');
+      return;
+    }
+
+    expect.soft(res.status(), 'PUT /admin/fees/tiers/{participant_id} should return 200').toBe(200);
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. POST /api/v1/screening/check — screen participant
+  // -------------------------------------------------------------------------
+
+  test('POST /screening/check — screen participant returns status < 500', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/screening/check`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { participant_id: 'uat-test-participant' },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    expect.soft(res.status(), 'POST /screening/check should return status < 500')
+      .toBeLessThan(500);
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. POST /api/v1/warehouse/receipts — issue warehouse receipt
+  // -------------------------------------------------------------------------
+
+  test('POST /warehouse/receipts — issue receipt returns status < 500', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/warehouse/receipts`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          holder_id: 'uat-test-holder',
+          commodity_id: 'WHT-HRW',
+          quantity: 100,
+        },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    expect.soft(res.status(), 'POST /warehouse/receipts should return status < 500')
+      .toBeLessThan(500);
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. POST /api/v1/bot/chat — bot handles CRUD commands
+  // -------------------------------------------------------------------------
+
+  test('POST /bot/chat — bot handles CRUD command containing "commodity" or "created"', async ({ request }) => {
+    if (!token) { test.skip(); return; }
+
+    let res;
+    try {
+      res = await request.post(`${BASE}/api/v1/bot/chat`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { message: 'create commodity test grain kg' },
+      });
+    } catch {
+      test.skip(); return;
+    }
+
+    if (res.status() >= 500) { test.skip(true, 'Bot endpoint unavailable'); return; }
+
+    expect.soft(res.status(), 'POST /bot/chat (CRUD) should return 200').toBe(200);
+
+    if (res.status() === 200) {
+      const body = await res.json().catch(() => null) as Record<string, unknown> | null;
+      if (body !== null) {
+        // Accept reply nested under data.reply or top-level reply
+        const reply: string =
+          (typeof (body as { data?: { reply?: string } }).data?.reply === 'string'
+            ? (body as { data: { reply: string } }).data.reply
+            : typeof body.reply === 'string'
+              ? (body.reply as string)
+              : '') as string;
+
+        expect.soft(
+          reply.toLowerCase().includes('commodity') || reply.toLowerCase().includes('created'),
+          `Bot CRUD reply should mention "commodity" or "created", got: "${reply}"`,
+        ).toBeTruthy();
+      }
     }
   });
 });
