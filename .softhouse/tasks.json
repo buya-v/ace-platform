@@ -1,7 +1,92 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260331-bot-uat-rescope",
+  "feature": "Bot UAT Rescope — Admin CRUD APIs + Bot Handlers + Playwright Tests",
+  "requirement": "Rescope UAT to ensure the bot can do ALL administration tasks including creating instruments, commodities, managing fee rules, warehouse facilities, etc. Add missing CRUD APIs, wire them into the bot executor, and write Playwright UAT tests verifying each action works via bot conversation.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T701",
+      "title": "Admin CRUD APIs — instruments, commodities, fee rules, facilities",
+      "description": "Add missing admin CRUD API endpoints to the gateway for operations that currently have no API.\n\nCreate/update `src/gateway/internal/refdata/handlers.go`:\n- POST /api/v1/admin/instruments — create instrument\n  Body: {id, commodity_id, name, delivery_month, delivery_year, contract_size, tick_size, currency, settlement_type}\n  Inserts into reference.instruments table\n- PUT /api/v1/admin/instruments/{id} — update instrument (status, trading_hours, dates)\n- POST /api/v1/admin/commodities — create commodity\n  Body: {id, name, category, unit}\n  Inserts into reference.commodities table\n\nCreate `src/gateway/internal/fees/admin_handlers.go`:\n- POST /api/v1/admin/fees/schedules — create fee schedule\n- POST /api/v1/admin/fees/rules — create fee rule (already partially exists)\n- PUT /api/v1/admin/fees/rules/{id} — update fee rule\n- PUT /api/v1/admin/fees/tiers/{participant_id} — set participant tier\n\nUpdate `src/gateway/internal/tickets/handlers.go`:\n- POST /api/v1/admin/tickets — admin create ticket (already exists as POST /api/v1/tickets)\n\nAdd warehouse admin routes in gateway handler:\n- POST /api/v1/admin/warehouse/facilities — register facility (proxy to warehouse-service)\n\nWire all new routes in `src/gateway/cmd/gateway/main.go`.\nAll admin routes require admin role.\n\nAcceptance: All new endpoints return 200/201 with correct data. `go build && go test` pass.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/refdata/", "src/gateway/internal/fees/", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T702",
+      "title": "Bot executor — add handlers for all new CRUD + existing unhandled actions",
+      "description": "Update the bot executor to handle ALL admin CRUD operations including the new APIs.\n\nUpdate `src/gateway/internal/bot/executor.go`:\n\n1. **Instrument management**:\n   - 'create instrument wheat jul 2027 contract 5000 tick 0.0025' → POST /api/v1/admin/instruments\n   - 'list instruments' (already works)\n   - 'update instrument WHT-... status suspended' → PUT /api/v1/admin/instruments/{id}\n\n2. **Commodity management**:\n   - 'create commodity rice grain kg' → POST /api/v1/admin/commodities\n   - 'list commodities' → GET /api/v1/commodities\n\n3. **Fee management**:\n   - 'create fee schedule Standard 2027' → POST /api/v1/admin/fees/schedules\n   - 'set trader ABC tier to farmer' → PUT /api/v1/admin/fees/tiers/ABC\n   - 'add fee rule trading farmer 10bps' → POST /api/v1/admin/fees/rules\n\n4. **Warehouse management**:\n   - 'register facility Ulaanbaatar Grain Storage' → POST /api/v1/admin/warehouse/facilities\n   - 'issue receipt farmer1 wheat 5000 bushels' → POST /api/v1/warehouse/receipts\n   - 'pledge receipt RCP-001' → POST /api/v1/warehouse/receipts/RCP-001/pledge\n   - 'create delivery...' → POST /api/v1/warehouse/deliveries\n\n5. **Settlement**:\n   - 'trigger settlement' / 'run settlement cycle' → POST /api/v1/settlement/cycle (if exists) or indicate not available\n\n6. **Screening**:\n   - 'screen participant ABC' → POST /api/v1/screening/check\n   - 'batch screen all participants' → POST /api/v1/screening/batch\n\nUpdate the help text to include ALL new commands.\n\nAcceptance: 'help' lists 50+ commands. All new actions callable via natural language.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/executor.go"],
+      "dependencies": ["T701"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T703",
+      "title": "MCP tools — add CRUD tools for instruments, commodities, fees, facilities",
+      "description": "Add MCP tools for all new admin CRUD APIs so Claude CLI can also execute them.\n\nUpdate `src/admin-bot/mcp-server/src/tools/`:\n\n1. Update `market_data.ts` — add:\n   - create_instrument(id, commodity_id, name, delivery_month, delivery_year, contract_size, tick_size, currency, settlement_type)\n   - update_instrument(id, status?, trading_hours?)\n   - create_commodity(id, name, category, unit)\n\n2. Update `fees.ts` — add:\n   - create_fee_schedule(name, effective_from)\n   - create_fee_rule(schedule_id, fee_type, participant_tier, rate_bps, min_fee?, max_fee?)\n   - set_participant_tier(participant_id, tier)\n\n3. Update `warehouse.ts` — add:\n   - register_facility(name, address, capacity_mt, commodities_accepted[])\n   - issue_receipt(holder_id, commodity_id, quantity, facility_id)\n   - pledge_receipt(receipt_id)\n   - create_delivery(receipt_id, destination)\n\n4. Update `participants.ts` — add:\n   - screen_participant(participant_id)\n   - batch_screen()\n\nRebuild: `npm run build`\n\nAcceptance: 45+ MCP tools total. Build succeeds.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/mcp-server/src/tools/"],
+      "dependencies": ["T701"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T704",
+      "title": "Playwright UAT — bot CRUD tests (create instrument, commodity, fees, etc.)",
+      "description": "Write Playwright UAT tests verifying the bot can execute ALL admin CRUD actions via conversation.\n\nCreate `tests/playwright/uat/bot-crud.spec.ts`:\n\n```typescript\ntest.describe('Bot CRUD UAT — Admin Operations', () => {\n  // Login + open bot before each\n\n  test('create commodity via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'create commodity rice grain kg');\n    expect.soft(reply).toMatch(/created|rice|commodity/i);\n  });\n\n  test('create instrument via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'create instrument rice-futures RIC-2027M07 rice jul 2027 contract 5000 tick 0.01');\n    expect.soft(reply).toMatch(/created|instrument|RIC/i);\n  });\n\n  test('list instruments shows new instrument', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'show instruments');\n    expect.soft(reply).toMatch(/WHT|instrument/i);\n  });\n\n  test('set participant tier via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'set tier farmer for trader1');\n    expect.soft(reply).toMatch(/tier|farmer|updated/i);\n  });\n\n  test('register warehouse facility via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'register facility UB Grain Storage');\n    expect.soft(reply).toMatch(/facility|registered|warehouse/i);\n  });\n\n  test('issue warehouse receipt via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'issue receipt farmer1 wheat 5000 bushels');\n    expect.soft(reply).toMatch(/receipt|issued|warehouse/i);\n  });\n\n  test('screen participant via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'screen participant trader1');\n    expect.soft(reply).toMatch(/screen|clear|result/i);\n  });\n\n  test('submit order via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'buy 10 wheat at 325');\n    expect.soft(reply).toMatch(/order|submitted|buy|placed/i);\n  });\n\n  test('halt and resume via bot', async ({ page }) => {\n    const halt = await sendBotMessage(page, 'halt wheat');\n    expect.soft(halt).toMatch(/halt|stopped|WHT/i);\n    const resume = await sendBotMessage(page, 'resume wheat');\n    expect.soft(resume).toMatch(/resume|started|WHT/i);\n  });\n\n  test('approve KYC via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'show pending KYC');\n    expect.soft(reply).toMatch(/participant|pending|application|0/i);\n  });\n\n  test('file SAR via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'file SAR on trader1 for suspicious trading');\n    expect.soft(reply).toMatch(/sar|filed|suspicious/i);\n  });\n\n  test('generate report via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'market summary today');\n    expect.soft(reply).toMatch(/market|summary|report/i);\n  });\n\n  test('show audit log via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'show audit log');\n    expect.soft(reply).toMatch(/audit|trail|log/i);\n  });\n\n  test('create ticket via bot', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'report a bug: the margin page loads slowly');\n    expect.soft(reply).toMatch(/ticket|created|bug|report/i);\n  });\n\n  test('bot help lists ALL command categories', async ({ page }) => {\n    const reply = await sendBotMessage(page, 'help');\n    // Must list all admin domains\n    expect.soft(reply).toMatch(/instrument/i);\n    expect.soft(reply).toMatch(/commodity/i);\n    expect.soft(reply).toMatch(/fee/i);\n    expect.soft(reply).toMatch(/warehouse/i);\n    expect.soft(reply).toMatch(/margin/i);\n    expect.soft(reply).toMatch(/settlement/i);\n    expect.soft(reply).toMatch(/compliance|alert/i);\n    expect.soft(reply).toMatch(/order/i);\n    expect.soft(reply).toMatch(/ticket/i);\n  });\n});\n```\n\n15+ tests covering ALL admin CRUD operations via bot.\n\nAcceptance: All tests pass against live portal. Bot executes every admin action.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["tests/playwright/uat/bot-crud.spec.ts"],
+      "dependencies": ["T702"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T705",
+      "title": "Playwright UAT — API contract tests for new CRUD endpoints",
+      "description": "Add API contract tests for the new admin CRUD endpoints.\n\nUpdate `tests/playwright/uat/api-contracts.spec.ts` — add tests for:\n\n1. POST /api/v1/admin/instruments — creates instrument (or 503 if DB not configured)\n2. POST /api/v1/admin/commodities — creates commodity\n3. POST /api/v1/admin/fees/schedules — creates fee schedule\n4. POST /api/v1/admin/fees/rules — creates fee rule\n5. PUT /api/v1/admin/fees/tiers/{id} — sets participant tier\n6. POST /api/v1/admin/warehouse/facilities — registers facility\n7. POST /api/v1/warehouse/receipts — issues receipt\n8. POST /api/v1/warehouse/receipts/{id}/pledge — pledges receipt\n9. POST /api/v1/warehouse/deliveries — creates delivery\n10. POST /api/v1/screening/check — screens participant\n\nEach test: verify status < 500, response is JSON, expected fields present.\nSkip gracefully when DB/service not available (503).\n\nAcceptance: 10+ new API contract tests. All pass or skip gracefully.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["tests/playwright/uat/api-contracts.spec.ts"],
+      "dependencies": ["T701"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T706",
+      "title": "Bot executor tests — Go unit tests for all new CRUD handlers",
+      "description": "Add Go unit tests for all new bot executor CRUD handlers.\n\nUpdate `src/gateway/internal/bot/executor_test.go` — add tests for:\n\n1. 'create commodity rice grain kg' → calls POST /admin/commodities\n2. 'create instrument ...' → calls POST /admin/instruments\n3. 'update instrument WHT status suspended' → calls PUT /admin/instruments/...\n4. 'list commodities' → calls GET /commodities\n5. 'set tier farmer for trader1' → calls PUT /admin/fees/tiers/trader1\n6. 'add fee rule trading farmer 10bps' → calls POST /admin/fees/rules\n7. 'register facility UB Grain Storage' → calls POST /admin/warehouse/facilities\n8. 'issue receipt farmer1 wheat 5000' → calls POST /warehouse/receipts\n9. 'pledge receipt RCP-001' → calls POST /warehouse/receipts/RCP-001/pledge\n10. 'screen participant ABC' → calls POST /screening/check\n11. 'batch screen' → calls POST /screening/batch\n12. 'help' → contains 'instrument', 'commodity', 'fee', 'warehouse'\n\nUse httptest.NewServer mock pattern. 15+ tests.\n\nAcceptance: All tests pass. Every new executor path tested.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/executor_test.go"],
+      "dependencies": ["T702"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T707",
+      "title": "Docker rebuild + UAT verification",
+      "description": "Rebuild the gateway with all new CRUD endpoints and verify via UAT.\n\n1. `cd src/gateway && go build ./... && go test ./...` — verify build\n2. `docker compose build gateway admin-ui` — rebuild containers\n3. `docker compose up -d gateway admin-ui` — deploy\n4. Re-register admin user\n5. Run full UAT: `cd tests/playwright && npx playwright test uat/ --project=uat`\n6. Report results\n\nAcceptance: All UAT tests pass. Bot can create instruments, commodities, manage fees via conversation.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["docker-compose.yml"],
+      "dependencies": ["T702", "T704", "T705"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
