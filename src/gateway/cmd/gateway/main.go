@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,8 +16,11 @@ import (
 	"github.com/garudax-platform/gateway/internal/handler"
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/refdata"
 	"github.com/garudax-platform/gateway/internal/router"
 	"github.com/garudax-platform/gateway/internal/websocket"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -52,18 +56,40 @@ func main() {
 	rt.Handle("GET", "/api/v1/ws/book", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/executions", wsHandler.ExecutionsHandler)
 
+	// Register reference data routes (direct DB queries, public)
+	if cfg.DatabaseURL != "" {
+		db, err := sql.Open("pgx", cfg.DatabaseURL)
+		if err != nil {
+			log.Printf("WARNING: Failed to open reference data DB: %v (reference data endpoints disabled)", err)
+		} else {
+			db.SetMaxOpenConns(5)
+			db.SetMaxIdleConns(2)
+			store := refdata.NewPgStore(db)
+			refHandlers := refdata.NewHandlers(store)
+			refHandlers.RegisterRoutes(rt)
+			log.Println("Reference data endpoints enabled")
+
+			defer db.Close()
+		}
+	} else {
+		log.Println("DATABASE_URL not set — reference data endpoints disabled")
+	}
+
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{
 		PublicPaths: map[string]bool{
-			"/healthz":                         true,
-			"/readyz":                          true,
-			"POST /api/v1/auth/login":          true,
-			"POST /api/v1/auth/register":       true,
-			"POST /api/v1/auth/password/reset":  true,
-			"POST /api/v1/auth/refresh":         true,
+			"/healthz":                            true,
+			"/readyz":                             true,
+			"POST /api/v1/auth/login":             true,
+			"POST /api/v1/auth/register":          true,
+			"POST /api/v1/auth/password/reset":    true,
+			"POST /api/v1/auth/refresh":           true,
+			"GET /api/v1/instruments":             true,
+			"GET /api/v1/commodities":             true,
 		},
 		PublicPrefixes: []string{
 			"/api/v1/instruments/",
+			"/api/v1/commodities/",
 			"/api/v1/market-data/",
 			"/api/v1/ws/",
 		},

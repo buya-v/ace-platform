@@ -94,4 +94,7 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("POST", "/api/v1/warehouse/receipts/{receipt_id}/pledge", h.PledgeReceipt)
 	rt.Handle("POST", "/api/v1/warehouse/deliveries", h.CreateDelivery)
 	rt.Handle("GET", "/api/v1/warehouse/inventory", h.GetInventory)
+
+	// --- Reference Data (direct DB, public) ---
+	// These routes are registered separately via RefDataHandlers.RegisterRoutes()
 }

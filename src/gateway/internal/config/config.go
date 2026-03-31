@@ -40,6 +40,9 @@ type Config struct {
 
 	// Request limits
 	MaxBodySize int64
+
+	// Database (for reference data)
+	DatabaseURL string
 }
 
 // FromEnv creates a Config from environment variables with sensible defaults.
@@ -71,6 +74,8 @@ func FromEnv() *Config {
 		RateLimitEnabled: envBool("RATE_LIMIT_ENABLED", true),
 
 		MaxBodySize: int64(envInt("MAX_BODY_SIZE", 1048576)), // 1MB
+
+		DatabaseURL: envStr("DATABASE_URL", ""),
 	}
 }
 
