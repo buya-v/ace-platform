@@ -673,7 +673,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	// guide them with the required format instead of falling through to list handlers.
 	// This section runs AFTER all regex CRUD handlers (which catch fully-formed commands)
 	// and BEFORE keyword list handlers (which would otherwise list instead of guide).
-	if containsAny(lower, "create", "new", "add", "register") {
+	if containsAny(lower, "create", "new", "add", "register", "report") {
 		if containsAny(lower, "instrument") {
 			return ChatResponse{
 				Reply: "To create a new instrument, please provide:\n\n" +
@@ -1045,7 +1045,7 @@ func formatHealthResponse(raw string) ChatResponse {
 	}
 	json.Unmarshal([]byte(raw), &data)
 
-	lines := []string{fmt.Sprintf("🏥 System Health: %s", strings.ToUpper(data.OverallStatus))}
+	lines := []string{fmt.Sprintf("🏥 System Health: %s\n", strings.ToUpper(data.OverallStatus))}
 	for _, s := range data.Services {
 		icon := "✅"
 		if s.Status != "healthy" {
