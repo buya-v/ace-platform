@@ -68,3 +68,22 @@ export interface Candle {
   close: number;
   volume: number;
 }
+
+/** Historical trade record with instrument context for the trade history table */
+export interface TradeRecord {
+  tradeId: string;
+  instrumentId: string;
+  instrumentSymbol: string;
+  side: 'buy' | 'sell';
+  quantity: string;
+  price: string;
+  totalValue: string;
+  timestamp: string;
+}
+
+export interface TradeHistoryFilter {
+  startDate: string;
+  endDate: string;
+  instrumentId: string;
+  side: '' | 'buy' | 'sell';
+}

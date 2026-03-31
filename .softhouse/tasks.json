@@ -488,8 +488,8 @@
       "dependencies": [
         "T120"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P7",
       "estimate_minutes": 20
     },

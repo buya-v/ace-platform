@@ -75,12 +75,55 @@
   overflow: hidden;
 }
 
+.entryPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .bottomArea {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 4px;
   height: 25%;
   min-height: 150px;
+}
+
+.bottomTabArea {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tabBar {
+  display: flex;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted, #8888aa);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tab:hover {
+  color: var(--text-primary, #eee);
+}
+
+.tabActive {
+  color: var(--text-primary, #eee);
+  border-bottom-color: var(--accent, #3498db);
+}
+
+.tabContent {
+  flex: 1;
+  overflow: auto;
 }
 
 .positionsPanel, .marginPanel {

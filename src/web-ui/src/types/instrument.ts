@@ -9,6 +9,16 @@ export interface Instrument {
   status: 'active' | 'halted' | 'expired';
 }
 
+export interface InstrumentDetail extends Instrument {
+  contractSize: string;
+  positionLimit: string;
+  currency: string;
+  exchange: string;
+  firstTradeDate: string;
+  lastTradeDate: string;
+  settlementType: 'physical' | 'cash';
+}
+
 export interface Ticker {
   instrumentId: string;
   lastPrice: string;

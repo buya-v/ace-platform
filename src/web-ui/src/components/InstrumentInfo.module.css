@@ -1,0 +1,61 @@
+.instrumentInfo {
+  background: var(--bg-secondary, #1a1a2e);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.toggleBtn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border, #333);
+  color: var(--text-muted, #8888aa);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.toggleBtn:hover {
+  color: var(--text-primary, #eee);
+  border-color: var(--text-muted, #8888aa);
+}
+
+.panel {
+  margin-top: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  color: var(--text-muted, #8888aa);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value {
+  color: var(--text-primary, #eee);
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+}
+
+.loading, .empty {
+  text-align: center;
+  color: var(--text-muted, #8888aa);
+  padding: 12px;
+  font-size: 0.8rem;
+}
+
+.active { color: var(--buy-color, #2ecc71); }
+.halted { color: var(--sell-color, #e74c3c); }
+.expired { color: var(--text-muted, #8888aa); }

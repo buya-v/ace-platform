@@ -4,6 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../services/api';
 import { parseTradeMessage } from '../services/ws';
+import { calculateTradeValue } from '../services/tradingUtils';
 import { OrderBook } from '../components/OrderBook';
 import { OrderEntry } from '../components/OrderEntry';
 import { TradeHistory } from '../components/TradeHistory';
@@ -11,16 +12,22 @@ import { Chart } from '../components/Chart';
 import { Positions } from '../components/Positions';
 import { MarginStatusPanel } from '../components/MarginStatus';
 import { InstrumentSelector } from '../components/InstrumentSelector';
+import { InstrumentInfo } from '../components/InstrumentInfo';
 import { ConnectionStatus } from '../components/ConnectionStatus';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import type { WSMessage } from '../services/ws';
-import type { Position, PnlSummary, MarginStatus as MarginStatusType } from '../types/trade';
+import type { Position, PnlSummary, MarginStatus as MarginStatusType, TradeRecord } from '../types/trade';
+import type { Instrument, Ticker } from '../types/instrument';
 import styles from './Trading.module.css';
 
 export const Trading: React.FC = () => {
   const { state, dispatch, selectInstrument } = useTrading();
   const { logout } = useAuth();
   const [prefillPrice, setPrefillPrice] = useState<string | undefined>();
+  const [tradeHistory, setTradeHistory] = useState<TradeRecord[]>([]);
+  const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [tickers, setTickers] = useState<Map<string, Ticker>>(new Map());
+  const [activeTab, setActiveTab] = useState<'positions' | 'history'>('positions');
 
   const instrumentId = state.selectedInstrument?.instrumentId ?? null;
   const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
@@ -67,7 +74,14 @@ export const Trading: React.FC = () => {
     enabled: !!instrumentId,
   });
 
-  // Poll positions, P&L, margin
+  // Fetch instruments list for trade history filter
+  useEffect(() => {
+    apiRequest<{ instruments: Instrument[] }>('/instruments?status=active')
+      .then((data) => setInstruments(data.instruments || []))
+      .catch(() => {});
+  }, []);
+
+  // Poll positions, P&L, margin, tickers
   useEffect(() => {
     const poll = async () => {
       try {
@@ -87,6 +101,23 @@ export const Trading: React.FC = () => {
     return () => clearInterval(interval);
   }, [dispatch]);
 
+  // Poll tickers for position current prices
+  useEffect(() => {
+    if (state.positions.length === 0) return;
+    const pollTickers = () => {
+      state.positions.forEach((pos) => {
+        apiRequest<Ticker>(`/market-data/ticker?instrument_id=${pos.instrumentId}`)
+          .then((ticker) => {
+            setTickers((prev) => new Map(prev).set(pos.instrumentId, ticker));
+          })
+          .catch(() => {});
+      });
+    };
+    pollTickers();
+    const interval = setInterval(pollTickers, 5000);
+    return () => clearInterval(interval);
+  }, [state.positions]);
+
   useEffect(() => {
     apiRequest<PnlSummary>('/settlement/cycles')
       .then((pnl) => dispatch({ type: 'SET_PNL', pnl }))
@@ -99,6 +130,42 @@ export const Trading: React.FC = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [dispatch]);
+
+  // Poll trade history
+  useEffect(() => {
+    const fetchHistory = () => {
+      apiRequest<{ trades: TradeRecord[] }>('/trades/history')
+        .then((data) => {
+          const trades = (data.trades || []).map((t) => ({
+            ...t,
+            totalValue: t.totalValue || calculateTradeValue(t.price, t.quantity),
+          }));
+          setTradeHistory(trades);
+        })
+        .catch(() => {});
+    };
+    fetchHistory();
+    const interval = setInterval(fetchHistory, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Close position: submit opposing market order
+  const handleClosePosition = useCallback(async (posInstrumentId: string, side: 'long' | 'short', quantity: string) => {
+    const opposingSide = side === 'long' ? 'sell' : 'buy';
+    try {
+      await apiRequest('/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          instrument_id: posInstrumentId,
+          side: opposingSide,
+          order_type: 'market',
+          quantity: Math.abs(Number(quantity)).toString(),
+        }),
+      });
+    } catch {
+      // Error will show via next position poll
+    }
+  }, []);
 
   return (
     <div className={styles.layout}>
@@ -139,21 +206,49 @@ export const Trading: React.FC = () => {
           <div className={styles.entryPanel}>
             <ErrorBoundary>
               <OrderEntry instrumentId={instrumentId} prefillPrice={prefillPrice} />
+              <InstrumentInfo instrumentId={instrumentId} />
             </ErrorBoundary>
           </div>
 
           <div className={styles.tradesPanel}>
             <ErrorBoundary>
-              <TradeHistory trades={state.recentTrades} />
+              <TradeHistory trades={tradeHistory} instruments={instruments} />
             </ErrorBoundary>
           </div>
         </div>
 
         <div className={styles.bottomArea}>
-          <div className={styles.positionsPanel}>
-            <ErrorBoundary>
-              <Positions positions={state.positions} />
-            </ErrorBoundary>
+          <div className={styles.bottomTabArea}>
+            <div className={styles.tabBar}>
+              <button
+                className={`${styles.tab} ${activeTab === 'positions' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('positions')}
+              >
+                Positions ({state.positions.length})
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('history')}
+              >
+                Trade History ({tradeHistory.length})
+              </button>
+            </div>
+            <div className={styles.tabContent}>
+              {activeTab === 'positions' && (
+                <ErrorBoundary>
+                  <Positions
+                    positions={state.positions}
+                    tickers={tickers}
+                    onClosePosition={handleClosePosition}
+                  />
+                </ErrorBoundary>
+              )}
+              {activeTab === 'history' && (
+                <ErrorBoundary>
+                  <TradeHistory trades={tradeHistory} instruments={instruments} />
+                </ErrorBoundary>
+              )}
+            </div>
           </div>
           <div className={styles.marginPanel}>
             <ErrorBoundary>

@@ -10,9 +10,83 @@
   font-size: 0.8rem;
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.label {
+  font-weight: 600;
+  color: var(--text-primary, #eee);
+  font-size: 0.9rem;
+  font-family: system-ui, sans-serif;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+}
+
+.filterBtn, .exportBtn, .clearBtn {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--border, #333);
+  color: var(--text-muted, #8888aa);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-family: system-ui, sans-serif;
+}
+
+.filterBtn:hover, .exportBtn:hover, .clearBtn:hover {
+  color: var(--text-primary, #eee);
+  border-color: var(--text-muted, #8888aa);
+}
+
+.exportBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.filterPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-primary, #0f0f23);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-family: system-ui, sans-serif;
+}
+
+.filterRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.filterRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-muted, #8888aa);
+  font-size: 0.7rem;
+}
+
+.filterRow input, .filterRow select {
+  padding: 4px 6px;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  color: var(--text-primary, #eee);
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
 .header {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.8fr 0.6fr;
+  grid-template-columns: 1.5fr 1.2fr 0.6fr 0.8fr 1fr 1fr;
   padding: 4px 8px;
   color: var(--text-muted, #8888aa);
   font-weight: 600;
@@ -26,7 +100,7 @@
 
 .row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.8fr 0.6fr;
+  grid-template-columns: 1.5fr 1.2fr 0.6fr 0.8fr 1fr 1fr;
   padding: 2px 8px;
 }
 
@@ -43,4 +117,13 @@
   text-align: center;
   color: var(--text-muted, #8888aa);
   padding: 24px;
+}
+
+.footer {
+  padding: 4px 8px;
+  color: var(--text-muted, #8888aa);
+  font-size: 0.7rem;
+  text-align: right;
+  border-top: 1px solid var(--border, #333);
+  font-family: system-ui, sans-serif;
 }
