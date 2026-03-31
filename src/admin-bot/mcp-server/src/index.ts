@@ -29,10 +29,13 @@ import { registerWarehouseTools } from "./tools/warehouse.js";
 import { registerRiskTools } from "./tools/risk.js";
 import { registerReportTools } from "./tools/reports.js";
 import { registerFeeTools } from "./tools/fees.js";
+import { registerTicketTools } from "./tools/tickets.js";
+import { registerDailyAdminTools } from "./tools/daily_admin.js";
 
 // Resource registrations
 import { registerSystemStatusResource } from "./resources/system_status.js";
 import { registerActiveAlertsResource } from "./resources/active_alerts.js";
+import { registerTicketResources } from "./resources/tickets.js";
 
 async function main(): Promise<void> {
   const gatewayUrl = process.env.GARUDAX_GATEWAY_URL ?? "http://127.0.0.1:8080";
@@ -63,10 +66,13 @@ async function main(): Promise<void> {
   registerRiskTools(server, client);
   registerReportTools(server, client);
   registerFeeTools(server, client);
+  registerTicketTools(server, client);
+  registerDailyAdminTools(server, client);
 
   // Register resources
   registerSystemStatusResource(server, client);
   registerActiveAlertsResource(server, client);
+  registerTicketResources(server, client);
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();
