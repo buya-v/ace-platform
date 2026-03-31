@@ -2229,6 +2229,460 @@ func TestExecutor_EmptyMessage(t *testing.T) {
 }
 
 // =====================================================================
+// GUIDED PROMPTS — incomplete "create / new / add" commands
+// =====================================================================
+
+// Test 1: "create new instrument" → guided prompt, NOT list
+func TestExecutor_GuidedPrompt_CreateNewInstrument(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guided prompts should not call the API at all.
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create new instrument", "token")
+
+	if !strings.Contains(resp.Reply, "provide") && !strings.Contains(strings.ToLower(resp.Reply), "example") {
+		t.Errorf("expected guided prompt with 'provide' or 'example', got: %s", resp.Reply)
+	}
+	// Must NOT look like a JSON instrument list
+	if strings.Contains(resp.Reply, `"id"`) && strings.Contains(resp.Reply, "[") {
+		t.Error("guided prompt must NOT return instrument list JSON")
+	}
+}
+
+// Test 2: "create instrument" (no params) → guided prompt
+func TestExecutor_GuidedPrompt_CreateInstrumentNoParams(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create instrument", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "provide") && !strings.Contains(lower, "example") {
+		t.Errorf("expected guided prompt, got: %s", resp.Reply)
+	}
+	// Should mention the required format fields
+	if !strings.Contains(lower, "commodity") && !strings.Contains(lower, "contract") {
+		t.Errorf("guided prompt should mention required fields, got: %s", resp.Reply)
+	}
+}
+
+// Test 3: "new instrument" → guided prompt
+func TestExecutor_GuidedPrompt_NewInstrument(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("new instrument", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "provide") && !strings.Contains(lower, "example") {
+		t.Errorf("expected guided prompt for 'new instrument', got: %s", resp.Reply)
+	}
+}
+
+// Test 4: "create commodity" (no params) → guided prompt mentioning category/unit
+func TestExecutor_GuidedPrompt_CreateCommodityNoParams(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create commodity", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "category") && !strings.Contains(lower, "unit") {
+		t.Errorf("guided prompt should mention 'category' or 'unit', got: %s", resp.Reply)
+	}
+}
+
+// Test 5: "add fee" → guided prompt mentioning fee and rule/schedule
+func TestExecutor_GuidedPrompt_AddFee(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("add fee", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "fee") {
+		t.Errorf("expected 'fee' in guided prompt, got: %s", resp.Reply)
+	}
+	if !strings.Contains(lower, "rule") && !strings.Contains(lower, "schedule") {
+		t.Errorf("expected 'rule' or 'schedule' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 6: "create ticket" → guided prompt mentioning bug/describe
+func TestExecutor_GuidedPrompt_CreateTicket(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create ticket", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "bug") && !strings.Contains(lower, "describe") && !strings.Contains(lower, "title") {
+		t.Errorf("expected 'bug', 'describe', or 'title' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 7: "new receipt" → guided prompt mentioning issue receipt/holder
+func TestExecutor_GuidedPrompt_NewReceipt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("new receipt", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "issue receipt") && !strings.Contains(lower, "holder") {
+		t.Errorf("expected 'issue receipt' or 'holder' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 8a: "register facility" → guided prompt mentioning facility/register
+func TestExecutor_GuidedPrompt_RegisterFacility(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("register facility", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "facility") && !strings.Contains(lower, "register") {
+		t.Errorf("expected 'facility' or 'register' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 8b: "create facility" → guided prompt mentioning facility
+func TestExecutor_GuidedPrompt_CreateFacility(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create facility", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "facility") {
+		t.Errorf("expected 'facility' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 9a: "new order" → guided prompt mentioning buy/sell
+func TestExecutor_GuidedPrompt_NewOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("new order", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "buy") && !strings.Contains(lower, "sell") {
+		t.Errorf("expected 'buy' or 'sell' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 9b: "create order" → guided prompt mentioning buy/sell
+func TestExecutor_GuidedPrompt_CreateOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create order", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "buy") && !strings.Contains(lower, "sell") {
+		t.Errorf("expected 'buy' or 'sell' in guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// LIST HANDLERS — show/list prefix should still work (not guided prompt)
+// =====================================================================
+
+// Test 10: "show instruments" → returns instrument list data, not a guided prompt
+func TestExecutor_ListHandler_ShowInstruments(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/instruments/list",
+		method: "GET",
+		status: 200,
+		body:   `[{"id":"WHT-HRW-2026M07-UB","name":"Wheat Hard Red Winter"}]`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("show instruments", "token")
+
+	if !h.called.Load() {
+		t.Error("show instruments: list endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "instruments") && !strings.Contains(resp.Reply, "WHT") {
+		t.Errorf("expected instrument data in reply, got: %s", resp.Reply)
+	}
+	// Must NOT be the guided prompt
+	if strings.Contains(strings.ToLower(resp.Reply), "please provide") {
+		t.Errorf("show instruments must NOT trigger guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 11: "list commodities" → returns commodity list data, not guided prompt
+func TestExecutor_ListHandler_ListCommodities(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `[{"id":"wheat","name":"Wheat","category":"grain","unit":"bushel"}]`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "token")
+
+	if !h.called.Load() {
+		t.Error("list commodities: endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "wheat") && !strings.Contains(strings.ToLower(resp.Reply), "commodit") {
+		t.Errorf("expected commodity data in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 12: "show margin calls" → returns margin data, not guided prompt
+func TestExecutor_ListHandler_ShowMarginCalls(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/margin/calls/stats",
+		method: "GET",
+		status: 200,
+		body:   `{"total_calls":3,"pending":1,"resolved":2}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("show margin calls", "token")
+
+	if !h.called.Load() {
+		t.Error("show margin calls: margin endpoint was not called")
+	}
+	if strings.Contains(strings.ToLower(resp.Reply), "please provide") {
+		t.Errorf("show margin calls must NOT trigger guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// FULL CRUD COMMANDS — complete commands must execute, not guide
+// =====================================================================
+
+// Test 13: "create commodity rice grain kg" (full params) → executes CRUD, not guided prompt
+func TestExecutor_FullCRUD_CreateCommodityWithParams(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/admin/commodities",
+		method: "POST",
+		status: 201,
+		body:   `{"id":"rice","name":"Rice","category":"grain","unit":"kg"}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create commodity rice grain kg", "token")
+
+	if !h.called.Load() {
+		t.Error("create commodity: CRUD endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "✅") && !strings.Contains(strings.ToLower(resp.Reply), "created") {
+		t.Errorf("expected success reply (✅ or 'created'), got: %s", resp.Reply)
+	}
+	// Must NOT be a guided prompt
+	if strings.Contains(strings.ToLower(resp.Reply), "category") && strings.Contains(strings.ToLower(resp.Reply), "unit") && !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("full create commodity must execute, not show guided prompt, got: %s", resp.Reply)
+	}
+}
+
+// Test 14: "help" → shows full help text with command categories
+func TestExecutor_Help_ShowsAllCategories(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Help should NOT call any API endpoint
+		t.Errorf("unexpected API call for help: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("help", "token")
+
+	// Help should NOT be a guided prompt
+	if strings.Contains(strings.ToLower(resp.Reply), "please provide") {
+		t.Errorf("'help' must not trigger guided prompt, got: %s", resp.Reply)
+	}
+	// Should contain multiple command categories
+	for _, keyword := range []string{"halt", "buy", "sell", "margin", "settlement"} {
+		if !strings.Contains(strings.ToLower(resp.Reply), keyword) {
+			t.Errorf("help text missing keyword %q, got: %s", keyword, resp.Reply)
+		}
+	}
+}
+
+// =====================================================================
+// DEFAULT HANDLER — unknown commands get actionable suggestions
+// =====================================================================
+
+// Test 15: "xyzzy nonsense" → default reply contains "didn't understand" and suggestions
+func TestExecutor_Default_UnknownCommandHasActionableSuggestions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		w.Write([]byte(`{"error":"not found"}`))
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("xyzzy nonsense", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "didn't understand") && !strings.Contains(lower, "did not understand") && !strings.Contains(lower, "i didn") {
+		t.Errorf("expected 'didn't understand' in default reply, got: %s", resp.Reply)
+	}
+	// Should contain at least one actionable suggestion
+	hasAction := strings.Contains(lower, "show") ||
+		strings.Contains(lower, "help") ||
+		strings.Contains(lower, "halt") ||
+		strings.Contains(lower, "create")
+	if !hasAction {
+		t.Errorf("default reply should have actionable suggestions, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// GUIDED PROMPTS — additional edge cases and disambiguation
+// =====================================================================
+
+// Test 16: guided prompt for "create instrument" does NOT call instruments/list endpoint
+func TestExecutor_GuidedPrompt_CreateInstrumentDoesNotCallListAPI(t *testing.T) {
+	var apiCalled bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiCalled = true
+		w.WriteHeader(200)
+		w.Write([]byte(`[{"id":"WHT-HRW-2026M07-UB"}]`))
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create instrument", "token")
+
+	if apiCalled {
+		t.Error("guided prompt for 'create instrument' must NOT call any API endpoint")
+	}
+	if resp.Reply == "" {
+		t.Error("guided prompt must return a non-empty reply")
+	}
+}
+
+// Test 17: "add fee rule" with partial params (2 words) → guided prompt
+func TestExecutor_GuidedPrompt_AddFeeRulePartialParams(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	// Only 2 params (needs 3: type, tier, rate) → regex won't match → guided prompt fires
+	resp := exec.Execute("add fee rule trading", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "fee") {
+		t.Errorf("expected fee guidance, got: %s", resp.Reply)
+	}
+}
+
+// Test 18: guided prompt for instruments mentions example format
+func TestExecutor_GuidedPrompt_CreateInstrumentMentionsExample(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create new instrument", "token")
+
+	// Should include a concrete example with the create instrument pattern
+	if !strings.Contains(resp.Reply, "create instrument") {
+		t.Errorf("guided prompt should include 'create instrument' example, got: %s", resp.Reply)
+	}
+}
+
+// Test 19: "new commodity" → guided prompt (same as "create commodity" with no params)
+func TestExecutor_GuidedPrompt_NewCommodity(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("new commodity", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "category") && !strings.Contains(lower, "unit") && !strings.Contains(lower, "commodity") {
+		t.Errorf("expected commodity guidance, got: %s", resp.Reply)
+	}
+}
+
+// Test 20: "add receipt" → same guided prompt as "new receipt" (contains receipt keyword)
+func TestExecutor_GuidedPrompt_AddReceipt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("add receipt", "token")
+
+	lower := strings.ToLower(resp.Reply)
+	// Should guide toward issue receipt syntax
+	if !strings.Contains(lower, "receipt") {
+		t.Errorf("expected receipt guidance, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
 // CLEARING — NETTING / POSITIONS
 // =====================================================================
 
