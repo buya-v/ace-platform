@@ -11,4 +11,15 @@ export default defineConfig({
   },
   outputDir: './test-results',
   reporter: [['list'], ['html', { open: 'never' }]],
+  projects: [
+    {
+      name: 'uat',
+      testDir: './uat',
+      use: {
+        baseURL: process.env.ADMIN_BASE_URL || 'https://admin.garudax.asla.mn',
+        ignoreHTTPSErrors: true,
+        screenshot: 'on',
+      },
+    },
+  ],
 });
