@@ -3,6 +3,7 @@ package bot
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/router"
@@ -10,12 +11,16 @@ import (
 
 // Handlers provides HTTP handlers for bot chat endpoints.
 type Handlers struct {
-	bridge *Bridge
+	bridge   *Bridge
+	executor *ActionExecutor
 }
 
 // NewHandlers creates bot handlers with the given orchestrator bridge.
 func NewHandlers(bridge *Bridge) *Handlers {
-	return &Handlers{bridge: bridge}
+	return &Handlers{
+		bridge:   bridge,
+		executor: NewActionExecutor("http://127.0.0.1:8080"),
+	}
 }
 
 // RegisterRoutes registers bot routes on the router.
@@ -88,24 +93,28 @@ func (h *Handlers) Chat(w http.ResponseWriter, r *http.Request) {
 		// Fall through to fallback on error
 	}
 
-	// Fallback mode: use built-in keyword responses
-	reply := FallbackResponse(req.Message)
+	// Fallback mode: execute actions directly using user's JWT token
+	userToken := ""
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		userToken = strings.TrimPrefix(auth, "Bearer ")
+	}
+
+	execResp := h.executor.Execute(req.Message, userToken)
 
 	// Get page-aware suggestions from context
 	page := ""
 	if req.Context != nil {
 		page = req.Context["page"]
 	}
-	suggestions := GetSuggestions(page)
-
-	resp := ChatResponse{
-		Reply:       reply,
-		Actions:     []Action{},
-		Suggestions: suggestions,
+	if len(execResp.Suggestions) == 0 {
+		execResp.Suggestions = GetSuggestions(page)
+	}
+	if execResp.Actions == nil {
+		execResp.Actions = []Action{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data": resp,
+		"data": execResp,
 	})
 }
 
