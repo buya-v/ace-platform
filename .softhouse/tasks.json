@@ -2,7 +2,7 @@
   "run_id": "20260331-uat",
   "feature": "Softhouse UAT \u2014 Playwright Sub-Agents for Acceptance Testing",
   "requirement": "Improve UAT capability of the softhouse pipeline by adding Playwright-based sub-agents that verify outcomes in a real browser against the live system. Every softhouse task should produce verifiable results that pass UAT.",
-  "status": "executing",
+  "status": "complete",
   "tasks": [
     {
       "id": "T601",
@@ -104,8 +104,8 @@
         "T604",
         "T605"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     }
   ]
 }
