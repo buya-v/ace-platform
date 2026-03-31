@@ -95,6 +95,10 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("POST", "/api/v1/warehouse/deliveries", h.CreateDelivery)
 	rt.Handle("GET", "/api/v1/warehouse/inventory", h.GetInventory)
 
+	// --- Admin Risk (direct DB) ---
+	rt.Handle("GET", "/api/v1/admin/risk/order-limits", h.ListOrderLimits)
+	rt.Handle("PUT", "/api/v1/admin/risk/order-limits/{instrument_id}", h.UpdateOrderLimits)
+
 	// --- Reference Data (direct DB, public) ---
 	// These routes are registered separately via RefDataHandlers.RegisterRoutes()
 }

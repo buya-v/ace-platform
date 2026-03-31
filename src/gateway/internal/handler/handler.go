@@ -6,17 +6,30 @@ import (
 
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/risk"
 	"github.com/garudax-platform/gateway/internal/types"
 )
 
 // Handler manages REST→gRPC translation for all backend services.
 type Handler struct {
-	client proxy.BackendClient
+	client      proxy.BackendClient
+	riskChecker *risk.PreTradeChecker
 }
 
 // New creates a new Handler.
 func New(client proxy.BackendClient) *Handler {
-	return &Handler{client: client}
+	return &Handler{
+		client:      client,
+		riskChecker: risk.NewPreTradeChecker(nil), // fail-open by default
+	}
+}
+
+// NewWithRisk creates a new Handler with a risk checker backed by the given store.
+func NewWithRisk(client proxy.BackendClient, riskStore risk.Store) *Handler {
+	return &Handler{
+		client:      client,
+		riskChecker: risk.NewPreTradeChecker(riskStore),
+	}
 }
 
 // forward is the generic request forwarding function.
@@ -84,7 +97,70 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, service, rpcMe
 // --- Order Endpoints (matching-engine) ---
 
 func (h *Handler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
-	h.forward(w, r, "matching-engine", "OrderService/SubmitOrder")
+	reqID := middleware.RequestIDFromContext(r.Context())
+
+	// Read body for risk check
+	body, err := proxy.ReadJSONBody(r, 1048576)
+	if err != nil {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_JSON",
+			"Invalid JSON in request body", reqID)
+		return
+	}
+
+	// Extract participant ID from JWT claims
+	var participantID string
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil {
+		participantID = claims.ParticipantID
+	}
+
+	// Pre-trade risk checks
+	if body != nil && h.riskChecker != nil {
+		order, parseErr := risk.ParseOrderRequest(body, participantID)
+		if parseErr == nil {
+			// Last price of 0 means no price band check (fail-open for first trade)
+			if rErr := h.riskChecker.CheckOrder(r.Context(), order, 0); rErr != nil {
+				types.WriteErrorWithDetails(w, http.StatusBadRequest, rErr.Code, rErr.Message, reqID,
+					[]types.ErrorDetail{{Field: rErr.Field, Reason: rErr.Message}})
+				return
+			}
+		}
+		// If parse fails, let the matching engine handle validation
+	}
+
+	// Build metadata from claims
+	meta := map[string]string{
+		"x-request-id": reqID,
+	}
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil {
+		meta["x-user-id"] = claims.Sub
+		meta["x-participant-id"] = claims.ParticipantID
+		rolesJSON, _ := json.Marshal(claims.Roles)
+		meta["x-roles"] = string(rolesJSON)
+	}
+
+	req := &proxy.BackendRequest{
+		Service:    "matching-engine",
+		Method:     "OrderService/SubmitOrder",
+		Body:       body,
+		Metadata:   meta,
+		PathParams: make(map[string]string),
+		Query:      make(map[string]string),
+	}
+
+	resp, fwdErr := h.client.Forward(req)
+	if fwdErr != nil {
+		types.WriteError(w, http.StatusBadGateway, "SERVICE_UNAVAILABLE",
+			"Failed to reach backend service", reqID)
+		return
+	}
+
+	for k, v := range resp.Headers {
+		w.Header().Set(k, v)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-API-Version", "v1")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(resp.Body)
 }
 
 func (h *Handler) GetOrder(w http.ResponseWriter, r *http.Request) {
@@ -365,4 +441,90 @@ func (h *Handler) CreateDelivery(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, "warehouse-service", "WarehouseService/GetInventory")
+}
+
+// --- Admin Risk Endpoints (direct DB) ---
+
+// ListOrderLimits returns all configured order limits.
+func (h *Handler) ListOrderLimits(w http.ResponseWriter, r *http.Request) {
+	reqID := middleware.RequestIDFromContext(r.Context())
+
+	if h.riskChecker == nil || h.riskChecker.Store() == nil {
+		types.WriteError(w, http.StatusServiceUnavailable, "RISK_DB_UNAVAILABLE",
+			"Risk database is not configured", reqID)
+		return
+	}
+
+	limits, err := h.riskChecker.Store().ListOrderLimits(r.Context())
+	if err != nil {
+		types.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR",
+			"Failed to fetch order limits", reqID)
+		return
+	}
+
+	if limits == nil {
+		limits = []risk.OrderLimits{}
+	}
+
+	types.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"data": limits,
+	})
+}
+
+// UpdateOrderLimits updates order limits for a specific instrument.
+func (h *Handler) UpdateOrderLimits(w http.ResponseWriter, r *http.Request) {
+	reqID := middleware.RequestIDFromContext(r.Context())
+
+	if h.riskChecker == nil || h.riskChecker.Store() == nil {
+		types.WriteError(w, http.StatusServiceUnavailable, "RISK_DB_UNAVAILABLE",
+			"Risk database is not configured", reqID)
+		return
+	}
+
+	instrumentID := r.URL.Query().Get("instrument_id")
+	if instrumentID == "" {
+		types.WriteError(w, http.StatusBadRequest, "MISSING_INSTRUMENT_ID",
+			"instrument_id path parameter is required", reqID)
+		return
+	}
+
+	body, err := proxy.ReadJSONBody(r, 1048576)
+	if err != nil {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_JSON",
+			"Invalid JSON in request body", reqID)
+		return
+	}
+
+	var limits risk.OrderLimits
+	if err := json.Unmarshal(body, &limits); err != nil {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_JSON",
+			"Invalid order limits JSON", reqID)
+		return
+	}
+	limits.InstrumentID = instrumentID
+
+	// Validate
+	if limits.MaxOrderQty <= 0 {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_LIMIT",
+			"max_order_qty must be positive", reqID)
+		return
+	}
+	if limits.MaxOrderValue <= 0 {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_LIMIT",
+			"max_order_value must be positive", reqID)
+		return
+	}
+	if limits.PriceBandPct <= 0 || limits.PriceBandPct > 100 {
+		types.WriteError(w, http.StatusBadRequest, "INVALID_LIMIT",
+			"price_band_pct must be between 0 and 100", reqID)
+		return
+	}
+
+	if err := h.riskChecker.Store().UpsertOrderLimits(r.Context(), &limits); err != nil {
+		types.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR",
+			"Failed to update order limits", reqID)
+		return
+	}
+
+	types.WriteJSON(w, http.StatusOK, limits)
 }
