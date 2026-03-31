@@ -159,3 +159,142 @@ type PaymentResult struct {
 type IDGenerator interface {
 	NewID() string
 }
+
+// InstrumentType distinguishes between physical delivery and cash-settled instruments.
+type InstrumentType int
+
+const (
+	// InstrumentCashSettled instruments settle only via cash payment (variation margin).
+	InstrumentCashSettled InstrumentType = 0
+	// InstrumentPhysicalDelivery instruments require commodity delivery alongside cash payment.
+	InstrumentPhysicalDelivery InstrumentType = 1
+)
+
+func (t InstrumentType) String() string {
+	if t == InstrumentPhysicalDelivery {
+		return "PHYSICAL_DELIVERY"
+	}
+	return "CASH_SETTLED"
+}
+
+// InstrumentConfig holds settlement configuration for an instrument.
+type InstrumentConfig struct {
+	InstrumentID   string
+	Type           InstrumentType
+	ContractUnit   string  // e.g. "MT" (metric tons), "BBL" (barrels)
+	ContractSize   int64   // units per contract, e.g. 100 MT per lot
+}
+
+// DeliveryReceiptStatus tracks the lifecycle of a commodity delivery.
+type DeliveryReceiptStatus int
+
+const (
+	DeliveryPending   DeliveryReceiptStatus = 0
+	DeliveryConfirmed DeliveryReceiptStatus = 1
+	DeliveryFailed    DeliveryReceiptStatus = 2
+)
+
+func (s DeliveryReceiptStatus) String() string {
+	switch s {
+	case DeliveryPending:
+		return "PENDING"
+	case DeliveryConfirmed:
+		return "CONFIRMED"
+	case DeliveryFailed:
+		return "FAILED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// DeliveryReceipt represents proof that physical commodity was delivered.
+type DeliveryReceipt struct {
+	ReceiptID     string
+	InstrumentID  string
+	SellerID      string
+	BuyerID       string
+	Quantity      int64   // in contract units
+	WarehouseID   string
+	Status        DeliveryReceiptStatus
+	IssuedAt      time.Time
+	ConfirmedAt   time.Time
+	Error         string
+}
+
+// DVPStep tracks each step of the DVP coordination sequence.
+type DVPStep int
+
+const (
+	DVPStepValidateDelivery DVPStep = 1
+	DVPStepLockPayment      DVPStep = 2
+	DVPStepConfirmDelivery  DVPStep = 3
+	DVPStepReleasePayment   DVPStep = 4
+)
+
+func (s DVPStep) String() string {
+	switch s {
+	case DVPStepValidateDelivery:
+		return "VALIDATE_DELIVERY"
+	case DVPStepLockPayment:
+		return "LOCK_PAYMENT"
+	case DVPStepConfirmDelivery:
+		return "CONFIRM_DELIVERY"
+	case DVPStepReleasePayment:
+		return "RELEASE_PAYMENT"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// DVPResultStatus is the outcome of a DVP coordination.
+type DVPResultStatus int
+
+const (
+	DVPSucceeded  DVPResultStatus = 0
+	DVPFailed     DVPResultStatus = 1
+	DVPRolledBack DVPResultStatus = 2
+)
+
+func (s DVPResultStatus) String() string {
+	switch s {
+	case DVPSucceeded:
+		return "SUCCEEDED"
+	case DVPFailed:
+		return "FAILED"
+	case DVPRolledBack:
+		return "ROLLED_BACK"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// DVPResult is the outcome of a delivery-vs-payment coordination.
+type DVPResult struct {
+	InstrumentID     string
+	Status           DVPResultStatus
+	DeliveryReceipts []DeliveryReceipt
+	Instructions     []SettlementInstruction
+	FailedAtStep     DVPStep
+	Error            string
+	CompletedAt      time.Time
+}
+
+// MultiInstrumentResult holds aggregated settlement results across all instruments.
+type MultiInstrumentResult struct {
+	CycleID              string
+	InstrumentResults    map[string]*InstrumentSettlementResult
+	AggregatedPayIn      Decimal
+	AggregatedPayOut     Decimal
+	NetParticipantAmounts map[string]Decimal // participant -> net amount (positive = receive, negative = owe)
+}
+
+// InstrumentSettlementResult holds settlement results for a single instrument within a cycle.
+type InstrumentSettlementResult struct {
+	InstrumentID   string
+	InstrumentType InstrumentType
+	PnLRecords     []PnLRecord
+	DVPResult      *DVPResult // nil for cash-settled instruments
+	PayIn          Decimal
+	PayOut         Decimal
+	Error          string
+}

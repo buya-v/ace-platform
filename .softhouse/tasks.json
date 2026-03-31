@@ -303,8 +303,8 @@
         "T107",
         "T111"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P5",
       "estimate_minutes": 15
     },
@@ -452,8 +452,8 @@
       "dependencies": [
         "T105"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P2",
       "estimate_minutes": 18
     },
@@ -470,8 +470,8 @@
         "T106",
         "T108"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P2",
       "estimate_minutes": 15
     },

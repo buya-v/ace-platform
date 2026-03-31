@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/garudax-platform/settlement-engine/internal/dvp"
 	"github.com/garudax-platform/settlement-engine/internal/payment"
 	"github.com/garudax-platform/settlement-engine/internal/pnl"
 	"github.com/garudax-platform/settlement-engine/internal/settlement"
@@ -29,9 +30,11 @@ type Engine struct {
 	generator     *settlement.Generator
 	processor     *payment.Processor
 	idGen         types.IDGenerator
+	dvpCoord      *dvp.DVPCoordinator
 
-	cycles   map[string]*types.SettlementCycle
-	handler  CycleHandler
+	instruments map[string]types.InstrumentConfig // instrumentID -> config
+	cycles      map[string]*types.SettlementCycle
+	handler     CycleHandler
 }
 
 // NewEngine creates a new settlement engine.
@@ -41,12 +44,37 @@ func NewEngine(
 	gateway payment.Gateway,
 ) *Engine {
 	return &Engine{
-		priceStore: priceStore,
+		priceStore:  priceStore,
 		pnlCalc:    pnl.NewCalculator(priceStore),
 		generator:  settlement.NewGenerator(idGen),
 		processor:  payment.NewProcessor(gateway),
 		idGen:      idGen,
+		instruments: make(map[string]types.InstrumentConfig),
 		cycles:     make(map[string]*types.SettlementCycle),
+	}
+}
+
+// SetDVPCoordinator sets the DVP coordinator for physical delivery settlement.
+func (e *Engine) SetDVPCoordinator(coord *dvp.DVPCoordinator) {
+	e.dvpCoord = coord
+}
+
+// RegisterInstrument registers an instrument's settlement configuration.
+// Instruments without explicit registration default to cash-settled.
+func (e *Engine) RegisterInstrument(config types.InstrumentConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.instruments[config.InstrumentID] = config
+}
+
+// getInstrumentConfig returns the config for an instrument, defaulting to cash-settled.
+func (e *Engine) getInstrumentConfig(instrumentID string) types.InstrumentConfig {
+	if cfg, ok := e.instruments[instrumentID]; ok {
+		return cfg
+	}
+	return types.InstrumentConfig{
+		InstrumentID: instrumentID,
+		Type:         types.InstrumentCashSettled,
 	}
 }
 
@@ -117,6 +145,131 @@ func (e *Engine) RunSettlementCycle(cycleID string, settleDate time.Time, positi
 	}
 
 	return cycle, nil
+}
+
+// RunMultiInstrumentCycle executes a settlement cycle across ALL active instruments.
+// For each instrument: fetches settlement price, calculates P&L per position,
+// aggregates net settlement amounts per participant across all instruments,
+// and uses DVPCoordinator for physical delivery instruments.
+func (e *Engine) RunMultiInstrumentCycle(
+	cycleID string,
+	settleDate time.Time,
+	positions []types.Position,
+	deliveryReceipts map[string][]types.DeliveryReceipt, // instrumentID -> receipts
+) (*types.SettlementCycle, *types.MultiInstrumentResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	cycle := &types.SettlementCycle{
+		CycleID:    cycleID,
+		SettleDate: settleDate,
+		Status:     types.CycleStatusValuing,
+		StartedAt:  time.Now(),
+	}
+	e.cycles[cycleID] = cycle
+
+	// Group positions by instrument
+	positionsByInstrument := make(map[string][]types.Position)
+	for _, pos := range positions {
+		positionsByInstrument[pos.InstrumentID] = append(positionsByInstrument[pos.InstrumentID], pos)
+	}
+
+	multiResult := &types.MultiInstrumentResult{
+		CycleID:              cycleID,
+		InstrumentResults:    make(map[string]*types.InstrumentSettlementResult),
+		NetParticipantAmounts: make(map[string]types.Decimal),
+	}
+
+	var allPnLRecords []types.PnLRecord
+	hasError := false
+
+	// Process each instrument
+	for instrumentID, instrPositions := range positionsByInstrument {
+		instrConfig := e.getInstrumentConfig(instrumentID)
+		instrResult := &types.InstrumentSettlementResult{
+			InstrumentID:   instrumentID,
+			InstrumentType: instrConfig.Type,
+		}
+
+		// Calculate P&L for this instrument's positions
+		pnlRecords, err := e.pnlCalc.CalculateBatch(instrPositions, settleDate)
+		if err != nil {
+			instrResult.Error = fmt.Sprintf("P&L calculation failed: %v", err)
+			multiResult.InstrumentResults[instrumentID] = instrResult
+			hasError = true
+			continue
+		}
+		instrResult.PnLRecords = pnlRecords
+		allPnLRecords = append(allPnLRecords, pnlRecords...)
+
+		// Generate per-instrument instructions for DVP coordination
+		instrInstructions := e.generator.Generate(cycleID, pnlRecords)
+		payIn, payOut := settlement.Totals(instrInstructions)
+		instrResult.PayIn = payIn
+		instrResult.PayOut = payOut
+
+		// Handle DVP for physical delivery instruments
+		if instrConfig.Type == types.InstrumentPhysicalDelivery && e.dvpCoord != nil {
+			receipts := deliveryReceipts[instrumentID]
+			dvpResult := e.dvpCoord.CoordinateSettlement(cycleID, instrConfig, instrInstructions, receipts)
+			instrResult.DVPResult = dvpResult
+			if dvpResult.Status != types.DVPSucceeded {
+				instrResult.Error = fmt.Sprintf("DVP failed: %s", dvpResult.Error)
+				hasError = true
+			}
+		}
+
+		multiResult.InstrumentResults[instrumentID] = instrResult
+	}
+
+	cycle.Status = types.CycleStatusCalculated
+	cycle.PnLRecords = allPnLRecords
+
+	// Aggregate net amounts per participant across ALL instruments
+	for _, rec := range allPnLRecords {
+		current := multiResult.NetParticipantAmounts[rec.ParticipantID]
+		multiResult.NetParticipantAmounts[rec.ParticipantID] = current.Add(rec.VariationMargin)
+	}
+
+	// Generate aggregated settlement instructions across all instruments
+	instructions := e.generator.Generate(cycleID, allPnLRecords)
+	payIn, payOut := settlement.Totals(instructions)
+	cycle.TotalPayIn = payIn
+	cycle.TotalPayOut = payOut
+	multiResult.AggregatedPayIn = payIn
+	multiResult.AggregatedPayOut = payOut
+
+	// Process payments
+	cycle.Status = types.CycleStatusSettling
+	processed := e.processor.ProcessAll(instructions)
+	cycle.Instructions = processed
+
+	// Determine final status
+	allConfirmed := true
+	for _, inst := range processed {
+		if inst.Status != types.InstructionConfirmed {
+			allConfirmed = false
+			break
+		}
+	}
+
+	if allConfirmed && !hasError {
+		cycle.Status = types.CycleStatusCompleted
+	} else {
+		cycle.Status = types.CycleStatusFailed
+		if hasError {
+			cycle.Error = "one or more instruments had settlement errors"
+		} else {
+			cycle.Error = "one or more payment instructions failed"
+		}
+	}
+	cycle.CompletedAt = time.Now()
+
+	if e.handler != nil {
+		e.handler(*cycle)
+	}
+
+	return cycle, multiResult, nil
 }
 
 // GetCycle returns a settlement cycle by ID.

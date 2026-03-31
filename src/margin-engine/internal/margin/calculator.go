@@ -5,13 +5,24 @@ import (
 
 	"github.com/garudax-platform/margin-engine/internal/params"
 	"github.com/garudax-platform/margin-engine/internal/scanner"
+	"github.com/garudax-platform/margin-engine/internal/span"
 	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
 // Calculator computes SPAN-style margin requirements for positions.
+// It supports two scanning modes:
+//   - Risk-array mode (SPAN): uses pre-computed risk arrays when available
+//   - Fallback mode: uses the existing scenario-generation scanner
+//
+// When a SPANScanner is configured and has risk arrays for an instrument,
+// the risk-array mode is used. Otherwise, the fallback scanner is used.
+// This allows gradual migration: instruments with risk arrays get SPAN pricing,
+// while others keep the existing behavior.
 type Calculator struct {
-	scanner    *scanner.Scanner
-	paramStore *params.Store
+	scanner      *scanner.Scanner
+	spanScanner  *span.SPANScanner
+	spreadCredit *span.SpreadCreditor
+	paramStore   *params.Store
 }
 
 func NewCalculator(paramStore *params.Store) *Calculator {
@@ -19,6 +30,18 @@ func NewCalculator(paramStore *params.Store) *Calculator {
 		scanner:    scanner.New(),
 		paramStore: paramStore,
 	}
+}
+
+// SetSPANScanner configures the SPAN risk-array scanner.
+// When set, instruments with loaded risk arrays will use SPAN scanning
+// instead of the fallback percentage-based scanner.
+func (c *Calculator) SetSPANScanner(s *span.SPANScanner) {
+	c.spanScanner = s
+}
+
+// SetSpreadCreditor configures spread credit calculation for portfolio margin.
+func (c *Calculator) SetSpreadCreditor(sc *span.SpreadCreditor) {
+	c.spreadCredit = sc
 }
 
 // Calculate computes the margin requirement for a single position.
@@ -29,7 +52,18 @@ func (c *Calculator) Calculate(pos types.Position) (types.MarginRequirement, err
 	}
 
 	// Step 1: SPAN scanning risk
-	scanResult := c.scanner.Scan(pos, ip)
+	// Use risk-array scanner if available for this instrument, otherwise fallback
+	var scanRisk types.Decimal
+	if c.spanScanner != nil && c.spanScanner.HasRiskArray(pos.InstrumentID) {
+		spanResult := c.spanScanner.ScanSinglePosition(span.PortfolioPosition{
+			InstrumentID: pos.InstrumentID,
+			NetQuantity:  pos.NetQuantity,
+		})
+		scanRisk = spanResult.ScanRisk
+	} else {
+		scanResult := c.scanner.Scan(pos, ip)
+		scanRisk = scanResult.ScanRisk
+	}
 
 	// Step 2: Delivery month charge
 	deliveryCharge := types.DecimalZero()
@@ -41,7 +75,7 @@ func (c *Calculator) Calculate(pos types.Position) (types.MarginRequirement, err
 
 	// Step 3: Initial margin = scanRisk + deliveryCharge
 	// (InterMonth spread charge is zero for single-instrument portfolios)
-	initialMargin := scanResult.ScanRisk.Add(deliveryCharge)
+	initialMargin := scanRisk.Add(deliveryCharge)
 
 	// Step 4: Mark-to-market
 	mtm := c.scanner.MarkToMarket(pos, ip)
@@ -58,7 +92,7 @@ func (c *Calculator) Calculate(pos types.Position) (types.MarginRequirement, err
 		ParticipantID: pos.ParticipantID,
 		InstrumentID:  pos.InstrumentID,
 		NetQuantity:   pos.NetQuantity,
-		ScanRisk:      scanResult.ScanRisk,
+		ScanRisk:      scanRisk,
 		InterMonth:    types.DecimalZero(), // Single-instrument; T029+ could add spread margins
 		DeliveryMonth: deliveryCharge,
 		ShortOption:   types.DecimalZero(), // Futures only; no options yet
@@ -70,6 +104,9 @@ func (c *Calculator) Calculate(pos types.Position) (types.MarginRequirement, err
 }
 
 // CalculatePortfolio computes margin for all of a participant's positions.
+// When a SPANScanner is configured, it performs portfolio-level SPAN scanning
+// (evaluating all positions simultaneously across scenarios) and applies
+// spread credits for offsetting positions.
 func (c *Calculator) CalculatePortfolio(participantID string, positions []types.Position, collateral types.Decimal) (types.PortfolioMargin, error) {
 	now := time.Now()
 	pm := types.PortfolioMargin{
@@ -81,6 +118,10 @@ func (c *Calculator) CalculatePortfolio(participantID string, positions []types.
 	totalInitial := types.DecimalZero()
 	totalMtM := types.DecimalZero()
 	totalRequired := types.DecimalZero()
+
+	// Collect per-instrument data for spread credit calculation
+	positionQtys := make(map[string]int64)
+	perInstrumentMargin := make(map[string]types.Decimal)
 
 	for _, pos := range positions {
 		if pos.NetQuantity == 0 {
@@ -94,6 +135,24 @@ func (c *Calculator) CalculatePortfolio(participantID string, positions []types.
 		totalInitial = totalInitial.Add(req.InitialMargin)
 		totalMtM = totalMtM.Add(req.MarkToMarket)
 		totalRequired = totalRequired.Add(req.TotalRequired)
+
+		positionQtys[pos.InstrumentID] = pos.NetQuantity
+		perInstrumentMargin[pos.InstrumentID] = req.ScanRisk
+	}
+
+	// Apply spread credits if configured
+	if c.spreadCredit != nil && len(positionQtys) > 1 {
+		spreadReduction := c.spreadCredit.ApplySpreadCredits(positionQtys, perInstrumentMargin)
+		if spreadReduction.GreaterThan(types.DecimalZero()) {
+			totalInitial = totalInitial.Sub(spreadReduction)
+			if totalInitial.IsNeg() {
+				totalInitial = types.DecimalZero()
+			}
+			totalRequired = totalRequired.Sub(spreadReduction)
+			if totalRequired.IsNeg() {
+				totalRequired = types.DecimalZero()
+			}
+		}
 	}
 
 	pm.TotalInitial = totalInitial
