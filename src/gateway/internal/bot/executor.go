@@ -50,7 +50,308 @@ func NewActionExecutor(gatewayAddr string) *ActionExecutor {
 func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	lower := strings.ToLower(strings.TrimSpace(message))
 
-	// Halt instrument
+	// --- Profile ---
+	// "who am I", "my profile", "whoami"
+	if containsAny(lower, "who am i", "whoami", "my profile") {
+		body, status := e.doRequest("GET", "/api/v1/auth/me", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("👤 Your profile:\n%s", prettyJSON(body))}
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch profile."}
+	}
+
+	// --- Orders: buy / sell ---
+	// Pattern: "buy 10 wheat at 325" or "sell 5 corn at 450"
+	if reBuy := regexp.MustCompile(`(?i)^(buy|sell)\s+(\d+(?:\.\d+)?)\s+(\w+)\s+at\s+(\d+(?:\.\d+)?)`).FindStringSubmatch(message); len(reBuy) == 5 {
+		side := strings.ToUpper(reBuy[1])
+		qty := reBuy[2]
+		instrumentName := reBuy[3]
+		price := reBuy[4]
+		instrumentID := resolveInstrument(instrumentName)
+		if instrumentID == "" {
+			return ChatResponse{Reply: fmt.Sprintf("Unknown instrument '%s'. Try: wheat, corn, soybeans, barley, cashmere, cattle.", instrumentName)}
+		}
+		payload := map[string]string{
+			"instrument_id": instrumentID,
+			"side":          side,
+			"order_type":    "LIMIT",
+			"quantity":      qty,
+			"price":         price,
+		}
+		body, status := e.doRequest("POST", "/api/v1/orders", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("✅ %s order placed: %s x%s %s @ %s", side, instrumentID, qty, side, price),
+				Actions: []Action{{Label: "View Orders", Type: "link", URL: "/dashboard/orderbook"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Order failed: %s", body)}
+	}
+
+	// --- Orders: modify ---
+	// Pattern: "modify order ABC price 330" or "change order ABC price 330"
+	if reModify := regexp.MustCompile(`(?i)^(?:modify|change|update)\s+order\s+(\S+)\s+(?:price|to)\s+(\d+(?:\.\d+)?)`).FindStringSubmatch(message); len(reModify) == 3 {
+		orderID := reModify[1]
+		newPrice := reModify[2]
+		payload := map[string]string{"price": newPrice}
+		body, status := e.doRequest("PATCH", "/api/v1/orders/"+orderID, payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Order %s updated: price → %s", orderID, newPrice)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to modify order %s: %s", orderID, body)}
+	}
+
+	// --- Orders: cancel specific ---
+	// Pattern: "cancel order ABC"
+	if reCancel := regexp.MustCompile(`(?i)^cancel\s+order\s+(\S+)$`).FindStringSubmatch(message); len(reCancel) == 2 {
+		orderID := reCancel[1]
+		body, status := e.doRequest("DELETE", "/api/v1/orders/"+orderID, nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Order %s cancelled.", orderID)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to cancel order %s: %s", orderID, body)}
+	}
+
+	// --- Orders: list (my orders / show orders) ---
+	if containsAny(lower, "show orders", "my orders", "list orders", "open orders") {
+		body, status := e.doRequest("GET", "/api/v1/orders", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("📋 Orders:\n%s", prettyJSON(body)),
+				Actions: []Action{{Label: "Order Book", Type: "link", URL: "/dashboard/orderbook"}},
+			}
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch orders."}
+	}
+
+	// --- Admin: bust trade ---
+	// Pattern: "bust trade ABC"
+	if reBust := regexp.MustCompile(`(?i)^bust\s+trade\s+(\S+)`).FindStringSubmatch(message); len(reBust) == 2 {
+		tradeID := reBust[1]
+		body, status := e.doRequest("POST", "/api/v1/admin/trades/"+tradeID+"/bust", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Trade %s busted.", tradeID)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to bust trade %s: %s", tradeID, body)}
+	}
+
+	// --- Admin: disable participant ---
+	// Pattern: "disable participant ABC" or "disable trader ABC"
+	if reDisable := regexp.MustCompile(`(?i)^disable\s+(?:participant|trader)\s+(\S+)`).FindStringSubmatch(message); len(reDisable) == 2 {
+		pid := reDisable[1]
+		body, status := e.doRequest("POST", "/api/v1/admin/participants/"+pid+"/disable", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Participant %s disabled.", pid)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to disable participant %s: %s", pid, body)}
+	}
+
+	// --- Admin: set circuit breaker ---
+	// Pattern: "set circuit breaker wheat 15" or "circuit breaker corn 10"
+	if reCB := regexp.MustCompile(`(?i)^(?:set\s+)?circuit[\s-]?breaker\s+(\w+)\s+(\d+(?:\.\d+)?)`).FindStringSubmatch(message); len(reCB) == 3 {
+		instrumentName := reCB[1]
+		limit := reCB[2]
+		instrumentID := resolveInstrument(instrumentName)
+		if instrumentID == "" {
+			return ChatResponse{Reply: fmt.Sprintf("Unknown instrument '%s'.", instrumentName)}
+		}
+		payload := map[string]string{"limit_pct": limit}
+		body, status := e.doRequest("PUT", "/api/v1/admin/instruments/"+instrumentID+"/circuit-breaker", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("✅ Circuit breaker for %s set to %s%%.", instrumentID, limit),
+				Actions: []Action{{Label: "Circuit Breakers", Type: "link", URL: "/dashboard/circuit-breakers"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to set circuit breaker: %s", body)}
+	}
+
+	// --- Compliance: suspend trader ---
+	// Pattern: "suspend trader ABC" or "suspend trader ABC for insider trading"
+	if reSuspend := regexp.MustCompile(`(?i)^suspend\s+(?:trader|participant)\s+(\S+)(?:\s+for\s+(.+))?`).FindStringSubmatch(message); len(reSuspend) >= 2 {
+		pid := reSuspend[1]
+		reason := "Suspended by admin"
+		if len(reSuspend) == 3 && reSuspend[2] != "" {
+			reason = strings.TrimSpace(reSuspend[2])
+		}
+		payload := map[string]string{"reason": reason}
+		body, status := e.doRequest("POST", "/api/v1/compliance/participants/"+pid+"/suspend", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("✅ Trader %s suspended. Reason: %s", pid, reason),
+				Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to suspend %s: %s", pid, body)}
+	}
+
+	// --- Compliance: reinstate trader ---
+	// Pattern: "reinstate trader ABC" or "reinstate participant ABC"
+	if reReinstate := regexp.MustCompile(`(?i)^reinstate\s+(?:trader|participant)\s+(\S+)`).FindStringSubmatch(message); len(reReinstate) == 2 {
+		pid := reReinstate[1]
+		body, status := e.doRequest("POST", "/api/v1/compliance/participants/"+pid+"/reinstate", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Trader %s reinstated.", pid)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to reinstate %s: %s", pid, body)}
+	}
+
+	// --- Compliance: file SAR ---
+	// Pattern: "file SAR on trader ABC for money laundering" or "file SAR ABC"
+	if reSAR := regexp.MustCompile(`(?i)^file\s+sar\s+(?:on\s+)?(?:trader|participant\s+)?(\S+)(?:\s+for\s+(.+))?`).FindStringSubmatch(message); len(reSAR) >= 2 {
+		pid := reSAR[1]
+		reason := "Suspicious activity"
+		if len(reSAR) == 3 && reSAR[2] != "" {
+			reason = strings.TrimSpace(reSAR[2])
+		}
+		payload := map[string]string{
+			"participant_id": pid,
+			"reason":        reason,
+		}
+		body, status := e.doRequest("POST", "/api/v1/compliance/sar", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("✅ SAR filed for %s. Reason: %s", pid, reason),
+				Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to file SAR for %s: %s", pid, body)}
+	}
+
+	// --- Compliance: resolve alert ---
+	// Pattern: "resolve alert 123"
+	if reResolveAlert := regexp.MustCompile(`(?i)^resolve\s+alert\s+(\S+)`).FindStringSubmatch(message); len(reResolveAlert) == 2 {
+		alertID := reResolveAlert[1]
+		body, status := e.doRequest("POST", "/api/v1/compliance/alerts/"+alertID+"/resolve", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("✅ Alert %s resolved.", alertID)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to resolve alert %s: %s", alertID, body)}
+	}
+
+	// --- Market data: candles ---
+	// Pattern: "wheat candles" or "corn candles daily"
+	for alias, id := range instrumentAliases {
+		if strings.Contains(lower, alias+" candles") || strings.Contains(lower, alias+" candle") {
+			body, status := e.doRequest("GET", "/api/v1/market-data/candles/"+id, nil, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{Reply: fmt.Sprintf("🕯️ %s candles:\n%s", id, prettyJSON(body))}
+			}
+		}
+		// Market data: recent trades
+		if strings.Contains(lower, alias+" trades") || strings.Contains(lower, alias+" trade history") {
+			body, status := e.doRequest("GET", "/api/v1/market-data/trades/"+id, nil, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{Reply: fmt.Sprintf("📈 %s recent trades:\n%s", id, prettyJSON(body))}
+			}
+		}
+		// Market data: last trade
+		if strings.Contains(lower, "last trade "+alias) || strings.Contains(lower, alias+" last trade") {
+			body, status := e.doRequest("GET", "/api/v1/instruments/"+id+"/trades/latest", nil, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{Reply: fmt.Sprintf("🔄 %s last trade:\n%s", id, prettyJSON(body))}
+			}
+		}
+	}
+
+	// --- Clearing: netting ---
+	if containsAny(lower, "show netting", "netting positions", "netting report") {
+		body, status := e.doRequest("GET", "/api/v1/clearing/netting", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("⚖️ Netting positions:\n%s", prettyJSON(body)),
+				Actions: []Action{{Label: "Clearing", Type: "link", URL: "/dashboard/settlement"}},
+			}
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch netting data."}
+	}
+
+	// --- Clearing: position for specific instrument ---
+	// Pattern: "position for wheat" or "wheat position"
+	for alias, id := range instrumentAliases {
+		if strings.Contains(lower, "position for "+alias) || strings.Contains(lower, alias+" position") {
+			body, status := e.doRequest("GET", "/api/v1/clearing/positions/"+id, nil, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{Reply: fmt.Sprintf("📊 Position for %s:\n%s", id, prettyJSON(body))}
+			}
+		}
+	}
+
+	// --- Risk: set max order limit ---
+	// Pattern: "set wheat max order 500" or "set max order for corn 1000"
+	if reRiskSet := regexp.MustCompile(`(?i)^set\s+(?:(\w+)\s+)?max\s+order(?:\s+(?:for|size|limit))?\s+(?:(\w+)\s+)?(\d+)`).FindStringSubmatch(message); len(reRiskSet) == 4 {
+		instrumentName := reRiskSet[1]
+		if instrumentName == "" {
+			instrumentName = reRiskSet[2]
+		}
+		limit := reRiskSet[3]
+		instrumentID := resolveInstrument(instrumentName)
+		if instrumentID == "" {
+			return ChatResponse{Reply: fmt.Sprintf("Unknown instrument '%s'.", instrumentName)}
+		}
+		payload := map[string]string{"max_order_size": limit}
+		body, status := e.doRequest("PUT", "/api/v1/admin/risk/order-limits/"+instrumentID, payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("✅ Max order size for %s set to %s.", instrumentID, limit),
+				Actions: []Action{{Label: "Risk Limits", Type: "link", URL: "/dashboard/circuit-breakers"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to set risk limit: %s", body)}
+	}
+
+	// --- Risk: show limits ---
+	if containsAny(lower, "show risk limits", "risk limits", "order limits") {
+		body, status := e.doRequest("GET", "/api/v1/admin/risk/order-limits", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("⚠️ Risk / order limits:\n%s", prettyJSON(body)),
+				Actions: []Action{{Label: "Risk Limits", Type: "link", URL: "/dashboard/circuit-breakers"}},
+			}
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch risk limits."}
+	}
+
+	// --- Reports: market summary ---
+	// Pattern: "market summary today" or "market summary 2026-03-31"
+	if containsAny(lower, "market summary", "daily summary", "trading summary") {
+		date := time.Now().Format("2006-01-02")
+		if reDateMatch := regexp.MustCompile(`(\d{4}-\d{2}-\d{2})`).FindString(message); reDateMatch != "" {
+			date = reDateMatch
+		}
+		body, status := e.doRequest("GET", "/api/v1/reports/market-summary?date="+date, nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("📊 Market Summary (%s):\n%s", date, prettyJSON(body)),
+				Actions: []Action{{Label: "Reports", Type: "link", URL: "/dashboard/settlement"}},
+			}
+		}
+		// Reports endpoint may not exist yet; return helpful message
+		return ChatResponse{Reply: fmt.Sprintf("📊 Market summary for %s: endpoint not yet available. Check the Settlement page for P&L data.", date)}
+	}
+
+	// --- Reports: large trader ---
+	if containsAny(lower, "large trader report", "large trader") {
+		body, status := e.doRequest("GET", "/api/v1/reports/large-traders", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("📋 Large trader report:\n%s", prettyJSON(body))}
+		}
+		return ChatResponse{Reply: "📋 Large trader report: endpoint not yet available. Check the Surveillance page for position monitoring."}
+	}
+
+	// --- Audit log ---
+	if containsAny(lower, "audit log", "audit trail", "show audit") {
+		body, status := e.doRequest("GET", "/api/v1/compliance/audit-trail", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("📝 Audit trail:\n%s", prettyJSON(body)),
+				Actions: []Action{{Label: "Compliance", Type: "link", URL: "/dashboard/surveillance"}},
+			}
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch audit trail."}
+	}
+
+	// --- Halt instrument ---
 	if strings.HasPrefix(lower, "halt ") {
 		name := strings.TrimPrefix(lower, "halt ")
 		name = strings.TrimPrefix(name, "trading on ")
@@ -69,7 +370,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to halt %s: %s", instrumentID, body)}
 	}
 
-	// Resume instrument
+	// --- Resume instrument ---
 	if strings.HasPrefix(lower, "resume ") {
 		name := strings.TrimPrefix(lower, "resume ")
 		name = strings.TrimPrefix(name, "trading on ")
@@ -88,7 +389,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to resume %s: %s", instrumentID, body)}
 	}
 
-	// Approve KYC
+	// --- Approve KYC ---
 	if matchApprove := regexp.MustCompile(`(?i)^approve\s+(?:trader|participant|kyc|application)?\s*(.+)`).FindStringSubmatch(message); len(matchApprove) > 1 {
 		pid := strings.TrimSpace(matchApprove[1])
 		_, status := e.doRequest("POST", "/api/v1/participants/"+pid+"/approve", nil, userToken)
@@ -98,7 +399,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to approve %s. Check the participant ID.", pid)}
 	}
 
-	// Reject KYC
+	// --- Reject KYC ---
 	if matchReject := regexp.MustCompile(`(?i)^reject\s+(?:trader|participant|kyc|application)?\s*(\S+)\s*(?:because|reason:?)?\s*(.*)`).FindStringSubmatch(message); len(matchReject) > 1 {
 		pid := strings.TrimSpace(matchReject[1])
 		reason := strings.TrimSpace(matchReject[2])
@@ -112,7 +413,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to reject %s.", pid)}
 	}
 
-	// Mass cancel
+	// --- Mass cancel ---
 	if containsAny(lower, "mass cancel", "cancel all") {
 		_, status := e.doRequest("POST", "/api/v1/admin/mass-cancel", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -121,7 +422,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Mass cancel failed."}
 	}
 
-	// System health
+	// --- System health ---
 	if containsAny(lower, "health", "status", "services") {
 		body, status := e.doRequest("GET", "/api/v1/admin/health", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -130,7 +431,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch system health."}
 	}
 
-	// Margin calls
+	// --- Margin calls ---
 	if containsAny(lower, "margin") {
 		body, status := e.doRequest("GET", "/api/v1/margin/calls/stats", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -139,7 +440,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch margin data."}
 	}
 
-	// Settlement
+	// --- Settlement ---
 	if lower == "run settlement" || lower == "trigger settlement" {
 		_, status := e.doRequest("POST", "/api/v1/settlement/cycle", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -155,7 +456,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch settlement data."}
 	}
 
-	// Alerts
+	// --- Alerts (generic, after resolve-alert handler above) ---
 	if containsAny(lower, "alert") {
 		body, status := e.doRequest("GET", "/api/v1/compliance/alerts", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -164,7 +465,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch alerts."}
 	}
 
-	// Participants / KYC
+	// --- Participants / KYC ---
 	if containsAny(lower, "participant", "kyc", "pending application", "pending kyc") {
 		body, status := e.doRequest("GET", "/api/v1/participants", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -173,7 +474,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch participants."}
 	}
 
-	// Instruments
+	// --- Instruments ---
 	if containsAny(lower, "instrument", "commodity", "contract") {
 		body, status := e.doRequest("GET", "/api/v1/instruments/list", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -182,7 +483,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Unable to fetch instruments."}
 	}
 
-	// Order book / price
+	// --- Order book / price (per instrument) ---
 	for alias, id := range instrumentAliases {
 		if strings.Contains(lower, alias+" price") || strings.Contains(lower, alias+" ticker") {
 			body, status := e.doRequest("GET", "/api/v1/market-data/ticker/"+id, nil, userToken)
@@ -198,7 +499,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// Warehouse
+	// --- Warehouse ---
 	if containsAny(lower, "inventory", "warehouse") {
 		body, status := e.doRequest("GET", "/api/v1/warehouse/inventory", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -206,7 +507,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// Tickets
+	// --- Tickets ---
 	if containsAny(lower, "ticket") {
 		body, status := e.doRequest("GET", "/api/v1/tickets", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -214,7 +515,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// Fees
+	// --- Fees ---
 	if containsAny(lower, "fee") {
 		body, status := e.doRequest("GET", "/api/v1/admin/fees", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -222,7 +523,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// Positions
+	// --- Positions (clearing, all) ---
 	if containsAny(lower, "position") {
 		body, status := e.doRequest("GET", "/api/v1/clearing/positions", nil, userToken)
 		if status >= 200 && status < 300 {
@@ -230,25 +531,65 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// Help
+	// --- Help ---
 	if containsAny(lower, "help", "what can you do") {
 		return ChatResponse{
 			Reply: "I can execute these actions for you:\n\n" +
-				"📊 **Trading**: `halt wheat`, `resume corn`, `show instruments`\n" +
-				"👥 **KYC**: `show pending KYC`, `approve trader ABC`, `reject trader XYZ`\n" +
-				"💰 **Margin**: `show margin calls`, `recalculate margin`\n" +
-				"⚖️ **Settlement**: `run settlement`, `show settlement cycles`\n" +
-				"🔍 **Compliance**: `show alerts`, `resolve alert 123`\n" +
-				"📈 **Market**: `wheat price`, `corn order book`\n" +
-				"🎫 **Tickets**: `show tickets`, `report a bug`\n" +
-				"🏥 **System**: `system health`\n\n" +
-				"Just tell me what you need in plain language!",
+				"📋 **Orders**\n" +
+				"  `buy 10 wheat at 325` — place a limit buy order\n" +
+				"  `sell 5 corn at 450` — place a limit sell order\n" +
+				"  `show orders` / `my orders` — list your open orders\n" +
+				"  `cancel order <id>` — cancel a specific order\n" +
+				"  `modify order <id> price 330` — change order price\n\n" +
+				"📊 **Market Data**\n" +
+				"  `wheat price` / `corn ticker` — live ticker\n" +
+				"  `wheat order book` — L2 order book\n" +
+				"  `wheat candles` — OHLCV candle data\n" +
+				"  `corn trades` — recent trade history\n" +
+				"  `last trade wheat` — latest executed trade\n\n" +
+				"🛑 **Trading Controls**\n" +
+				"  `halt wheat` — suspend trading on an instrument\n" +
+				"  `resume corn` — re-enable trading\n" +
+				"  `set circuit breaker wheat 15` — set price limit %\n" +
+				"  `mass cancel` — cancel all open orders\n\n" +
+				"👥 **KYC / Participants**\n" +
+				"  `show pending KYC` — list applications\n" +
+				"  `approve trader <id>` — approve KYC\n" +
+				"  `reject trader <id> reason: <text>` — reject KYC\n" +
+				"  `disable participant <id>` — disable a participant\n\n" +
+				"⚖️ **Compliance**\n" +
+				"  `suspend trader <id> for <reason>` — suspend access\n" +
+				"  `reinstate trader <id>` — restore access\n" +
+				"  `file SAR on trader <id> for <reason>` — file SAR\n" +
+				"  `show alerts` — view compliance alerts\n" +
+				"  `resolve alert <id>` — resolve an alert\n" +
+				"  `show audit log` — view audit trail\n\n" +
+				"💰 **Clearing & Margin**\n" +
+				"  `show netting` — netting positions\n" +
+				"  `position for wheat` — per-instrument position\n" +
+				"  `show margin calls` — margin call stats\n\n" +
+				"⚠️ **Risk**\n" +
+				"  `set wheat max order 500` — order size limit\n" +
+				"  `show risk limits` — all order limits\n\n" +
+				"⚖️ **Settlement**\n" +
+				"  `run settlement` — trigger settlement cycle\n" +
+				"  `show settlement cycles` — cycle history\n\n" +
+				"📈 **Reports**\n" +
+				"  `market summary today` — daily market summary\n" +
+				"  `large trader report` — large position holders\n\n" +
+				"🏭 **Warehouse**\n" +
+				"  `show inventory` — warehouse inventory\n\n" +
+				"🏥 **System**\n" +
+				"  `system health` — service status\n" +
+				"  `show fees` — fee schedule\n" +
+				"  `who am I` — your profile\n" +
+				"  `show tickets` — support tickets\n",
 		}
 	}
 
 	// Default
 	return ChatResponse{
-		Reply: "I didn't understand that. Try:\n• `halt wheat` — stop trading\n• `show margin calls` — view margin status\n• `approve trader ABC` — approve KYC\n• `system health` — check services\n• `help` — see all commands",
+		Reply: "I can help with system health, alerts, margin status, and tickets. What would you like to know?",
 	}
 }
 
