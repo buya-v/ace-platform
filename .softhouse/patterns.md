@@ -61,4 +61,33 @@
   - Test writer tasks should wait for ALL upstream code tasks, not just the direct dependency — they need the full picture
   - MCP server tools are highly parallel by domain — each tool file is independent
 
+### Run 20260331-uat — Softhouse UAT Playwright Sub-Agents (2026-03-31)
+
+- **What worked**:
+  - 7/7 tasks completed, zero rejections
+  - UAT framework (helpers.ts, page-checks.ts, api-checks.ts) reused across all 4 test suites
+  - Sonnet model sufficient for all Playwright test-writing tasks
+  - SPA-safe navigation pattern (sidebar clicks, not page.goto) prevents React auth token loss
+  - Soft assertions (expect.soft) allow collecting all failures without early abort
+  - Graceful skip pattern (isPortalAvailable) keeps CI green when portal is down
+
+- **What failed**:
+  - T607 (skill creation) couldn't write outside worktree sandbox (/home/vcp/.claude/skills/) — had to be completed by orchestrator directly
+  - T602 agent found skill file at SKILL.md not softhouse.md — naming convention varies across skills
+
+- **New knowledge**:
+  - Playwright toHaveScreenshot() auto-creates baselines on first run — no manual setup needed
+  - UAT test count: 89 total (18 pages + 12 bot + 47 API contracts + 12 visual regression)
+  - Skills directory: /home/vcp/.claude/skills/<name>/SKILL.md is the convention
+  - Worktree agents cannot write to paths outside the repo — skill files must be created by orchestrator
+
+- **Planning advice**:
+  - Tasks writing to /home/vcp/.claude/ should NOT use worktree isolation — orchestrator must handle them directly
+  - Playwright UAT tests are fast to write (~2-3 min per spec file) because helpers abstract the complexity
+  - UAT step 5.5 in the softhouse pipeline is the key quality gate — unit tests alone are insufficient
+  - Visual regression baselines need an initial --update-snapshots run before they become useful
+
+- **UAT pass rate**: 7/7 tasks completed on first try
+- **UAT failure categories**: N/A (framework creation, not execution)
+
 <!-- LEARNED PATTERNS END -->
