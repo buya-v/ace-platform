@@ -32,18 +32,50 @@ func main() {
 	cfg := server.ConfigFromEnv()
 	idGen := &seqIDGen{}
 	eng := engine.NewEngine(idGen)
-	tradeStore := store.NewInMemoryTradeStore()
 
-	// Set up trade handler for logging
+	// Choose trade store based on DB_HOST environment variable.
+	// If DB_HOST is set, use PostgreSQL async trade writer.
+	// Otherwise, use in-memory store (development/testing).
+	var tradeStore store.TradeStore
+	var pgStore *store.PostgresTradeStore
+
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		dsn := store.BuildDSN(
+			dbHost,
+			os.Getenv("DB_PORT"),
+			os.Getenv("DB_USER"),
+			os.Getenv("DB_PASSWORD"),
+			os.Getenv("DB_NAME"),
+			os.Getenv("DB_SSLMODE"),
+		)
+
+		db, err := store.ConnectPostgres(dsn)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		log.Printf("Connected to PostgreSQL at %s", dbHost)
+
+		pgStore = store.NewPostgresTradeStore(store.PostgresConfig{DB: db})
+		tradeStore = pgStore
+	} else {
+		log.Println("No DB_HOST set — using in-memory trade store")
+		tradeStore = store.NewInMemoryTradeStore()
+	}
+
+	// Set up trade handler: log + persist to trade store
 	eng.SetTradeHandler(func(trade types.Trade) {
 		log.Printf("TRADE: %s %s qty=%d price=%s aggressor=%s",
 			trade.TradeID, trade.InstrumentID,
 			trade.Quantity, trade.Price.String(), trade.AggressorSide)
 	})
 
+	// Set up execution report handler: log + persist if PostgreSQL is configured
 	eng.SetExecReportHandler(func(report types.ExecutionReport) {
 		log.Printf("EXEC: %s order=%s type=%d status=%d",
 			report.ExecID, report.OrderID, report.ExecType, report.OrderStatus)
+		if pgStore != nil {
+			pgStore.AppendExecutionReport(report)
+		}
 	})
 
 	srv := server.NewServer(eng, tradeStore, cfg)
@@ -88,5 +120,14 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
 	log.Printf("Received signal %s, shutting down...", sig)
+
+	// Graceful shutdown: flush pending writes
+	if pgStore != nil {
+		log.Println("Flushing pending PostgreSQL writes...")
+		if err := pgStore.Close(); err != nil {
+			log.Printf("WARN: error closing PostgreSQL store: %v", err)
+		}
+	}
+
 	lis.Close()
 }
