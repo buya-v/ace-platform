@@ -8,27 +8,40 @@ import type {
   TicketPayload,
 } from './types.js';
 
-function getGatewayConfig(): GatewayConfig {
-  return {
-    baseUrl: process.env.GATEWAY_URL ?? 'http://localhost:8080',
-    token: process.env.GATEWAY_TOKEN,
-  };
+let cachedToken: string | undefined;
+
+function getGatewayBaseUrl(): string {
+  return process.env.GARUDAX_GATEWAY_URL ?? process.env.GATEWAY_URL ?? 'http://localhost:8080';
 }
 
-function authHeaders(config: GatewayConfig): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (config.token) {
-    headers['Authorization'] = `Bearer ${config.token}`;
-  }
-  return headers;
+async function ensureToken(): Promise<string | undefined> {
+  if (cachedToken) return cachedToken;
+  if (process.env.GATEWAY_TOKEN) { cachedToken = process.env.GATEWAY_TOKEN; return cachedToken; }
+  const email = process.env.GARUDAX_ADMIN_EMAIL;
+  const password = process.env.GARUDAX_ADMIN_PASSWORD;
+  if (!email || !password) return undefined;
+  try {
+    const res = await fetch(`${getGatewayBaseUrl()}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json() as Record<string, string>;
+    cachedToken = data.AccessToken ?? data.access_token;
+    return cachedToken;
+  } catch { return undefined; }
 }
 
 async function fetchGateway(path: string, options?: RequestInit): Promise<Response> {
-  const config = getGatewayConfig();
-  const url = `${config.baseUrl}${path}`;
+  const baseUrl = getGatewayBaseUrl();
+  const token = await ensureToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const url = `${baseUrl}${path}`;
   return fetch(url, {
     ...options,
-    headers: { ...authHeaders(config), ...(options?.headers as Record<string, string> | undefined) },
+    headers: { ...headers, ...(options?.headers as Record<string, string> | undefined) },
   });
 }
 
