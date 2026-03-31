@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/garudax-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/bot"
 	"github.com/garudax-platform/gateway/internal/config"
 	"github.com/garudax-platform/gateway/internal/handler"
 	"github.com/garudax-platform/gateway/internal/middleware"
@@ -59,6 +60,18 @@ func main() {
 	// Uses InMemoryStore by default; PgStore when DATABASE_URL is configured.
 	ticketHandlers := tickets.NewHandlers(tickets.NewInMemoryStore())
 	ticketHandlers.RegisterRoutes(rt)
+
+	// Register bot chat routes (AI assistant proxy to orchestrator)
+	// BOT_ORCHESTRATOR_URL env var configures the orchestrator; empty = fallback mode
+	botOrchestratorURL := os.Getenv("BOT_ORCHESTRATOR_URL")
+	botBridge := bot.NewBridge(botOrchestratorURL)
+	botHandlers := bot.NewHandlers(botBridge)
+	botHandlers.RegisterRoutes(rt)
+	if botOrchestratorURL != "" {
+		logger.Info("Bot orchestrator configured", slog.String("url", botOrchestratorURL))
+	} else {
+		logger.Info("Bot running in fallback mode (no orchestrator)")
+	}
 
 	// Register WebSocket routes (both path-param and query-param styles)
 	wsHandler := websocket.NewHandler()
