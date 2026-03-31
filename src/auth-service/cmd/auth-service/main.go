@@ -21,11 +21,34 @@ func main() {
 
 	cfg := config.ConfigFromEnv()
 
-	if cfg.JWTSigningKey == "" {
-		log.Fatal("AUTH_JWT_SIGNING_KEY environment variable is required")
+	// Initialize JWT service: RS256 if key paths are set, HS256 otherwise
+	var jwtSvc *auth.JWTService
+	if cfg.JWTRSAPrivateKeyPath != "" {
+		privKey, pubKey, err := auth.LoadRSAPrivateKeyOnly(cfg.JWTRSAPrivateKeyPath)
+		if err != nil {
+			log.Fatalf("Failed to load RSA private key from %s: %v", cfg.JWTRSAPrivateKeyPath, err)
+		}
+		// If public key path is also set, load it explicitly (cross-validation)
+		if cfg.JWTRSAPublicKeyPath != "" {
+			_, pubKey, err = auth.LoadRSAKeyPair(cfg.JWTRSAPrivateKeyPath, cfg.JWTRSAPublicKeyPath)
+			if err != nil {
+				log.Fatalf("Failed to load RSA key pair: %v", err)
+			}
+		}
+		jwtSvc = auth.NewJWTServiceRS256(privKey, pubKey, "key-1", cfg.AccessTokenTTLSecs, cfg.RefreshTokenTTLSecs)
+		log.Println("JWT signing: RS256 (asymmetric)")
+	} else {
+		// HS256 mode
+		if cfg.ProductionMode && cfg.JWTSigningKey == "" {
+			log.Fatal("PRODUCTION_MODE is set: AUTH_JWT_SIGNING_KEY or JWT_RSA_PRIVATE_KEY_PATH is required")
+		}
+		if cfg.JWTSigningKey == "" {
+			log.Println("WARNING: using default dev JWT secret — set AUTH_JWT_SIGNING_KEY for production")
+			cfg.JWTSigningKey = "garudax-dev-secret-do-not-use-in-production"
+		}
+		jwtSvc = auth.NewJWTService(cfg.JWTSigningKey, cfg.AccessTokenTTLSecs, cfg.RefreshTokenTTLSecs)
+		log.Println("JWT signing: HS256 (symmetric)")
 	}
-
-	jwtSvc := auth.NewJWTService(cfg.JWTSigningKey, cfg.AccessTokenTTLSecs, cfg.RefreshTokenTTLSecs)
 
 	// Use PostgreSQL store when DB_HOST is explicitly set, otherwise fall back to in-memory.
 	var repo auth.Store

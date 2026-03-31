@@ -29,7 +29,24 @@ func main() {
 	cfg := config.FromEnv()
 
 	// Initialize JWT validator
-	jwtValidator := auth.NewJWTValidator(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience)
+	// If RSA public key path is set, use dual mode (accepts both HS256 and RS256)
+	var jwtValidator *auth.JWTValidator
+	if cfg.JWTRSAPublicKeyPath != "" {
+		pubKey, err := auth.LoadRSAPublicKeyFromFile(cfg.JWTRSAPublicKeyPath)
+		if err != nil {
+			logger.Error("Failed to load RSA public key", slog.String("path", cfg.JWTRSAPublicKeyPath), slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		jwtValidator = auth.NewJWTValidatorDual(cfg.JWTSecret, pubKey, cfg.JWTIssuer, cfg.JWTAudience)
+		logger.Info("JWT validation: dual mode (HS256 + RS256)")
+	} else {
+		if cfg.ProductionMode && cfg.JWTSecret == "ace-dev-secret-change-in-production" {
+			logger.Error("PRODUCTION_MODE is set but JWT_SECRET is still the default dev secret")
+			os.Exit(1)
+		}
+		jwtValidator = auth.NewJWTValidator(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience)
+		logger.Info("JWT validation: HS256")
+	}
 
 	// Initialize backend client — forwards to service HTTP APIs
 	var backendClient proxy.BackendClient = proxy.NewHTTPBackendClient(map[string]string{

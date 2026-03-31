@@ -21,9 +21,11 @@ type Config struct {
 	BackendTimeout  time.Duration
 
 	// JWT
-	JWTSecret    string
-	JWTIssuer    string
-	JWTAudience  string
+	JWTSecret          string
+	JWTIssuer          string
+	JWTAudience        string
+	JWTRSAPublicKeyPath string
+	ProductionMode     bool
 
 	// Backend services
 	MatchingEngineAddr  string
@@ -61,9 +63,11 @@ func FromEnv() *Config {
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 		BackendTimeout:  envDuration("BACKEND_TIMEOUT", 30*time.Second),
 
-		JWTSecret:   envStr("JWT_SECRET", "ace-dev-secret-change-in-production"),
-		JWTIssuer:   envStr("JWT_ISSUER", "ace-auth-service"),
-		JWTAudience: envStr("JWT_AUDIENCE", "ace-api-gateway"),
+		JWTSecret:           envStr("JWT_SECRET", "ace-dev-secret-change-in-production"),
+		JWTIssuer:           envStr("JWT_ISSUER", "ace-auth-service"),
+		JWTAudience:         envStr("JWT_AUDIENCE", "ace-api-gateway"),
+		JWTRSAPublicKeyPath: envStr("JWT_RSA_PUBLIC_KEY_PATH", ""),
+		ProductionMode:      envBool("PRODUCTION_MODE", false),
 
 		MatchingEngineAddr:    envStr("MATCHING_ENGINE_ADDR", "localhost:50051"),
 		ClearingEngineAddr:    envStr("CLEARING_ENGINE_ADDR", "localhost:50052"),

@@ -14,6 +14,13 @@ type Config struct {
 	AccessTokenTTLSecs  int
 	RefreshTokenTTLSecs int
 
+	// RS256 key paths (if set, RS256 is used instead of HS256)
+	JWTRSAPrivateKeyPath string
+	JWTRSAPublicKeyPath  string
+
+	// Production mode: if true, requires explicit JWT_SECRET or RSA key paths
+	ProductionMode bool
+
 	DBHost    string
 	DBPort    int
 	DBUser    string
@@ -113,6 +120,15 @@ func ConfigFromEnv() Config {
 	}
 	if v := os.Getenv("REDIS_URL"); v != "" {
 		cfg.RedisURL = v
+	}
+	if v := os.Getenv("JWT_RSA_PRIVATE_KEY_PATH"); v != "" {
+		cfg.JWTRSAPrivateKeyPath = v
+	}
+	if v := os.Getenv("JWT_RSA_PUBLIC_KEY_PATH"); v != "" {
+		cfg.JWTRSAPublicKeyPath = v
+	}
+	if v := os.Getenv("PRODUCTION_MODE"); v != "" {
+		cfg.ProductionMode = v == "true" || v == "1" || v == "yes"
 	}
 
 	return cfg
