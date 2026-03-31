@@ -74,7 +74,22 @@ export async function sendBotMessage(
     throw new Error(`Bot request failed: ${response.status}`);
   }
 
-  return response.json();
+  const json = await response.json();
+  const data = json.data ?? json;
+  // Normalize suggestions from gateway format {text,category} to UI format {id,label,prompt}
+  if (data.suggestions) {
+    data.suggestions = data.suggestions.map(normalizeSuggestion);
+  }
+  return data;
+}
+
+export function normalizeSuggestion(raw: Record<string, string>, idx: number): Suggestion {
+  return {
+    id: raw.id ?? `sug-${idx}`,
+    label: raw.label ?? raw.text ?? '',
+    prompt: raw.prompt ?? raw.text ?? '',
+    icon: raw.icon ?? raw.category,
+  };
 }
 
 export async function getBotSuggestions(page: string): Promise<Suggestion[]> {
@@ -88,7 +103,9 @@ export async function getBotSuggestions(page: string): Promise<Suggestion[]> {
     throw new Error(`Failed to get suggestions: ${response.status}`);
   }
 
-  return response.json();
+  const json = await response.json();
+  const items: Record<string, string>[] = json.data ?? json;
+  return items.map(normalizeSuggestion);
 }
 
 export async function createTicket(ticket: TicketInput): Promise<TicketResult> {
