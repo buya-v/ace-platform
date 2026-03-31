@@ -33,4 +33,32 @@
   - Frontend tasks (React) parallelize well since they touch different page files
   - Estimate 5-8 min per task for this codebase (30 tasks completed in ~2.5 hours wall-clock)
 
+### Run 20260331-bot — GarudaX Admin Bot with MCP + Ticket System (2026-03-31)
+
+- **What worked**:
+  - 9/9 tasks completed on first attempt, zero rejections
+  - Clean 4-iteration dependency chain: foundation (T201+T202) → services (T203+T204+T206+T207) → UI (T205+T208) → tests (T209)
+  - MCP server + orchestrator as separate TypeScript packages worked well — clean separation of concerns
+  - Gateway bot fallback pattern (keyword-based responses when orchestrator unavailable) makes the bot usable immediately without external AI services
+  - Page-aware suggestions pattern is simple and effective — static data, no ML needed
+  - BotContext + useReducer pattern integrates cleanly with existing React architecture
+  - Test writer agent (T209) produced 73 tests covering all three layers (orchestrator, gateway, admin-ui)
+
+- **What failed**:
+  - Worktree cleanup race: some worktrees were cleaned up before merge, requiring files to already be staged from prior commits
+  - T207 (MCP extension) worktree was cleaned up before explicit merge, but files were already in git from sharing the worktree with T203
+
+- **New knowledge**:
+  - MCP SDK: `@modelcontextprotocol/sdk` — use `server.tool()` for tools, `server.resource()` for resources, `StdioServerTransport` for CLI integration
+  - GPT-nano routing: keyword-based fallback is sufficient for 90% of admin queries — nano classification is a nice-to-have enhancement
+  - Claude CLI as orchestrator: `claude -p "prompt" --bare --max-budget-usd 0.10` works for headless bot usage
+  - Bot chat panels: 380x500px fixed-position is the sweet spot for chat overlays
+  - Ticket system: simple schema (tickets + comments) covers bug reports, feature requests, and support
+
+- **Planning advice**:
+  - TypeScript tasks (MCP, orchestrator) are faster than Go tasks (~3-5 min vs ~5-8 min)
+  - Frontend component tasks (BotButton, BotChatPanel, BotTicketForm) can be in one task if they share a context provider
+  - Test writer tasks should wait for ALL upstream code tasks, not just the direct dependency — they need the full picture
+  - MCP server tools are highly parallel by domain — each tool file is independent
+
 <!-- LEARNED PATTERNS END -->

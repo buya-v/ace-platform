@@ -1,0 +1,156 @@
+{
+  "run_id": "20260331-bot",
+  "feature": "GarudaX Admin Bot \u2014 AI-Powered Assistant with MCP + Ticket System",
+  "requirement": "Develop GarudaX bot for admin portal. Use MCP server for tool access, GPT-nano for simple tasks, Claude CLI as orchestrator. Daily administration support, ticket system for customization and bug reports. Floating button UI in admin dashboard.",
+  "status": "complete",
+  "tasks": [
+    {
+      "id": "T201",
+      "title": "MCP server \u2014 GarudaX admin tools (TypeScript)",
+      "description": "Create an MCP server in TypeScript that wraps the GarudaX gateway admin APIs as MCP tools.\n\nCreate `src/admin-bot/mcp-server/` with:\n1. `package.json` with @modelcontextprotocol/sdk dependency\n2. `tsconfig.json` for TypeScript compilation\n3. `src/index.ts` \u2014 MCP server entry point using StdioServerTransport\n4. `src/gateway-client.ts` \u2014 HTTP client for GarudaX gateway with JWT auth (auto-login with email/password, token refresh)\n5. `src/tools/` \u2014 Tool definitions grouped by domain:\n   - `health.ts`: get_system_health, get_service_status\n   - `trading.ts`: halt_instrument, resume_instrument, get_circuit_breakers, mass_cancel\n   - `margin.ts`: get_margin_calls, get_margin_stats, trigger_margin_calculation\n   - `clearing.ts`: get_positions, get_netting\n   - `settlement.ts`: get_settlement_cycles, trigger_settlement\n   - `compliance.ts`: get_alerts, resolve_alert, file_sar, get_audit_trail\n   - `participants.ts`: list_participants, approve_kyc, reject_kyc\n   - `market_data.ts`: get_orderbook, get_ticker, get_last_trade\n   - `warehouse.ts`: get_inventory, get_receipts\n   - `risk.ts`: get_order_limits, update_order_limits\n   - `reports.ts`: get_market_summary, get_large_traders\n   - `fees.ts`: get_fee_schedule\n6. `src/resources/` \u2014 MCP resources:\n   - `system_status.ts` \u2014 current health + halted instruments\n   - `active_alerts.ts` \u2014 unresolved compliance alerts\n\nInclude `.mcp.json` at project root for Claude CLI integration.\n\nConfig via env: GARUDAX_GATEWAY_URL, GARUDAX_ADMIN_EMAIL, GARUDAX_ADMIN_PASSWORD\n\nAcceptance: `npm run build` succeeds. MCP server starts and lists 25+ tools.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "src/admin-bot/mcp-server/"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T202",
+      "title": "Ticket system \u2014 backend API (gateway)",
+      "description": "Add a ticket/issue tracking system to the gateway for bug reports, customization requests, and support tickets.\n\nCreate migration `infrastructure/db/migrations/V25__tickets.sql`:\n- tickets.tickets: id, title, description, category (bug_report/customization/support/feature_request), priority (low/medium/high/critical), status (open/in_progress/resolved/closed), reporter_id, assignee_id, tags[], metadata JSONB, created_at, updated_at, resolved_at\n- tickets.comments: id, ticket_id, author_id, body, is_bot BOOLEAN, created_at\n- Indexes on status, reporter, category, priority\n\nCreate `src/gateway/internal/tickets/` package:\n- `store.go`: Store interface + PgStore + InMemoryStore\n- `handlers.go`: POST/GET/PATCH /api/v1/tickets, POST /api/v1/tickets/{id}/comments, GET /api/v1/admin/tickets/stats\n- `handlers_test.go`: 25+ tests\n\nWire routes in gateway main.go.\n\nAcceptance: Tickets CRUD works via API. Tests pass.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "src/gateway/internal/tickets/",
+        "infrastructure/db/migrations/",
+        "src/gateway/cmd/gateway/main.go"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T203",
+      "title": "Bot orchestrator \u2014 nano routing + Claude escalation",
+      "description": "Create the bot orchestrator that routes requests between GPT-nano (simple) and Claude CLI (complex).\n\nCreate `src/admin-bot/orchestrator/` with:\n1. `package.json` with openai SDK, node-cron\n2. `src/index.ts` \u2014 HTTP server on port 3100\n3. `src/router.ts` \u2014 Classifies requests via GPT-nano into: status_query, admin_action, ticket_create, ticket_update, report_generate, complex_analysis. Simple \u2192 nano. Complex \u2192 Claude CLI.\n4. `src/nano-handler.ts` \u2014 GPT-nano handler with function calling for simple lookups, ticket creation, status queries\n5. `src/claude-handler.ts` \u2014 Spawns `claude -p \"<prompt>\" --bare` with MCP config, captures response, 60s timeout, 2 retries\n6. `src/daily-admin.ts` \u2014 Scheduled tasks via node-cron: morning health check (09:00), EOD report, aging tickets alert\n7. `src/api.ts` \u2014 Express-like HTTP routes: POST /chat, GET /suggestions, GET /health\n8. `src/types.ts` \u2014 Shared types\n\nAcceptance: Router classifies correctly. Simple queries \u2192 nano. Complex \u2192 Claude CLI.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "src/admin-bot/orchestrator/"
+      ],
+      "dependencies": [
+        "T201"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T204",
+      "title": "Bot chat API \u2014 gateway proxy to orchestrator",
+      "description": "Add bot chat endpoints to the gateway that proxy to the orchestrator.\n\nCreate `src/gateway/internal/bot/` package:\n1. `handler.go`:\n   - POST /api/v1/bot/chat \u2014 { message, context? } \u2192 { reply, actions?, ticket_id? }\n   - GET /api/v1/bot/suggestions?page= \u2014 context-aware quick actions\n   - For MVP: built-in keyword-based responses when orchestrator is unavailable\n2. `suggestions.go` \u2014 Page-aware suggestions:\n   - Dashboard: \"System health\", \"Open alerts\", \"Today's volume\"\n   - Surveillance: \"Unresolved alerts\", \"Wash trading detections\"\n   - Margin: \"Margin call participants\", \"Total shortfall\"\n   - Settlement: \"Settlement status\", \"Run cycle\"\n   - Tickets: \"Open tickets\", \"Aging tickets\"\n3. `bridge.go` \u2014 Proxy to orchestrator HTTP (BOT_ORCHESTRATOR_URL env)\n4. `handler_test.go` \u2014 20+ tests\n\nBot endpoints require admin auth. Wire in gateway main.go.\n\nAcceptance: Chat endpoint returns responses. Suggestions vary by page.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "src/gateway/internal/bot/"
+      ],
+      "dependencies": [
+        "T202"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T205",
+      "title": "Admin UI \u2014 floating bot button + chat panel",
+      "description": "Add floating bot button and chat panel to admin-ui.\n\nCreate:\n1. `BotButton.tsx` + CSS: Floating circle, bottom-right (24px inset), z-index 1100, pulse animation on notification, robot icon, unread badge\n2. `BotChatPanel.tsx` + CSS: Slide-up panel (400x500px), header with minimize/close, scrollable messages (user right-aligned blue, bot left-aligned gray), typing indicator (3 dots), text input + send button, quick action chips from suggestions API\n3. `BotTicketForm.tsx` + CSS: Inline form in chat \u2014 title, description, category dropdown (bug/customization/support/feature), priority. Auto-captures current page + browser info as metadata. Shows confirmation after submit.\n4. `BotContext.tsx`: Provider with state (isOpen, messages[], unreadCount, isTyping, suggestions[]), actions (sendMessage, togglePanel, loadSuggestions on route change)\n5. `botApi.ts`: sendBotMessage, getBotSuggestions, createTicket, getTickets\n6. Wire BotButton + BotProvider into App.tsx DashboardLayout\n\nFollow CSS Modules + design tokens. Extract pure functions for tests.\n\nAcceptance: Button visible on all admin pages. Chat opens/closes. Messages send. Ticket form works. 25+ tests.",
+      "agent_role": "coder",
+      "target": "frontend",
+      "files_hint": [
+        "src/admin-ui/src/components/BotButton.tsx",
+        "src/admin-ui/src/components/BotChatPanel.tsx",
+        "src/admin-ui/src/components/BotTicketForm.tsx",
+        "src/admin-ui/src/contexts/BotContext.tsx",
+        "src/admin-ui/src/services/botApi.ts"
+      ],
+      "dependencies": [
+        "T204"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T206",
+      "title": "Admin UI \u2014 ticket management page",
+      "description": "Add Tickets page to admin-ui.\n\nCreate:\n1. `Tickets.tsx` + CSS: Table with ID, Title, Category, Priority, Status, Reporter, Created. Filters (category, priority, status, search). Click row \u2192 expand detail with comments. Admin actions: assign, change status/priority. Comment form. Bot comments marked with robot icon.\n2. Update Sidebar.tsx: Add 'Tickets' nav item with icon\n3. Update App.tsx: Add /dashboard/tickets route\n4. Update api.ts: fetchTickets, fetchTicket, updateTicket, addTicketComment, fetchTicketStats\n5. Tests: tickets.test.ts with 20+ tests for pure functions\n\nAcceptance: Tickets page works. CRUD via UI. Tests pass.",
+      "agent_role": "coder",
+      "target": "frontend",
+      "files_hint": [
+        "src/admin-ui/src/pages/Tickets.tsx",
+        "src/admin-ui/src/components/Sidebar.tsx",
+        "src/admin-ui/src/App.tsx",
+        "src/admin-ui/src/services/api.ts"
+      ],
+      "dependencies": [
+        "T202"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T207",
+      "title": "MCP server \u2014 ticket + daily admin tools extension",
+      "description": "Extend MCP server with ticket management and daily admin tools.\n\nAdd to `src/admin-bot/mcp-server/src/tools/`:\n1. `tickets.ts`: create_ticket, list_tickets, update_ticket, add_comment, get_ticket_stats\n2. `daily_admin.ts`: run_daily_health_check, run_eod_report, get_aging_tickets, get_unresolved_alerts_summary\n\nAdd MCP resources:\n3. `src/resources/tickets.ts`: open_tickets, ticket_stats\n\nAcceptance: New tools visible in MCP. Claude CLI can manage tickets via MCP.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "src/admin-bot/mcp-server/src/tools/tickets.ts",
+        "src/admin-bot/mcp-server/src/tools/daily_admin.ts",
+        "src/admin-bot/mcp-server/src/resources/tickets.ts"
+      ],
+      "dependencies": [
+        "T201",
+        "T202"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T208",
+      "title": "Docker Compose + Dockerfiles for bot services",
+      "description": "Add bot services to Docker Compose stack.\n\n1. Create `src/admin-bot/mcp-server/Dockerfile` \u2014 Node 22 slim, npm ci, npm run build\n2. Create `src/admin-bot/orchestrator/Dockerfile` \u2014 Node 22 slim, npm ci, npm run build, EXPOSE 3100\n3. Update `docker-compose.yml`:\n   - admin-bot-orchestrator service: build, env (OPENAI_API_KEY, gateway URL, credentials), port 3100, depends_on gateway\n   - Update gateway env: BOT_ORCHESTRATOR_URL=http://admin-bot-orchestrator:3100\n\nAcceptance: `docker compose up` starts bot services. Bot API reachable through gateway.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": [
+        "docker-compose.yml",
+        "src/admin-bot/mcp-server/Dockerfile",
+        "src/admin-bot/orchestrator/Dockerfile"
+      ],
+      "dependencies": [
+        "T203",
+        "T204"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T209",
+      "title": "Bot + ticket integration tests",
+      "description": "Write tests for the full bot system.\n\nCreate:\n1. `src/admin-bot/orchestrator/src/__tests__/router.test.ts` \u2014 request classification, nano vs claude routing, fallback\n2. `src/admin-bot/orchestrator/src/__tests__/nano-handler.test.ts` \u2014 health queries, ticket creation, mock API\n3. `src/admin-bot/orchestrator/src/__tests__/daily-admin.test.ts` \u2014 report generation, schedule config\n4. `src/admin-ui/src/__tests__/bot-chat.test.ts` \u2014 BotContext, BotButton render/toggle, BotTicketForm validation, botApi functions\n5. `src/gateway/internal/bot/handler_test.go` \u2014 chat endpoint, suggestions, auth\n\nAcceptance: All test suites pass. >60% coverage.",
+      "agent_role": "test_writer",
+      "target": "backend",
+      "files_hint": [
+        "src/admin-bot/orchestrator/src/__tests__/",
+        "src/admin-ui/src/__tests__/bot-chat.test.ts"
+      ],
+      "dependencies": [
+        "T203",
+        "T205"
+      ],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
