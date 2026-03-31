@@ -81,7 +81,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("POST", "/api/v1/orders", payload, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ %s order placed: %s x%s %s @ %s", side, instrumentID, qty, side, price),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ %s order placed: %s x%s %s @ %s", side, instrumentID, qty, side, price), userToken),
 				Actions: []Action{{Label: "View Orders", Type: "link", URL: "/dashboard/orderbook"}},
 			}
 		}
@@ -96,7 +96,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		payload := map[string]string{"price": newPrice}
 		body, status := e.doRequest("PATCH", "/api/v1/orders/"+orderID, payload, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Order %s updated: price → %s", orderID, newPrice)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Order %s updated: price → %s", orderID, newPrice), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to modify order %s: %s", orderID, body)}
 	}
@@ -107,7 +107,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		orderID := reCancel[1]
 		body, status := e.doRequest("DELETE", "/api/v1/orders/"+orderID, nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Order %s cancelled.", orderID)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Order %s cancelled.", orderID), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to cancel order %s: %s", orderID, body)}
 	}
@@ -130,7 +130,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		tradeID := reBust[1]
 		body, status := e.doRequest("POST", "/api/v1/admin/trades/"+tradeID+"/bust", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Trade %s busted.", tradeID)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Trade %s busted.", tradeID), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to bust trade %s: %s", tradeID, body)}
 	}
@@ -141,7 +141,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		pid := reDisable[1]
 		body, status := e.doRequest("POST", "/api/v1/admin/participants/"+pid+"/disable", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Participant %s disabled.", pid)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Participant %s disabled.", pid), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to disable participant %s: %s", pid, body)}
 	}
@@ -159,7 +159,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("PUT", "/api/v1/admin/instruments/"+instrumentID+"/circuit-breaker", payload, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ Circuit breaker for %s set to %s%%.", instrumentID, limit),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Circuit breaker for %s set to %s%%.", instrumentID, limit), userToken),
 				Actions: []Action{{Label: "Circuit Breakers", Type: "link", URL: "/dashboard/circuit-breakers"}},
 			}
 		}
@@ -178,7 +178,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("POST", "/api/v1/compliance/participants/"+pid+"/suspend", payload, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ Trader %s suspended. Reason: %s", pid, reason),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Trader %s suspended. Reason: %s", pid, reason), userToken),
 				Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
 			}
 		}
@@ -191,7 +191,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		pid := reReinstate[1]
 		body, status := e.doRequest("POST", "/api/v1/compliance/participants/"+pid+"/reinstate", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Trader %s reinstated.", pid)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Trader %s reinstated.", pid), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to reinstate %s: %s", pid, body)}
 	}
@@ -211,7 +211,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("POST", "/api/v1/compliance/sar", payload, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ SAR filed for %s. Reason: %s", pid, reason),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ SAR filed for %s. Reason: %s", pid, reason), userToken),
 				Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
 			}
 		}
@@ -224,7 +224,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		alertID := reResolveAlert[1]
 		body, status := e.doRequest("POST", "/api/v1/compliance/alerts/"+alertID+"/resolve", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ Alert %s resolved.", alertID)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Alert %s resolved.", alertID), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to resolve alert %s: %s", alertID, body)}
 	}
@@ -293,7 +293,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("PUT", "/api/v1/admin/risk/order-limits/"+instrumentID, payload, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ Max order size for %s set to %s.", instrumentID, limit),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Max order size for %s set to %s.", instrumentID, limit), userToken),
 				Actions: []Action{{Label: "Risk Limits", Type: "link", URL: "/dashboard/circuit-breakers"}},
 			}
 		}
@@ -363,7 +363,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("POST", "/api/v1/admin/instruments/"+instrumentID+"/halt", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ Trading HALTED on %s.", instrumentID),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Trading HALTED on %s.", instrumentID), userToken),
 				Actions: []Action{{Label: "Circuit Breakers", Type: "link", URL: "/dashboard/circuit-breakers"}},
 			}
 		}
@@ -382,7 +382,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		body, status := e.doRequest("POST", "/api/v1/admin/instruments/"+instrumentID+"/resume", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
-				Reply:   fmt.Sprintf("✅ Trading RESUMED on %s.", instrumentID),
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Trading RESUMED on %s.", instrumentID), userToken),
 				Actions: []Action{{Label: "Circuit Breakers", Type: "link", URL: "/dashboard/circuit-breakers"}},
 			}
 		}
@@ -394,7 +394,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		pid := strings.TrimSpace(matchApprove[1])
 		_, status := e.doRequest("POST", "/api/v1/participants/"+pid+"/approve", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ KYC APPROVED for participant %s.", pid)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ KYC APPROVED for participant %s.", pid), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to approve %s. Check the participant ID.", pid)}
 	}
@@ -408,7 +408,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 		_, status := e.doRequest("POST", "/api/v1/participants/"+pid+"/reject", map[string]string{"reason": reason}, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("✅ KYC REJECTED for %s. Reason: %s", pid, reason)}
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ KYC REJECTED for %s. Reason: %s", pid, reason), userToken)}
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to reject %s.", pid)}
 	}
@@ -417,7 +417,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	if containsAny(lower, "mass cancel", "cancel all") {
 		_, status := e.doRequest("POST", "/api/v1/admin/mass-cancel", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: "✅ Mass cancel executed. All open orders cancelled."}
+			return ChatResponse{Reply: e.withAttribution("✅ Mass cancel executed. All open orders cancelled.", userToken)}
 		}
 		return ChatResponse{Reply: "❌ Mass cancel failed."}
 	}
@@ -444,7 +444,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	if lower == "run settlement" || lower == "trigger settlement" {
 		_, status := e.doRequest("POST", "/api/v1/settlement/cycle", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: "✅ Settlement cycle triggered."}
+			return ChatResponse{Reply: e.withAttribution("✅ Settlement cycle triggered.", userToken)}
 		}
 		return ChatResponse{Reply: "❌ Failed to trigger settlement."}
 	}
@@ -591,6 +591,41 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	return ChatResponse{
 		Reply: "I can help with system health, alerts, margin status, and tickets. What would you like to know?",
 	}
+}
+
+// fetchUserEmail fetches the email of the currently authenticated user from /auth/me.
+// Returns an empty string if the request fails or the token is empty.
+func (e *ActionExecutor) fetchUserEmail(token string) string {
+	if token == "" {
+		return ""
+	}
+	body, status := e.doRequest("GET", "/api/v1/auth/me", nil, token)
+	if status < 200 || status >= 300 {
+		return ""
+	}
+	var profile struct {
+		Data struct {
+			Email string `json:"email"`
+		} `json:"data"`
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal([]byte(body), &profile); err != nil {
+		return ""
+	}
+	if profile.Data.Email != "" {
+		return profile.Data.Email
+	}
+	return profile.Email
+}
+
+// withAttribution appends an "Executed by" line to a reply using the user's email.
+// If the email cannot be fetched, the reply is returned unchanged.
+func (e *ActionExecutor) withAttribution(reply, token string) string {
+	email := e.fetchUserEmail(token)
+	if email == "" {
+		return reply
+	}
+	return reply + "\n\nExecuted by: " + email
 }
 
 // doRequest makes an HTTP request to the gateway using the user's token.

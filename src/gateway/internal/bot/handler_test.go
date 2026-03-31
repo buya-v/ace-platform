@@ -682,3 +682,90 @@ func TestGetSuggestions_Default(t *testing.T) {
 		t.Errorf("default suggestions count = %d, want 4", len(s))
 	}
 }
+
+// --- Attribution tests ---
+
+func TestFetchUserEmail_EmptyToken(t *testing.T) {
+	e := NewActionExecutor("")
+	email := e.fetchUserEmail("")
+	if email != "" {
+		t.Errorf("fetchUserEmail with empty token = %q, want empty", email)
+	}
+}
+
+func TestFetchUserEmail_ServerReturnsEmail(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/auth/me" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"email":"alice@garudax.mn"}}`))
+	}))
+	defer mock.Close()
+
+	e := NewActionExecutor(mock.URL)
+	email := e.fetchUserEmail("test-token")
+	if email != "alice@garudax.mn" {
+		t.Errorf("fetchUserEmail = %q, want alice@garudax.mn", email)
+	}
+}
+
+func TestFetchUserEmail_FlatEmailField(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"email":"bob@garudax.mn"}`))
+	}))
+	defer mock.Close()
+
+	e := NewActionExecutor(mock.URL)
+	email := e.fetchUserEmail("some-token")
+	if email != "bob@garudax.mn" {
+		t.Errorf("fetchUserEmail flat = %q, want bob@garudax.mn", email)
+	}
+}
+
+func TestFetchUserEmail_ServerError(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mock.Close()
+
+	e := NewActionExecutor(mock.URL)
+	email := e.fetchUserEmail("some-token")
+	if email != "" {
+		t.Errorf("fetchUserEmail on server error = %q, want empty", email)
+	}
+}
+
+func TestWithAttribution_AppendsEmail(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"email":"carol@garudax.mn"}}`))
+	}))
+	defer mock.Close()
+
+	e := NewActionExecutor(mock.URL)
+	result := e.withAttribution("✅ Action completed.", "my-jwt")
+	want := "✅ Action completed.\n\nExecuted by: carol@garudax.mn"
+	if result != want {
+		t.Errorf("withAttribution = %q, want %q", result, want)
+	}
+}
+
+func TestWithAttribution_NoEmailFallsThrough(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mock.Close()
+
+	e := NewActionExecutor(mock.URL)
+	result := e.withAttribution("✅ Action completed.", "my-jwt")
+	if result != "✅ Action completed." {
+		t.Errorf("withAttribution on failure = %q, want unchanged reply", result)
+	}
+}

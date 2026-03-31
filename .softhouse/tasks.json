@@ -42,8 +42,8 @@
       "dependencies": [
         "T501"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T504",
@@ -102,8 +102,8 @@
       "dependencies": [
         "T504"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T508",
