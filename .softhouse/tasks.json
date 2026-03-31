@@ -590,8 +590,8 @@
         "T109",
         "T116"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P2",
       "estimate_minutes": 12
     },

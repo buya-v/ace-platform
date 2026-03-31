@@ -43,14 +43,40 @@ func main() {
 	idGen := &seqIDGen{}
 	callDeadline := 1 * time.Hour
 
-	// Select collateral source: HTTP to clearing-engine when CLEARING_ENGINE_ADDR is set
-	var colSrc engine.CollateralSource
+	// Build composite collateral source from available upstream services.
+	// Each source is best-effort: if unreachable, it contributes zero.
+	compositeSrc := collateral.NewCompositeCollateralSource()
+
 	if addr := os.Getenv("CLEARING_ENGINE_ADDR"); addr != "" {
-		colSrc = collateral.NewHTTPCollateralSource(addr)
-		log.Printf("Using HTTP collateral source at %s", addr)
+		compositeSrc.Add("clearing-positions", collateral.NewHTTPCollateralSource(addr))
+		log.Printf("Collateral source: clearing-engine positions at %s", addr)
+	}
+
+	if addr := os.Getenv("WAREHOUSE_SERVICE_ADDR"); addr != "" {
+		// Price provider uses the param store's spot prices for commodity valuation.
+		priceProvider := func(commodityID string) (types.Decimal, bool) {
+			price, ok := paramStore.GetSpotPrice(commodityID)
+			return price, ok
+		}
+		warehouseOpts := []collateral.WarehouseOption{}
+		if h := os.Getenv("WAREHOUSE_HAIRCUT"); h != "" {
+			if hv, err := strconv.ParseFloat(h, 64); err == nil {
+				warehouseOpts = append(warehouseOpts, collateral.WithHaircut(hv))
+				log.Printf("Collateral source: warehouse receipts haircut=%.0f%%", hv*100)
+			}
+		}
+		compositeSrc.Add("warehouse-receipts",
+			collateral.NewWarehouseCollateralSource(addr, priceProvider, warehouseOpts...))
+		log.Printf("Collateral source: warehouse receipts at %s", addr)
+	}
+
+	var colSrc engine.CollateralSource
+	if compositeSrc.SourceCount() > 0 {
+		colSrc = compositeSrc
+		log.Printf("Using composite collateral source (%d sources)", compositeSrc.SourceCount())
 	} else {
 		colSrc = &inMemoryCollateral{}
-		log.Println("Using in-memory collateral source (set CLEARING_ENGINE_ADDR for real collateral)")
+		log.Println("Using in-memory collateral source (set CLEARING_ENGINE_ADDR / WAREHOUSE_SERVICE_ADDR for real collateral)")
 	}
 
 	eng := engine.NewEngine(paramStore, idGen, colSrc, callDeadline)

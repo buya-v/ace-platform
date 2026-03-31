@@ -126,6 +126,19 @@ func (s *Store) UpdateSpotPrice(instrumentID string, price types.Decimal) error 
 	return nil
 }
 
+// GetSpotPrice returns the current spot/settlement price for an instrument or commodity.
+// Returns (price, true) if found, or (zero, false) if the instrument is not configured.
+func (s *Store) GetSpotPrice(instrumentID string) (types.Decimal, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	p, ok := s.params[instrumentID]
+	if !ok {
+		return types.DecimalZero(), false
+	}
+	return p.SpotPrice, true
+}
+
 // All returns all instrument parameters.
 func (s *Store) All() []InstrumentParams {
 	s.mu.RLock()
