@@ -137,8 +137,8 @@
         "T101",
         "T104"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P1",
       "estimate_minutes": 15
     },
