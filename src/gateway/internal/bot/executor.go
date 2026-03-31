@@ -786,7 +786,17 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Instruments ---
-	if (containsAny(lower, "instrument", "commodity", "commodities", "contract") || containsAny(norm, "instrument", "commodity", "commodities", "contract")) && !containsAny(lower, "create", "new", "add") {
+	// Commodities query — separate from instruments
+	if (containsAny(lower, "commodity", "commodities") || containsAny(norm, "commodity", "commodities")) && !containsAny(lower, "create", "new", "add") && !containsAny(lower, "instrument", "contract") {
+		body, status := e.doRequest("GET", "/api/v1/commodities", nil, userToken)
+		if status >= 200 && status < 300 {
+			return formatCommoditiesResponse(body)
+		}
+		return ChatResponse{Reply: "❌ Unable to fetch commodities."}
+	}
+
+	// Instruments query
+	if (containsAny(lower, "instrument", "contract") || containsAny(norm, "instrument", "contract")) && !containsAny(lower, "create", "new", "add") {
 		body, status := e.doRequest("GET", "/api/v1/instruments/list", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatInstrumentsResponse(body)
