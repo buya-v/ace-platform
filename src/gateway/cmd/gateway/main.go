@@ -77,6 +77,20 @@ func main() {
 	feesHandlers.RegisterRoutes(rt)
 	feesHandlers.RegisterAdminRoutes(rt)
 
+	// Seed default master data so the in-memory store is non-empty on first start.
+	// Both methods are no-ops when data already exists (idempotent).
+	seedCtx := context.Background()
+	if err := refdataStore.SeedDefaults(seedCtx); err != nil {
+		logger.Warn("refdata seed failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("refdata master data ready")
+	}
+	if err := feesStore.SeedDefaults(seedCtx); err != nil {
+		logger.Warn("fees seed failed", slog.String("error", err.Error()))
+	} else {
+		logger.Info("fees master data ready")
+	}
+
 	// Register bot chat routes (AI assistant proxy to orchestrator)
 	// BOT_ORCHESTRATOR_URL env var configures the orchestrator; empty = fallback mode
 	botOrchestratorURL := os.Getenv("BOT_ORCHESTRATOR_URL")

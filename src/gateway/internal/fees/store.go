@@ -481,6 +481,54 @@ func (s *PgStore) SetParticipantTier(ctx context.Context, participantID, tier st
 	return err
 }
 
+// SeedDefaults seeds the store with a default fee schedule and rules if the
+// schedule store is empty. Safe to call on every startup — no-op when data exists.
+func (s *PgStore) SeedDefaults(ctx context.Context) error {
+	existing, err := s.ListAllSchedules(ctx)
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return nil // already seeded
+	}
+
+	sched, err := s.CreateSchedule(ctx, FeeScheduleInput{
+		ID:            "default",
+		Name:          "GarudaX Default Fee Schedule",
+		EffectiveFrom: "2026-01-01T00:00:00Z",
+		Status:        "ACTIVE",
+	})
+	if err != nil {
+		return fmt.Errorf("seed fee schedule: %w", err)
+	}
+
+	type ruleSeed struct {
+		id, feeType, pattern, tier string
+		rateBPS                    float64
+	}
+	rules := []ruleSeed{
+		{"default-farmer-trading", "trading", "*", "farmer", 10},
+		{"default-hedger-trading", "trading", "*", "hedger", 15},
+		{"default-speculator-trading", "trading", "*", "speculator", 25},
+		{"default-market_maker-trading", "trading", "*", "market_maker", 5},
+		{"default-clearing", "clearing", "*", "*", 5},
+	}
+	for _, r := range rules {
+		if err := s.CreateRule(ctx, FeeRule{
+			ID:                r.id,
+			ScheduleID:        sched.ID,
+			FeeType:           r.feeType,
+			InstrumentPattern: r.pattern,
+			ParticipantTier:   r.tier,
+			RateBPS:           r.rateBPS,
+			CreatedAt:         time.Now().UTC(),
+		}); err != nil {
+			return fmt.Errorf("seed fee rule %s: %w", r.id, err)
+		}
+	}
+	return nil
+}
+
 // joinFeeStrings joins strings with a separator.
 func joinFeeStrings(parts []string, sep string) string {
 	result := ""

@@ -389,6 +389,69 @@ func (s *PgStore) CreateCommodity(ctx context.Context, input CommodityInput) (*C
 	}, nil
 }
 
+// SeedDefaults seeds the in-memory (or DB) store with default commodities and
+// instruments if the store is currently empty. It is a no-op when data already
+// exists, so it is safe to call on every startup.
+func (s *PgStore) SeedDefaults(ctx context.Context) error {
+	existing, err := s.ListCommodities(ctx)
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return nil // already seeded
+	}
+
+	type commoditySeed struct {
+		id, name, category, unit string
+	}
+	commodities := []commoditySeed{
+		{"WHT-HRW", "Hard Red Winter Wheat", "grain", "bushel"},
+		{"CRN-YEL", "Yellow Corn", "grain", "bushel"},
+		{"SBN-NO2", "No.2 Soybeans", "oilseed", "bushel"},
+		{"BRL-MALT", "Malting Barley", "grain", "bushel"},
+		{"CSH-RAW", "Raw Cashmere", "fiber", "kg"},
+		{"LVS-CATTLE", "Live Cattle", "livestock", "cwt"},
+	}
+	for _, c := range commodities {
+		if _, err := s.CreateCommodity(ctx, CommodityInput{
+			ID: c.id, Name: c.name, Category: c.category, Unit: c.unit,
+		}); err != nil {
+			return fmt.Errorf("seed commodity %s: %w", c.id, err)
+		}
+	}
+
+	type instrumentSeed struct {
+		id, commodityID, name string
+		month, year           int
+		contractSize, tickSize json.Number
+		currency, settlementType string
+	}
+	instruments := []instrumentSeed{
+		{"WHT-HRW-2026M07-UB", "WHT-HRW", "HRW Wheat Jul 2026", 7, 2026, "5000", "0.0025", "MNT", "PHYSICAL"},
+		{"CRN-YEL-2026M09-UB", "CRN-YEL", "Yellow Corn Sep 2026", 9, 2026, "5000", "0.0025", "MNT", "PHYSICAL"},
+		{"SBN-NO2-2026M11-UB", "SBN-NO2", "No.2 Soybeans Nov 2026", 11, 2026, "5000", "0.0025", "MNT", "PHYSICAL"},
+		{"BRL-MALT-2026M07-UB", "BRL-MALT", "Malting Barley Jul 2026", 7, 2026, "5000", "0.0025", "MNT", "PHYSICAL"},
+		{"CSH-RAW-2026M09-UB", "CSH-RAW", "Raw Cashmere Sep 2026", 9, 2026, "100", "0.01", "MNT", "PHYSICAL"},
+		{"LVS-CATTLE-2026M10-UB", "LVS-CATTLE", "Live Cattle Oct 2026", 10, 2026, "40000", "0.025", "MNT", "PHYSICAL"},
+	}
+	for _, inst := range instruments {
+		if _, err := s.CreateInstrument(ctx, InstrumentInput{
+			ID:             inst.id,
+			CommodityID:    inst.commodityID,
+			Name:           inst.name,
+			DeliveryMonth:  inst.month,
+			DeliveryYear:   inst.year,
+			ContractSize:   inst.contractSize,
+			TickSize:       inst.tickSize,
+			Currency:       inst.currency,
+			SettlementType: inst.settlementType,
+		}); err != nil {
+			return fmt.Errorf("seed instrument %s: %w", inst.id, err)
+		}
+	}
+	return nil
+}
+
 // joinStrings joins a slice of strings with a separator.
 func joinStrings(parts []string, sep string) string {
 	result := ""
