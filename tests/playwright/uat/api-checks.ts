@@ -317,7 +317,7 @@ export const ADMIN_API_CHECKS: EndpointCheck[] = [
     name: 'Auth login (sanity check)',
     method: 'POST',
     path: '/auth/login',
-    expectedFields: ['access_token'],
+    expectedFields: ['AccessToken'],
     requiresAuth: false,
     body: { email: 'admin@garudax.mn', password: 'Adm1n@GarudaX!' },
   },
