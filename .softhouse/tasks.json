@@ -323,8 +323,8 @@
         "T106",
         "T111"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P5",
       "estimate_minutes": 15
     },

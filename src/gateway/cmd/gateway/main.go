@@ -16,6 +16,7 @@ import (
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/observability"
 	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/reporting"
 	"github.com/garudax-platform/gateway/internal/router"
 	"github.com/garudax-platform/gateway/internal/websocket"
 )
@@ -29,24 +30,7 @@ func main() {
 	cfg := config.FromEnv()
 
 	// Initialize JWT validator
-	// If RSA public key path is set, use dual mode (accepts both HS256 and RS256)
-	var jwtValidator *auth.JWTValidator
-	if cfg.JWTRSAPublicKeyPath != "" {
-		pubKey, err := auth.LoadRSAPublicKeyFromFile(cfg.JWTRSAPublicKeyPath)
-		if err != nil {
-			logger.Error("Failed to load RSA public key", slog.String("path", cfg.JWTRSAPublicKeyPath), slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-		jwtValidator = auth.NewJWTValidatorDual(cfg.JWTSecret, pubKey, cfg.JWTIssuer, cfg.JWTAudience)
-		logger.Info("JWT validation: dual mode (HS256 + RS256)")
-	} else {
-		if cfg.ProductionMode && cfg.JWTSecret == "ace-dev-secret-change-in-production" {
-			logger.Error("PRODUCTION_MODE is set but JWT_SECRET is still the default dev secret")
-			os.Exit(1)
-		}
-		jwtValidator = auth.NewJWTValidator(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience)
-		logger.Info("JWT validation: HS256")
-	}
+	jwtValidator := auth.NewJWTValidator(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAudience)
 
 	// Initialize backend client — forwards to service HTTP APIs
 	var backendClient proxy.BackendClient = proxy.NewHTTPBackendClient(map[string]string{
@@ -64,6 +48,11 @@ func main() {
 	h := handler.New(backendClient)
 	rt := router.New()
 	h.RegisterRoutes(rt)
+
+	// Register reporting routes (settlement statements, market summaries, large trader reports)
+	// Uses a no-op store by default; a real PgStore is injected when DB is configured.
+	reportingHandlers := reporting.NewHandlers(reporting.NewNoOpStore())
+	reportingHandlers.RegisterRoutes(rt)
 
 	// Register WebSocket routes (both path-param and query-param styles)
 	wsHandler := websocket.NewHandler()
