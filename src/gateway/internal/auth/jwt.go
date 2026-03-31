@@ -30,6 +30,7 @@ var (
 type Claims struct {
 	Sub           string   `json:"sub"`
 	ParticipantID string   `json:"participant_id"`
+	Role          string   `json:"role"`
 	Roles         []string `json:"roles"`
 	Issuer        string   `json:"iss"`
 	Audience      string   `json:"aud"`
@@ -40,6 +41,9 @@ type Claims struct {
 
 // HasRole checks if the claims include a specific role.
 func (c *Claims) HasRole(role string) bool {
+	if c.Role == role {
+		return true
+	}
 	for _, r := range c.Roles {
 		if r == role {
 			return true
