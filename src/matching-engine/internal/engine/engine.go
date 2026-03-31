@@ -28,8 +28,9 @@ type Engine struct {
 }
 
 type bookEntry struct {
-	book *orderbook.OrderBook
-	mu   sync.Mutex // Per-instrument lock for single-threaded matching
+	book         *orderbook.OrderBook
+	phaseManager *orderbook.PhaseManager
+	mu           sync.Mutex // Per-instrument lock for single-threaded matching
 }
 
 // NewEngine creates a new matching engine.
@@ -59,8 +60,11 @@ func (e *Engine) RegisterInstrument(instrumentID string) error {
 		return fmt.Errorf("instrument %s already registered", instrumentID)
 	}
 
+	book := orderbook.NewOrderBook(instrumentID, e.idGen, &e.globalSeq)
+	auctionEngine := orderbook.NewAuctionEngine(e.idGen, &e.globalSeq)
 	e.books[instrumentID] = &bookEntry{
-		book: orderbook.NewOrderBook(instrumentID, e.idGen, &e.globalSeq),
+		book:         book,
+		phaseManager: orderbook.NewPhaseManager(auctionEngine),
 	}
 	return nil
 }
@@ -213,6 +217,49 @@ func (e *Engine) ListInstruments() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// TransitionPhase transitions an instrument's order book to a new market phase.
+// If leaving an auction phase, this triggers the uncrossing algorithm and
+// dispatches the resulting trades and execution reports.
+func (e *Engine) TransitionPhase(instrumentID string, phase orderbook.MarketPhase) (orderbook.PhaseTransitionResult, error) {
+	entry, err := e.getBook(instrumentID)
+	if err != nil {
+		return orderbook.PhaseTransitionResult{}, err
+	}
+
+	entry.mu.Lock()
+	result, err := entry.phaseManager.TransitionTo(phase, entry.book)
+	entry.mu.Unlock()
+
+	if err != nil {
+		return orderbook.PhaseTransitionResult{}, err
+	}
+
+	// Dispatch auction trades and execution reports
+	if result.AuctionResult != nil {
+		matchResult := orderbook.MatchResult{
+			Trades:           result.AuctionResult.Trades,
+			ExecutionReports: result.AuctionResult.ExecutionReports,
+		}
+		e.dispatchResults(matchResult)
+	}
+
+	return result, nil
+}
+
+// GetPhase returns the current market phase for an instrument.
+func (e *Engine) GetPhase(instrumentID string) (orderbook.MarketPhase, error) {
+	entry, err := e.getBook(instrumentID)
+	if err != nil {
+		return 0, err
+	}
+
+	entry.mu.Lock()
+	phase := entry.phaseManager.CurrentPhase()
+	entry.mu.Unlock()
+
+	return phase, nil
 }
 
 func (e *Engine) dispatchResults(result orderbook.MatchResult) {

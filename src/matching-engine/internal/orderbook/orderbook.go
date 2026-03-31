@@ -121,6 +121,32 @@ func (ob *OrderBook) SubmitOrder(order *types.Order) MatchResult {
 		AccountID:     order.AccountID,
 	})
 
+	// During auction/pre-open phases, queue orders on the book without matching.
+	// Only LIMIT orders are accepted during non-continuous phases.
+	if ob.State == types.BookStateAuction || ob.State == types.BookStatePreOpen {
+		if order.OrderType != types.OrderTypeLimit {
+			order.Status = types.OrderStatusRejected
+			result.ExecutionReports = append(result.ExecutionReports, types.ExecutionReport{
+				ExecID:        ob.idGen.NewID(),
+				OrderID:       order.OrderID,
+				ClientOrderID: order.ClientOrderID,
+				ExecType:      types.ExecTypeRejected,
+				OrderStatus:   types.OrderStatusRejected,
+				Side:          order.Side,
+				InstrumentID:  ob.InstrumentID,
+				Price:         order.Price,
+				Quantity:      order.Quantity,
+				LeavesQty:     order.Quantity,
+				TransactTime:  now,
+				RejectReason:  "only limit orders accepted during auction/pre-open phase",
+				AccountID:     order.AccountID,
+			})
+			return result
+		}
+		ob.addToBook(order)
+		return result
+	}
+
 	// FOK: check full fillability before matching
 	if order.TimeInForce == types.TIFFOK {
 		if !ob.canFillFOK(order) {
@@ -332,7 +358,7 @@ func (ob *OrderBook) OrderCount() int {
 
 // validateOrder performs pre-trade validation.
 func (ob *OrderBook) validateOrder(order *types.Order) string {
-	if ob.State != types.BookStateContinuous && ob.State != types.BookStateAuction {
+	if ob.State != types.BookStateContinuous && ob.State != types.BookStateAuction && ob.State != types.BookStatePreOpen {
 		return fmt.Sprintf("book state %d does not accept orders", ob.State)
 	}
 	if order.Side == types.SideUnspecified {
@@ -496,8 +522,7 @@ func (ob *OrderBook) match(incoming *types.Order, result *MatchResult, now time.
 			if resting.RemainingQty == 0 {
 				if ob.replenishIceberg(resting, bestLevel, now) {
 					// Iceberg was replenished: order stays on book with new time priority.
-					// The exec report above already shows FILL for this slice.
-					// Continue matching — the replenished order is now at back of queue.
+					// Do NOT remove from orderIndex or orderLevelIndex.
 				} else {
 					bestLevel.Dequeue()
 					delete(ob.orderIndex, resting.OrderID)

@@ -400,8 +400,8 @@
         "T103",
         "T110"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P2",
       "estimate_minutes": 20
     },
