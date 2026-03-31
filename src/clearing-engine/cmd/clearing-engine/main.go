@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 
@@ -29,7 +30,32 @@ func main() {
 
 	cfg := server.ConfigFromEnv()
 	idGen := &seqIDGen{}
-	oblStore := store.NewInMemoryObligationStore()
+
+	var oblStore store.ObligationStore
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		dbPort := 5432
+		if v := os.Getenv("DB_PORT"); v != "" {
+			if p, err := strconv.Atoi(v); err == nil {
+				dbPort = p
+			}
+		}
+		dbUser := envOrDefault("DB_USER", "clearing")
+		dbPass := envOrDefault("DB_PASSWORD", "")
+		dbName := envOrDefault("DB_NAME", "garudax")
+		dbSSL := envOrDefault("DB_SSLMODE", "disable")
+
+		db, err := store.OpenDB(dbHost, dbPort, dbUser, dbPass, dbName, dbSSL)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		defer db.Close()
+		oblStore = store.NewPostgresObligationStore(db)
+		log.Printf("Using PostgreSQL store at %s:%d/%s", dbHost, dbPort, dbName)
+	} else {
+		oblStore = store.NewInMemoryObligationStore()
+		log.Println("Using in-memory store (set DB_HOST for PostgreSQL)")
+	}
+
 	eng := engine.NewEngine(idGen, oblStore)
 
 	eng.SetTradeHandler(func(trade types.Trade, result novation.NovationResult) {
@@ -63,4 +89,11 @@ func main() {
 	sig := <-sigCh
 	log.Printf("Received signal %s, shutting down...", sig)
 	lis.Close()
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
