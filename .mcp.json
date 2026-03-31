@@ -6,7 +6,9 @@
                 "src/admin-bot/mcp-server/dist/index.js"
             ],
             "env": {
-                "GARUDAX_GATEWAY_URL": "http://127.0.0.1:8080"
+                "GARUDAX_GATEWAY_URL": "http://127.0.0.1:8080",
+                "GARUDAX_ADMIN_EMAIL": "admin@garudax.mn",
+                "GARUDAX_ADMIN_PASSWORD": "Adm1n@GarudaX!"
             }
         }
     }
