@@ -528,8 +528,8 @@ func TestExecutor_ShowInstruments(t *testing.T) {
 	if !h.called.Load() {
 		t.Error("instruments: endpoint not called")
 	}
-	if !strings.Contains(resp.Reply, "instrument") {
-		t.Errorf("expected instrument in reply, got: %s", resp.Reply)
+	if !strings.Contains(resp.Reply, "WHT-HRW-2026M07-UB") {
+		t.Errorf("expected instrument ID in reply, got: %s", resp.Reply)
 	}
 }
 
@@ -1404,9 +1404,12 @@ func TestExecutor_ShowAlertsEmpty(t *testing.T) {
 	if !h.called.Load() {
 		t.Error("show alerts empty: endpoint not called")
 	}
-	// Should show 0 alerts
-	if !strings.Contains(resp.Reply, "0") {
-		t.Errorf("expected 0 in reply, got: %s", resp.Reply)
+	// Should show empty state message
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected compliance emoji in empty reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(strings.ToLower(resp.Reply), "no active") {
+		t.Errorf("expected 'no active' in empty reply, got: %s", resp.Reply)
 	}
 }
 
@@ -3828,5 +3831,182 @@ func TestExecutor_AuditLogAPIError(t *testing.T) {
 	resp := exec.Execute("show audit log", "test-token")
 	if !strings.Contains(resp.Reply, "❌") {
 		t.Errorf("expected failure, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// FORMAT FUNCTIONS — unit tests for formatting helpers
+// =====================================================================
+
+func TestFormatInstrumentsResponse_WithData(t *testing.T) {
+	raw := `{"data":[{"id":"WHT-HRW-2026M07-UB","name":"HRW Wheat Jul 2026","status":"active"},{"id":"CRN-YEL-2026M09-UB","name":"Yellow Corn Sep 2026","status":"active"}]}`
+	resp := formatInstrumentsResponse(raw)
+	if !strings.Contains(resp.Reply, "Instruments (2 total)") {
+		t.Errorf("expected count in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "WHT-HRW-2026M07-UB") {
+		t.Errorf("expected instrument ID, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "HRW Wheat Jul 2026") {
+		t.Errorf("expected instrument name, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatInstrumentsResponse_Empty(t *testing.T) {
+	raw := `{"data":[]}`
+	resp := formatInstrumentsResponse(raw)
+	if !strings.Contains(resp.Reply, "No instruments found") {
+		t.Errorf("expected empty state message, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatInstrumentsResponse_InstrumentsKey(t *testing.T) {
+	raw := `{"instruments":[{"id":"WHT-HRW-2026M07-UB","status":"active"}],"total":1}`
+	resp := formatInstrumentsResponse(raw)
+	if !strings.Contains(resp.Reply, "WHT-HRW-2026M07-UB") {
+		t.Errorf("expected instrument ID, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatCommoditiesResponse_WithData(t *testing.T) {
+	raw := `{"data":[{"id":"wht-hrw","name":"Hard Red Winter Wheat","category":"grain","unit":"bushel"},{"id":"crn-yel","name":"Yellow Corn","category":"grain","unit":"bushel"}]}`
+	resp := formatCommoditiesResponse(raw)
+	if !strings.Contains(resp.Reply, "Commodities (2 total)") {
+		t.Errorf("expected count in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "WHT-HRW") {
+		t.Errorf("expected uppercase ID, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "Hard Red Winter Wheat") {
+		t.Errorf("expected name, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatCommoditiesResponse_Empty(t *testing.T) {
+	raw := `{"data":[]}`
+	resp := formatCommoditiesResponse(raw)
+	if !strings.Contains(resp.Reply, "No commodities found") {
+		t.Errorf("expected empty state message, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatParticipantsResponse_WithData(t *testing.T) {
+	raw := `{"data":[{"id":"p1","email":"trader1@demo","status":"APPROVED","type":"individual"},{"id":"p2","email":"trader2@demo","status":"SUBMITTED","type":"corporate"}]}`
+	resp := formatParticipantsResponse(raw)
+	if !strings.Contains(resp.Reply, "Participants (2 total)") {
+		t.Errorf("expected count in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "trader1@demo") {
+		t.Errorf("expected email, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "APPROVED") {
+		t.Errorf("expected status, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatParticipantsResponse_Empty(t *testing.T) {
+	raw := `{"data":[]}`
+	resp := formatParticipantsResponse(raw)
+	if !strings.Contains(resp.Reply, "No participants found") {
+		t.Errorf("expected empty state message, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatTicketsResponse_WithData(t *testing.T) {
+	raw := `{"data":[{"id":"abc12345","title":"Login page slow","type":"bug_report","priority":"high","status":"open"},{"id":"def45678","title":"Add dark mode","type":"feature_request","priority":"low","status":"open"}]}`
+	resp := formatTicketsResponse(raw)
+	if !strings.Contains(resp.Reply, "Tickets (2 total)") {
+		t.Errorf("expected count in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "Login page slow") {
+		t.Errorf("expected ticket title, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "bug_report") {
+		t.Errorf("expected ticket type, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "high") {
+		t.Errorf("expected priority, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatTicketsResponse_Empty(t *testing.T) {
+	raw := `{"data":[]}`
+	resp := formatTicketsResponse(raw)
+	if !strings.Contains(resp.Reply, "No tickets found") {
+		t.Errorf("expected empty state message, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatAlertsResponse_WithSeverityBreakdown(t *testing.T) {
+	raw := `{"alerts":[{"id":"a1","severity":"CRITICAL"},{"id":"a2","severity":"HIGH"},{"id":"a3","severity":"HIGH"},{"id":"a4","severity":"MEDIUM"},{"id":"a5","severity":"MEDIUM"}]}`
+	resp := formatAlertsResponse(raw)
+	if !strings.Contains(resp.Reply, "5 total") {
+		t.Errorf("expected total count, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "CRITICAL: 1") {
+		t.Errorf("expected CRITICAL count, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "HIGH: 2") {
+		t.Errorf("expected HIGH count, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "MEDIUM: 2") {
+		t.Errorf("expected MEDIUM count, got: %s", resp.Reply)
+	}
+}
+
+func TestFormatMarginResponse_NilValues(t *testing.T) {
+	raw := `{}`
+	resp := formatMarginResponse(raw)
+	if strings.Contains(resp.Reply, "<nil>") {
+		t.Errorf("expected no <nil> in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "Margin Status") {
+		t.Errorf("expected 'Margin Status', got: %s", resp.Reply)
+	}
+}
+
+func TestFormatMarginResponse_WithValues(t *testing.T) {
+	raw := `{"total_active":3,"total_shortfall":"150000.00","participants_in_call":2}`
+	resp := formatMarginResponse(raw)
+	if !strings.Contains(resp.Reply, "3") {
+		t.Errorf("expected active count, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "150000") {
+		t.Errorf("expected shortfall value, got: %s", resp.Reply)
+	}
+}
+
+func TestSafeStr_Nil(t *testing.T) {
+	if safeStr(nil) != "0" {
+		t.Errorf("safeStr(nil) should return '0', got: %s", safeStr(nil))
+	}
+}
+
+func TestSafeStr_Value(t *testing.T) {
+	if safeStr("hello") != "hello" {
+		t.Errorf("safeStr('hello') should return 'hello', got: %s", safeStr("hello"))
+	}
+}
+
+func TestListCommoditiesCommand(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `{"data":[{"id":"wht-hrw","name":"Hard Red Winter Wheat","category":"grain","unit":"bushel"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "test-token")
+	if !h.called.Load() {
+		t.Error("list commodities: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🌾") {
+		t.Errorf("expected commodity emoji, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "WHT-HRW") {
+		t.Errorf("expected commodity ID, got: %s", resp.Reply)
 	}
 }

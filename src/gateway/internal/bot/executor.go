@@ -554,7 +554,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	if containsAny(lower, "list commodities", "show commodities") {
 		respBody, status := e.doRequest("GET", "/api/v1/commodities", nil, userToken)
 		if status >= 200 && status < 300 {
-			return ChatResponse{Reply: fmt.Sprintf("🌾 Commodities:\n%s", prettyJSON(respBody))}
+			return formatCommoditiesResponse(respBody)
 		}
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to list commodities: %s", respBody)}
 	}
@@ -1017,6 +1017,14 @@ func prettyJSON(raw string) string {
 	return string(b)
 }
 
+// safeStr converts an interface{} value to a string, returning "0" for nil.
+func safeStr(v interface{}) string {
+	if v == nil {
+		return "0"
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 func formatHealthResponse(raw string) ChatResponse {
 	var data struct {
 		OverallStatus string `json:"overall_status"`
@@ -1042,66 +1050,361 @@ func formatMarginResponse(raw string) ChatResponse {
 	var data map[string]interface{}
 	json.Unmarshal([]byte(raw), &data)
 	return ChatResponse{
-		Reply: fmt.Sprintf("💰 Margin Status:\n  Active calls: %v\n  Total shortfall: %v\n  Participants in call: %v",
-			data["total_active"], data["total_shortfall"], data["participants_in_call"]),
+		Reply: fmt.Sprintf("💰 Margin Status:\n  Active calls: %s\n  Total shortfall: %s\n  Participants in call: %s",
+			safeStr(data["total_active"]), safeStr(data["total_shortfall"]), safeStr(data["participants_in_call"])),
 		Actions: []Action{{Label: "Margin Calls", Type: "link", URL: "/dashboard/margin"}},
 	}
 }
 
 func formatSettlementResponse(raw string) ChatResponse {
-	var data map[string]interface{}
-	json.Unmarshal([]byte(raw), &data)
+	var wrapper struct {
+		Data []struct {
+			ID        string `json:"id"`
+			Status    string `json:"status"`
+			CreatedAt string `json:"created_at"`
+		} `json:"data"`
+		Cycles []struct {
+			ID        string `json:"id"`
+			Status    string `json:"status"`
+			CreatedAt string `json:"created_at"`
+		} `json:"cycles"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	cycles := wrapper.Data
+	if len(cycles) == 0 {
+		for _, c := range wrapper.Cycles {
+			cycles = append(cycles, struct {
+				ID        string `json:"id"`
+				Status    string `json:"status"`
+				CreatedAt string `json:"created_at"`
+			}{ID: c.ID, Status: c.Status, CreatedAt: c.CreatedAt})
+		}
+	}
+
+	if len(cycles) == 0 {
+		return ChatResponse{
+			Reply:   "⚖️ No settlement cycles found.",
+			Actions: []Action{{Label: "Settlement", Type: "link", URL: "/dashboard/settlement"}},
+		}
+	}
+
+	lines := []string{fmt.Sprintf("⚖️ Settlement Cycles (%d total):", len(cycles))}
+	for i, c := range cycles {
+		ts := c.CreatedAt
+		if len(ts) > 10 {
+			ts = ts[:10]
+		}
+		lines = append(lines, fmt.Sprintf("  %d. #%s — Status: %s, Date: %s", i+1, c.ID, strings.ToUpper(c.Status), ts))
+	}
 	return ChatResponse{
-		Reply:   fmt.Sprintf("⚖️ Settlement cycles:\n%s", prettyJSON(raw)),
+		Reply:   strings.Join(lines, "\n"),
 		Actions: []Action{{Label: "Settlement", Type: "link", URL: "/dashboard/settlement"}},
 	}
 }
 
 func formatAlertsResponse(raw string) ChatResponse {
-	var data map[string]interface{}
-	json.Unmarshal([]byte(raw), &data)
-	alerts, _ := data["alerts"].([]interface{})
-	if alerts == nil {
-		if d, ok := data["data"].([]interface{}); ok {
-			alerts = d
+	var wrapper struct {
+		Data []struct {
+			ID       string `json:"id"`
+			Severity string `json:"severity"`
+			Type     string `json:"type"`
+			Status   string `json:"status"`
+		} `json:"data"`
+		Alerts []struct {
+			ID       string `json:"id"`
+			Severity string `json:"severity"`
+			Type     string `json:"type"`
+			Status   string `json:"status"`
+		} `json:"alerts"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	type alertItem struct {
+		ID       string
+		Severity string
+		Type     string
+		Status   string
+	}
+	var alerts []alertItem
+	for _, a := range wrapper.Data {
+		alerts = append(alerts, alertItem{ID: a.ID, Severity: a.Severity, Type: a.Type, Status: a.Status})
+	}
+	for _, a := range wrapper.Alerts {
+		alerts = append(alerts, alertItem{ID: a.ID, Severity: a.Severity, Type: a.Type, Status: a.Status})
+	}
+
+	if len(alerts) == 0 {
+		return ChatResponse{
+			Reply:   "🔍 No active compliance alerts.",
+			Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
+		}
+	}
+
+	// Count by severity
+	counts := map[string]int{}
+	for _, a := range alerts {
+		sev := strings.ToUpper(a.Severity)
+		if sev == "" {
+			sev = "UNKNOWN"
+		}
+		counts[sev]++
+	}
+
+	lines := []string{fmt.Sprintf("🔍 Compliance Alerts: %d total", len(alerts))}
+	// Show severity breakdown in priority order
+	for _, sev := range []string{"CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"} {
+		if n, ok := counts[sev]; ok {
+			lines = append(lines, fmt.Sprintf("  %s: %d", sev, n))
 		}
 	}
 	return ChatResponse{
-		Reply:   fmt.Sprintf("🔍 Compliance Alerts: %d total\n%s", len(alerts), prettyJSON(raw)),
+		Reply:   strings.Join(lines, "\n"),
 		Actions: []Action{{Label: "Surveillance", Type: "link", URL: "/dashboard/surveillance"}},
 	}
 }
 
 func formatParticipantsResponse(raw string) ChatResponse {
-	var data map[string]interface{}
-	json.Unmarshal([]byte(raw), &data)
-	participants, _ := data["data"].([]interface{})
-	if participants == nil {
-		if d, ok := data["applications"].([]interface{}); ok {
-			participants = d
+	var wrapper struct {
+		Data []struct {
+			ID     string `json:"id"`
+			Email  string `json:"email"`
+			Status string `json:"status"`
+			Type   string `json:"type"`
+		} `json:"data"`
+		Applications []struct {
+			ID     string `json:"id"`
+			Email  string `json:"email"`
+			Status string `json:"status"`
+			Type   string `json:"type"`
+		} `json:"applications"`
+		Participants []struct {
+			ID     string `json:"id"`
+			Email  string `json:"email"`
+			Status string `json:"status"`
+			Type   string `json:"type"`
+		} `json:"participants"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	type pItem struct {
+		ID     string
+		Email  string
+		Status string
+		Type   string
+	}
+	var participants []pItem
+	for _, p := range wrapper.Data {
+		participants = append(participants, pItem{ID: p.ID, Email: p.Email, Status: p.Status, Type: p.Type})
+	}
+	for _, p := range wrapper.Applications {
+		participants = append(participants, pItem{ID: p.ID, Email: p.Email, Status: p.Status, Type: p.Type})
+	}
+	for _, p := range wrapper.Participants {
+		participants = append(participants, pItem{ID: p.ID, Email: p.Email, Status: p.Status, Type: p.Type})
+	}
+
+	if len(participants) == 0 {
+		return ChatResponse{
+			Reply:   "👥 No participants found.",
+			Actions: []Action{{Label: "Participants", Type: "link", URL: "/dashboard/participants"}},
 		}
 	}
+
+	lines := []string{fmt.Sprintf("👥 Participants (%d total):", len(participants))}
+	for i, p := range participants {
+		display := p.Email
+		if display == "" {
+			display = p.ID
+		}
+		line := fmt.Sprintf("  %d. %s — Status: %s", i+1, display, strings.ToUpper(p.Status))
+		if p.Type != "" {
+			line += fmt.Sprintf(", Type: %s", p.Type)
+		}
+		lines = append(lines, line)
+	}
 	return ChatResponse{
-		Reply:   fmt.Sprintf("👥 Participants: %d total\n%s", len(participants), prettyJSON(raw)),
+		Reply:   strings.Join(lines, "\n"),
 		Actions: []Action{{Label: "Participants", Type: "link", URL: "/dashboard/participants"}},
 	}
 }
 
 func formatInstrumentsResponse(raw string) ChatResponse {
-	var data interface{}
-	json.Unmarshal([]byte(raw), &data)
+	var wrapper struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			CommodityID string `json:"commodity_id"`
+			Status      string `json:"status"`
+		} `json:"data"`
+		Instruments []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			CommodityID string `json:"commodity_id"`
+			Status      string `json:"status"`
+		} `json:"instruments"`
+		Total int `json:"total"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	type instItem struct {
+		ID          string
+		Name        string
+		CommodityID string
+		Status      string
+	}
+	var instruments []instItem
+	for _, inst := range wrapper.Data {
+		instruments = append(instruments, instItem{ID: inst.ID, Name: inst.Name, CommodityID: inst.CommodityID, Status: inst.Status})
+	}
+	for _, inst := range wrapper.Instruments {
+		instruments = append(instruments, instItem{ID: inst.ID, Name: inst.Name, CommodityID: inst.CommodityID, Status: inst.Status})
+	}
+
+	if len(instruments) == 0 {
+		return ChatResponse{
+			Reply:   "📊 No instruments found. Use `create instrument <ID> <commodity> <month> <year> contract <size> tick <tick_size>` to add one.",
+			Actions: []Action{{Label: "Order Book", Type: "link", URL: "/dashboard/orderbook"}},
+		}
+	}
+
+	lines := []string{fmt.Sprintf("📊 Instruments (%d total):", len(instruments))}
+	for i, inst := range instruments {
+		desc := inst.Name
+		if desc == "" {
+			desc = inst.CommodityID
+		}
+		line := fmt.Sprintf("  %d. %s", i+1, inst.ID)
+		if desc != "" {
+			line += fmt.Sprintf(" — %s", desc)
+		}
+		if inst.Status != "" && inst.Status != "active" {
+			line += fmt.Sprintf(" [%s]", strings.ToUpper(inst.Status))
+		}
+		lines = append(lines, line)
+	}
 	return ChatResponse{
-		Reply:   fmt.Sprintf("📊 Active instruments:\n%s", prettyJSON(raw)),
+		Reply:   strings.Join(lines, "\n"),
 		Actions: []Action{{Label: "Order Book", Type: "link", URL: "/dashboard/orderbook"}},
 	}
 }
 
-func formatTicketsResponse(raw string) ChatResponse {
-	var data map[string]interface{}
-	json.Unmarshal([]byte(raw), &data)
-	tickets, _ := data["data"].([]interface{})
+func formatCommoditiesResponse(raw string) ChatResponse {
+	var wrapper struct {
+		Data []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Category string `json:"category"`
+			Unit     string `json:"unit"`
+		} `json:"data"`
+		Commodities []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Category string `json:"category"`
+			Unit     string `json:"unit"`
+		} `json:"commodities"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	type commItem struct {
+		ID       string
+		Name     string
+		Category string
+		Unit     string
+	}
+	var commodities []commItem
+	for _, c := range wrapper.Data {
+		commodities = append(commodities, commItem{ID: c.ID, Name: c.Name, Category: c.Category, Unit: c.Unit})
+	}
+	for _, c := range wrapper.Commodities {
+		commodities = append(commodities, commItem{ID: c.ID, Name: c.Name, Category: c.Category, Unit: c.Unit})
+	}
+
+	if len(commodities) == 0 {
+		return ChatResponse{
+			Reply:   "🌾 No commodities found. Use `create commodity <id> <category> <unit>` to add one.",
+			Actions: []Action{{Label: "Reference Data", Type: "link", URL: "/dashboard/orderbook"}},
+		}
+	}
+
+	lines := []string{fmt.Sprintf("🌾 Commodities (%d total):", len(commodities))}
+	for i, c := range commodities {
+		line := fmt.Sprintf("  %d. %s", i+1, strings.ToUpper(c.ID))
+		if c.Name != "" {
+			line += fmt.Sprintf(" — %s", c.Name)
+			if c.Category != "" || c.Unit != "" {
+				line += fmt.Sprintf(" (%s, %s)", c.Category, c.Unit)
+			}
+		}
+		lines = append(lines, line)
+	}
 	return ChatResponse{
-		Reply:   fmt.Sprintf("🎫 Tickets: %d total\n%s", len(tickets), prettyJSON(raw)),
+		Reply:   strings.Join(lines, "\n"),
+		Actions: []Action{{Label: "Reference Data", Type: "link", URL: "/dashboard/orderbook"}},
+	}
+}
+
+func formatTicketsResponse(raw string) ChatResponse {
+	var wrapper struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Type        string `json:"type"`
+			Priority    string `json:"priority"`
+			Status      string `json:"status"`
+		} `json:"data"`
+		Tickets []struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Type        string `json:"type"`
+			Priority    string `json:"priority"`
+			Status      string `json:"status"`
+		} `json:"tickets"`
+	}
+	json.Unmarshal([]byte(raw), &wrapper)
+
+	type ticketItem struct {
+		ID       string
+		Title    string
+		Type     string
+		Priority string
+		Status   string
+	}
+	var tickets []ticketItem
+	for _, t := range wrapper.Data {
+		tickets = append(tickets, ticketItem{ID: t.ID, Title: t.Title, Type: t.Type, Priority: t.Priority, Status: t.Status})
+	}
+	for _, t := range wrapper.Tickets {
+		tickets = append(tickets, ticketItem{ID: t.ID, Title: t.Title, Type: t.Type, Priority: t.Priority, Status: t.Status})
+	}
+
+	if len(tickets) == 0 {
+		return ChatResponse{
+			Reply:   "🎫 No tickets found. Use `report a bug: <description>` to create one.",
+			Actions: []Action{{Label: "Tickets", Type: "link", URL: "/dashboard/tickets"}},
+		}
+	}
+
+	lines := []string{fmt.Sprintf("🎫 Tickets (%d total):", len(tickets))}
+	for i, t := range tickets {
+		shortID := t.ID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		line := fmt.Sprintf("  %d. #%s — %s", i+1, shortID, t.Title)
+		if t.Type != "" {
+			line += fmt.Sprintf(" [%s]", t.Type)
+		}
+		if t.Priority != "" {
+			line += fmt.Sprintf(" Priority: %s", t.Priority)
+		}
+		if t.Status != "" {
+			line += fmt.Sprintf(", Status: %s", t.Status)
+		}
+		lines = append(lines, line)
+	}
+	return ChatResponse{
+		Reply:   strings.Join(lines, "\n"),
 		Actions: []Action{{Label: "Tickets", Type: "link", URL: "/dashboard/tickets"}},
 	}
 }
