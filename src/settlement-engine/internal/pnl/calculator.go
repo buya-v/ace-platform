@@ -10,10 +10,10 @@ import (
 
 // Calculator computes daily mark-to-market P&L (variation margin) for positions.
 type Calculator struct {
-	priceStore *valuation.Store
+	priceStore valuation.PriceStore
 }
 
-func NewCalculator(priceStore *valuation.Store) *Calculator {
+func NewCalculator(priceStore valuation.PriceStore) *Calculator {
 	return &Calculator{priceStore: priceStore}
 }
 

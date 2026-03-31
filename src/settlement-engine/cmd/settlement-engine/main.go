@@ -5,12 +5,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 
 	"github.com/garudax-platform/settlement-engine/internal/engine"
 	"github.com/garudax-platform/settlement-engine/internal/payment"
 	"github.com/garudax-platform/settlement-engine/internal/server"
+	"github.com/garudax-platform/settlement-engine/internal/store"
 	"github.com/garudax-platform/settlement-engine/internal/types"
 	"github.com/garudax-platform/settlement-engine/internal/valuation"
 )
@@ -28,9 +30,35 @@ func main() {
 	log.Println("GarudaX Settlement Engine starting...")
 
 	cfg := server.ConfigFromEnv()
-	priceStore := valuation.NewStore()
 	idGen := &seqIDGen{}
 	gateway := payment.NewInMemoryGateway()
+
+	var priceStore valuation.PriceStore
+
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		dbPort := 5432
+		if v := os.Getenv("DB_PORT"); v != "" {
+			if p, err := strconv.Atoi(v); err == nil {
+				dbPort = p
+			}
+		}
+		dbUser := envOrDefault("DB_USER", "settlement")
+		dbPass := envOrDefault("DB_PASSWORD", "")
+		dbName := envOrDefault("DB_NAME", "garudax")
+		dbSSL := envOrDefault("DB_SSLMODE", "disable")
+
+		db, err := store.OpenDB(dbHost, dbPort, dbUser, dbPass, dbName, dbSSL)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		defer db.Close()
+
+		priceStore = store.NewPostgresPriceStore(db)
+		log.Printf("Using PostgreSQL store at %s:%d/%s", dbHost, dbPort, dbName)
+	} else {
+		priceStore = valuation.NewStore()
+		log.Println("Using in-memory store (set DB_HOST for PostgreSQL)")
+	}
 
 	eng := engine.NewEngine(priceStore, idGen, gateway)
 
@@ -63,4 +91,11 @@ func main() {
 	sig := <-sigCh
 	log.Printf("Received signal %s, shutting down...", sig)
 	lis.Close()
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

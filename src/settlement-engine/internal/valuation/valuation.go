@@ -13,6 +13,13 @@ type PriceSource interface {
 	GetSettlementPrice(instrumentID string) (types.Decimal, error)
 }
 
+// PriceStore is the interface for settlement price storage.
+// Both in-memory Store and PostgreSQL-backed stores implement this.
+type PriceStore interface {
+	SetSettlementPrice(instrumentID string, date time.Time, price types.Decimal)
+	GetSettlementPrice(instrumentID string, date time.Time) (types.SettlementPrice, error)
+}
+
 // Store manages settlement prices across settlement dates.
 type Store struct {
 	mu     sync.RWMutex

@@ -24,7 +24,7 @@ type CycleHandler func(cycle types.SettlementCycle)
 type Engine struct {
 	mu sync.Mutex
 
-	priceStore    *valuation.Store
+	priceStore    valuation.PriceStore
 	pnlCalc       *pnl.Calculator
 	generator     *settlement.Generator
 	processor     *payment.Processor
@@ -36,7 +36,7 @@ type Engine struct {
 
 // NewEngine creates a new settlement engine.
 func NewEngine(
-	priceStore *valuation.Store,
+	priceStore valuation.PriceStore,
 	idGen types.IDGenerator,
 	gateway payment.Gateway,
 ) *Engine {
@@ -144,7 +144,7 @@ func (e *Engine) GetAllCycles() []types.SettlementCycle {
 }
 
 // GetPriceStore returns the price store for setting settlement prices.
-func (e *Engine) GetPriceStore() *valuation.Store {
+func (e *Engine) GetPriceStore() valuation.PriceStore {
 	return e.priceStore
 }
 
