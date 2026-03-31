@@ -17,6 +17,9 @@ import {
   BookIcon,
   AlertIcon,
   ChartBarIcon,
+  EyeIcon,
+  DollarIcon as FeeIcon,
+  FileTextIcon,
 } from './icons';
 import styles from './Sidebar.module.css';
 
@@ -37,6 +40,9 @@ const operationsNav: NavItem[] = [
   { label: 'Circuit Breakers', path: '/dashboard/circuit-breakers', adminOnly: true, icon: ShieldIcon },
   { label: 'Warehouse', path: '/dashboard/warehouse', adminOnly: true, icon: BoxIcon },
   { label: 'Market Phase', path: '/dashboard/market-phase', adminOnly: true, icon: ShieldIcon },
+  { label: 'Surveillance', path: '/dashboard/surveillance', adminOnly: true, icon: EyeIcon },
+  { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
+  { label: 'Reports', path: '/dashboard/reports', adminOnly: true, icon: FileTextIcon },
 ];
 
 const complianceNav: NavItem[] = [

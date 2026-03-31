@@ -198,6 +198,26 @@ export function ChartBarIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function EyeIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+      <circle cx="8" cy="8" r="2.5" />
+    </svg>
+  );
+}
+
+export function FileTextIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M9 1H4a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V5L9 1z" />
+      <polyline points="9,1 9,5 13,5" />
+      <line x1="5.5" y1="8" x2="10.5" y2="8" />
+      <line x1="5.5" y1="11" x2="10.5" y2="11" />
+    </svg>
+  );
+}
+
 export function InfoIcon({ size = 16, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>

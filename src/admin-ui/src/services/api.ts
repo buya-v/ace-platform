@@ -292,6 +292,49 @@ export function massCancel() {
   return apiFetch<void>('/admin/mass-cancel', { method: 'POST' });
 }
 
+// Surveillance
+export function fetchSurveillanceAlerts(params?: { severity?: string; status?: string }, signal?: AbortSignal) {
+  const qs = new URLSearchParams();
+  if (params?.severity) qs.set('severity', params.severity);
+  if (params?.status) qs.set('status', params.status);
+  const query = qs.toString();
+  return apiFetch<import('../types').ApiResponse<import('../pages/Surveillance').SurveillanceAlert[]>>(
+    `/compliance/surveillance/alerts${query ? `?${query}` : ''}`,
+    {},
+    signal,
+  );
+}
+
+export function resolveSurveillanceAlert(alertId: string) {
+  return apiFetch<void>(`/compliance/surveillance/alerts/${alertId}/resolve`, { method: 'POST' });
+}
+
+// Fee Management
+export function fetchFeeSchedule(signal?: AbortSignal) {
+  return apiFetch<import('../types').ApiResponse<import('../pages/FeeManagement').FeeRule[]>>(
+    '/admin/fees',
+    {},
+    signal,
+  );
+}
+
+// Reports
+export function fetchMarketSummaryReport(date: string, signal?: AbortSignal) {
+  return apiFetch<import('../types').ApiResponse<import('../pages/Reports').MarketSummaryRow[]>>(
+    `/admin/reports/market-summary?date=${encodeURIComponent(date)}`,
+    {},
+    signal,
+  );
+}
+
+export function fetchLargeTraderReport(date: string, signal?: AbortSignal) {
+  return apiFetch<import('../types').ApiResponse<import('../pages/Reports').LargeTraderRow[]>>(
+    `/admin/reports/large-traders?date=${encodeURIComponent(date)}`,
+    {},
+    signal,
+  );
+}
+
 // Audit
 export function fetchAuditTrail(params?: { actor?: string; action?: string; from?: string; to?: string; page?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();

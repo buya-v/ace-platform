@@ -17,6 +17,9 @@ import { OrderBookPage } from './pages/OrderBook';
 import { PositionsPage } from './pages/Positions';
 import { RiskOverviewPage } from './pages/RiskOverview';
 import { MarketPhasePage } from './pages/MarketPhase';
+import { SurveillancePage } from './pages/Surveillance';
+import { FeeManagementPage } from './pages/FeeManagement';
+import { ReportsPage } from './pages/Reports';
 
 const ADMIN_ROLES = ['admin', 'exchange_admin'];
 
@@ -39,6 +42,9 @@ export function App() {
               <Route path="circuit-breakers" element={<CircuitBreakersPage />} />
               <Route path="warehouse" element={<WarehouseOverviewPage />} />
               <Route path="market-phase" element={<MarketPhasePage />} />
+              <Route path="surveillance" element={<SurveillancePage />} />
+              <Route path="fees" element={<FeeManagementPage />} />
+              <Route path="reports" element={<ReportsPage />} />
             </Route>
             {/* Admin + compliance routes */}
             <Route path="participants" element={<ParticipantsPage />} />
