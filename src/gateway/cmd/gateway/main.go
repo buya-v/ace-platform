@@ -13,10 +13,12 @@ import (
 	"github.com/garudax-platform/gateway/internal/auth"
 	"github.com/garudax-platform/gateway/internal/bot"
 	"github.com/garudax-platform/gateway/internal/config"
+	"github.com/garudax-platform/gateway/internal/fees"
 	"github.com/garudax-platform/gateway/internal/handler"
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/observability"
 	"github.com/garudax-platform/gateway/internal/proxy"
+	"github.com/garudax-platform/gateway/internal/refdata"
 	"github.com/garudax-platform/gateway/internal/reporting"
 	"github.com/garudax-platform/gateway/internal/router"
 	"github.com/garudax-platform/gateway/internal/tickets"
@@ -60,6 +62,20 @@ func main() {
 	// Uses InMemoryStore by default; PgStore when DATABASE_URL is configured.
 	ticketHandlers := tickets.NewHandlers(tickets.NewInMemoryStore())
 	ticketHandlers.RegisterRoutes(rt)
+
+	// Register reference data routes (commodities, instruments — public read + admin write).
+	// Uses in-memory fallback store when DATABASE_URL is not set.
+	refdataStore := refdata.NewPgStore(nil) // nil db → in-memory session fallback
+	refdataHandlers := refdata.NewHandlers(refdataStore)
+	refdataHandlers.RegisterRoutes(rt)
+	refdataHandlers.RegisterAdminRoutes(rt)
+
+	// Register fee routes (schedules, rules, tiers — authenticated read + admin write).
+	// Uses in-memory fallback store when DATABASE_URL is not set.
+	feesStore := fees.NewPgStore(nil) // nil db → in-memory session fallback
+	feesHandlers := fees.NewHandlers(feesStore)
+	feesHandlers.RegisterRoutes(rt)
+	feesHandlers.RegisterAdminRoutes(rt)
 
 	// Register bot chat routes (AI assistant proxy to orchestrator)
 	// BOT_ORCHESTRATOR_URL env var configures the orchestrator; empty = fallback mode

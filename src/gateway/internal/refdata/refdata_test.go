@@ -1,6 +1,7 @@
 package refdata
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/garudax-platform/gateway/internal/auth"
+	"github.com/garudax-platform/gateway/internal/middleware"
 )
 
 // mockStore implements Store for testing.
@@ -49,6 +53,35 @@ func (m *mockStore) GetInstrument(_ context.Context, id string) (*InstrumentDeta
 		return m.detail, nil
 	}
 	return nil, nil
+}
+
+func (m *mockStore) CreateInstrument(_ context.Context, input InstrumentInput) (*Instrument, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &Instrument{ID: input.ID, CommodityID: input.CommodityID, Name: input.Name,
+		ContractSize: input.ContractSize, TickSize: input.TickSize,
+		Currency: input.Currency, SettlementType: input.SettlementType,
+		Status: "active"}, nil
+}
+
+func (m *mockStore) UpdateInstrument(_ context.Context, id string, _ map[string]interface{}) (*Instrument, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	for i := range m.instruments {
+		if m.instruments[i].ID == id {
+			return &m.instruments[i], nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockStore) CreateCommodity(_ context.Context, input CommodityInput) (*Commodity, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &Commodity{ID: input.ID, Name: input.Name, Category: input.Category, Unit: input.Unit}, nil
 }
 
 // --- Commodity fixtures ---
@@ -442,5 +475,244 @@ func TestWriteError_Format(t *testing.T) {
 	}
 	if resp["error"]["message"] != "test not found" {
 		t.Errorf("error.message = %q, want %q", resp["error"]["message"], "test not found")
+	}
+}
+
+// --- Admin handler tests ---
+
+func adminClaims() *auth.Claims {
+	return &auth.Claims{
+		Sub:           "admin-user",
+		ParticipantID: "P-ADMIN",
+		Roles:         []string{"exchange_admin"},
+		ExpiresAt:     time.Now().Add(time.Hour).Unix(),
+	}
+}
+
+func withAdminContext(r *http.Request) *http.Request {
+	ctx := context.WithValue(r.Context(), middleware.ClaimsContextKey, adminClaims())
+	return r.WithContext(ctx)
+}
+
+func TestCreateInstrument_Success(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"commodity_id":"WHT-HRW","name":"Wheat Jul 2026","delivery_month":7,"delivery_year":2026,"contract_size":"50","tick_size":"0.25","currency":"MNT","settlement_type":"physical"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/instruments", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateInstrument(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var resp map[string]json.RawMessage
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp["data"]; !ok {
+		t.Error("response missing 'data' field")
+	}
+}
+
+func TestCreateInstrument_MissingFields(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"commodity_id":"WHT-HRW"}` // missing name, currency etc.
+	req := httptest.NewRequest("POST", "/api/v1/admin/instruments", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateInstrument(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateInstrument_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"commodity_id":"WHT-HRW","name":"Wheat Jul","contract_size":"50","tick_size":"0.25","currency":"MNT"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/instruments", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	h.CreateInstrument(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCreateInstrument_StoreError(t *testing.T) {
+	h := NewHandlers(&mockStore{err: errors.New("db down")})
+	body := `{"commodity_id":"WHT-HRW","name":"Wheat Jul","contract_size":"50","tick_size":"0.25","currency":"MNT","settlement_type":"physical"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/instruments", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateInstrument(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestCreateInstrument_AutoID(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	// No id field → should auto-generate
+	body := `{"commodity_id":"WHT-HRW","name":"Wheat Jul","delivery_month":7,"delivery_year":2026,"contract_size":"50","tick_size":"0.25","currency":"MNT","settlement_type":"physical"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/instruments", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateInstrument(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	var resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Data.ID == "" {
+		t.Error("expected auto-generated id, got empty string")
+	}
+}
+
+func TestUpdateInstrument_Success(t *testing.T) {
+	instruments := sampleInstruments()
+	h := NewHandlers(&mockStore{instruments: instruments})
+	body := `{"status":"suspended"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/instruments/WHT-HRW-2026M07-UB?id=WHT-HRW-2026M07-UB", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateInstrument(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestUpdateInstrument_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"status":"suspended"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/instruments/INST-1?id=INST-1", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	h.UpdateInstrument(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestUpdateInstrument_MissingID(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"status":"suspended"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/instruments/", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateInstrument(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestUpdateInstrument_EmptyBody(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/instruments/INST-1?id=INST-1", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateInstrument(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateCommodity_Success(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"name":"Rice","category":"grain","unit":"MT"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/commodities", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateCommodity(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var resp map[string]json.RawMessage
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp["data"]; !ok {
+		t.Error("response missing 'data' field")
+	}
+}
+
+func TestCreateCommodity_MissingFields(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"name":"Rice"}` // missing category, unit
+	req := httptest.NewRequest("POST", "/api/v1/admin/commodities", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateCommodity(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateCommodity_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"name":"Rice","category":"grain","unit":"MT"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/commodities", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	h.CreateCommodity(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCreateCommodity_AutoID(t *testing.T) {
+	h := NewHandlers(&mockStore{})
+	body := `{"name":"Cotton","category":"fiber","unit":"bale"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/commodities", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateCommodity(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	var resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Data.ID == "" {
+		t.Error("expected auto-generated id, got empty")
+	}
+}
+
+func TestCreateCommodity_StoreError(t *testing.T) {
+	h := NewHandlers(&mockStore{err: errors.New("db down")})
+	body := `{"name":"Cotton","category":"fiber","unit":"bale"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/commodities", bytes.NewBufferString(body))
+	req = withAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateCommodity(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }

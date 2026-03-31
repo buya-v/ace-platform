@@ -1,6 +1,8 @@
 package fees
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 
@@ -24,9 +26,16 @@ func (h *Handlers) RegisterRoutes(rt *router.Router) {
 	rt.Handle("GET", "/api/v1/fees/schedule", h.ListActiveSchedules)
 	rt.Handle("GET", "/api/v1/fees/my-fees", h.GetMyFees)
 
-	// Admin-only routes
+	// Admin-only read routes
 	rt.Handle("GET", "/api/v1/admin/fees", h.ListAllSchedules)
 	rt.Handle("POST", "/api/v1/admin/fees/rules", h.CreateFeeRule)
+}
+
+// RegisterAdminRoutes registers additional admin write routes for fee management.
+func (h *Handlers) RegisterAdminRoutes(rt *router.Router) {
+	rt.Handle("POST", "/api/v1/admin/fees/schedules", h.CreateSchedule)
+	rt.Handle("PUT", "/api/v1/admin/fees/rules/{id}", h.UpdateFeeRule)
+	rt.Handle("PUT", "/api/v1/admin/fees/tiers/{participant_id}", h.SetParticipantTier)
 }
 
 // ListActiveSchedules handles GET /api/v1/fees/schedule.
@@ -191,6 +200,126 @@ func (h *Handlers) CreateFeeRule(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"data": rule,
+	})
+}
+
+// CreateSchedule handles POST /api/v1/admin/fees/schedules.
+// Creates a new fee schedule. Requires admin or exchange_admin role.
+func (h *Handlers) CreateSchedule(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil || !claims.HasAnyRole("admin", "exchange_admin") {
+		writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "Admin role required")
+		return
+	}
+
+	var input FeeScheduleInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Invalid request body")
+		return
+	}
+
+	if input.Name == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing name")
+		return
+	}
+
+	if input.ID == "" {
+		b := make([]byte, 8)
+		rand.Read(b) //nolint:errcheck
+		input.ID = "SCHED-" + hex.EncodeToString(b)
+	}
+	if input.Status == "" {
+		input.Status = "ACTIVE"
+	}
+
+	schedule, err := h.store.CreateSchedule(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create fee schedule")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"data": schedule,
+	})
+}
+
+// UpdateFeeRule handles PUT /api/v1/admin/fees/rules/{id}.
+// Applies a partial update to an existing fee rule. Requires admin or exchange_admin role.
+func (h *Handlers) UpdateFeeRule(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil || !claims.HasAnyRole("admin", "exchange_admin") {
+		writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "Admin role required")
+		return
+	}
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing rule id")
+		return
+	}
+
+	var updates FeeRuleUpdate
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Invalid request body")
+		return
+	}
+
+	rule, err := h.store.UpdateRule(r.Context(), id, updates)
+	if err != nil {
+		if err.Error() == "fee rule not found" {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "Fee rule not found")
+			return
+		}
+		if err.Error() == "no updatable fields provided" {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "No fields to update")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update fee rule")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data": rule,
+	})
+}
+
+// SetParticipantTier handles PUT /api/v1/admin/fees/tiers/{participant_id}.
+// Upserts a participant's fee tier. Requires admin or exchange_admin role.
+func (h *Handlers) SetParticipantTier(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil || !claims.HasAnyRole("admin", "exchange_admin") {
+		writeError(w, http.StatusForbidden, "PERMISSION_DENIED", "Admin role required")
+		return
+	}
+
+	participantID := r.URL.Query().Get("participant_id")
+	if participantID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing participant_id")
+		return
+	}
+
+	var body struct {
+		Tier string `json:"tier"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Invalid request body")
+		return
+	}
+	if body.Tier == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing tier")
+		return
+	}
+
+	if err := h.store.SetParticipantTier(r.Context(), participantID, body.Tier); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to set participant tier")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]string{
+			"participant_id": participantID,
+			"tier":           body.Tier,
+		},
 	})
 }
 

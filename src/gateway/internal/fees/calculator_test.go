@@ -396,6 +396,35 @@ func (m *mockFeeStore) ListFeeTransactions(_ context.Context, _, _, _ string) ([
 	return m.transactions, nil
 }
 
+func (m *mockFeeStore) CreateSchedule(_ context.Context, input FeeScheduleInput) (*FeeSchedule, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &FeeSchedule{ID: input.ID, Name: input.Name, Status: input.Status}, nil
+}
+
+func (m *mockFeeStore) UpdateRule(_ context.Context, id string, updates FeeRuleUpdate) (*FeeRule, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	for _, rules := range m.rules {
+		for i := range rules {
+			if rules[i].ID == id {
+				rule := rules[i]
+				if updates.RateBPS != nil {
+					rule.RateBPS = *updates.RateBPS
+				}
+				return &rule, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockFeeStore) SetParticipantTier(_ context.Context, _ string, _ string) error {
+	return m.err
+}
+
 func sampleSchedules() []FeeSchedule {
 	return []FeeSchedule{
 		{
@@ -866,5 +895,245 @@ func TestRegisterRoutes(t *testing.T) {
 	routes := rt.GetRoutes()
 	if len(routes) != 4 {
 		t.Errorf("registered %d routes, want 4", len(routes))
+	}
+}
+
+func TestRegisterAdminRoutes(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	rt := router.New()
+	h.RegisterAdminRoutes(rt)
+
+	routes := rt.GetRoutes()
+	if len(routes) != 3 {
+		t.Errorf("registered %d admin routes, want 3", len(routes))
+	}
+}
+
+// --- Admin fee handler tests ---
+
+func feeAdminClaims() *auth.Claims {
+	return &auth.Claims{
+		Sub:           "fee-admin",
+		ParticipantID: "P-ADMIN",
+		Roles:         []string{"admin"},
+		ExpiresAt:     time.Now().Add(time.Hour).Unix(),
+	}
+}
+
+func withFeeAdminContext(r *http.Request) *http.Request {
+	ctx := context.WithValue(r.Context(), middleware.ClaimsContextKey, feeAdminClaims())
+	return r.WithContext(ctx)
+}
+
+func TestCreateSchedule_Success(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"name":"Q2 2026 Tariffs","effective_from":"2026-04-01T00:00:00Z","status":"ACTIVE"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/fees/schedules", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateSchedule(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var resp map[string]json.RawMessage
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp["data"]; !ok {
+		t.Error("response missing 'data' field")
+	}
+}
+
+func TestCreateSchedule_MissingName(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"status":"ACTIVE"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/fees/schedules", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateSchedule(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateSchedule_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"name":"Q2 2026 Tariffs"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/fees/schedules", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.CreateSchedule(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestCreateSchedule_AutoID(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"name":"Auto ID Test"}` // no id field
+	req := httptest.NewRequest("POST", "/api/v1/admin/fees/schedules", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateSchedule(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+func TestCreateSchedule_StoreError(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{err: errors.New("db down")})
+	body := `{"name":"Q2 Tariffs"}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/fees/schedules", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.CreateSchedule(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestUpdateFeeRule_Success(t *testing.T) {
+	store := &mockFeeStore{rules: sampleFeeRules()}
+	h := NewHandlers(store)
+	rate := 12.5
+	body, _ := json.Marshal(FeeRuleUpdate{RateBPS: &rate})
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/rules/farmer-trading?id=farmer-trading", strings.NewReader(string(body)))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateFeeRule(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestUpdateFeeRule_MissingID(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	rate := 12.5
+	body, _ := json.Marshal(FeeRuleUpdate{RateBPS: &rate})
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/rules/", strings.NewReader(string(body)))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateFeeRule(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestUpdateFeeRule_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	rate := 12.5
+	body, _ := json.Marshal(FeeRuleUpdate{RateBPS: &rate})
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/rules/farmer-trading?id=farmer-trading", strings.NewReader(string(body)))
+	rec := httptest.NewRecorder()
+
+	h.UpdateFeeRule(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestUpdateFeeRule_StoreError(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{err: errors.New("db down")})
+	rate := 12.5
+	body, _ := json.Marshal(FeeRuleUpdate{RateBPS: &rate})
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/rules/farmer-trading?id=farmer-trading", strings.NewReader(string(body)))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.UpdateFeeRule(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestSetParticipantTier_Success(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"tier":"hedger"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/tiers/P-001?participant_id=P-001", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.SetParticipantTier(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp struct {
+		Data struct {
+			ParticipantID string `json:"participant_id"`
+			Tier          string `json:"tier"`
+		} `json:"data"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.Data.Tier != "hedger" {
+		t.Errorf("tier = %q, want hedger", resp.Data.Tier)
+	}
+}
+
+func TestSetParticipantTier_MissingParticipantID(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"tier":"hedger"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/tiers/", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.SetParticipantTier(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSetParticipantTier_MissingTier(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/tiers/P-001?participant_id=P-001", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.SetParticipantTier(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSetParticipantTier_NoAuth(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{})
+	body := `{"tier":"hedger"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/tiers/P-001?participant_id=P-001", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.SetParticipantTier(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestSetParticipantTier_StoreError(t *testing.T) {
+	h := NewHandlers(&mockFeeStore{err: errors.New("db down")})
+	body := `{"tier":"hedger"}`
+	req := httptest.NewRequest("PUT", "/api/v1/admin/fees/tiers/P-001?participant_id=P-001", strings.NewReader(body))
+	req = withFeeAdminContext(req)
+	rec := httptest.NewRecorder()
+
+	h.SetParticipantTier(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }

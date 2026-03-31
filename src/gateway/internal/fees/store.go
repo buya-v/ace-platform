@@ -3,6 +3,8 @@ package fees
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"sync"
 	"time"
 )
 
@@ -50,6 +52,37 @@ type ParticipantTier struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// FeeScheduleInput holds fields for creating a new fee schedule.
+type FeeScheduleInput struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	EffectiveFrom string  `json:"effective_from"`
+	EffectiveTo   *string `json:"effective_to,omitempty"`
+	Status        string  `json:"status"`
+}
+
+// FeeRuleUpdate holds fields that may be updated on an existing fee rule.
+type FeeRuleUpdate struct {
+	InstrumentPattern *string  `json:"instrument_pattern,omitempty"`
+	ParticipantTier   *string  `json:"participant_tier,omitempty"`
+	RateBPS           *float64 `json:"rate_bps,omitempty"`
+	MinFee            *float64 `json:"min_fee,omitempty"`
+	MaxFee            *float64 `json:"max_fee,omitempty"`
+	PerContractFee    *float64 `json:"per_contract_fee,omitempty"`
+}
+
+// inMemoryFeeStore is the session-scoped fallback when no DATABASE_URL is set.
+var inMemoryFeeStore = struct {
+	mu        sync.RWMutex
+	schedules map[string]*FeeSchedule
+	rules     map[string]*FeeRule
+	tiers     map[string]string // participantID → tier
+}{
+	schedules: make(map[string]*FeeSchedule),
+	rules:     make(map[string]*FeeRule),
+	tiers:     make(map[string]string),
+}
+
 // Store defines the interface for fee data access.
 type Store interface {
 	ListActiveSchedules(ctx context.Context) ([]FeeSchedule, error)
@@ -59,6 +92,9 @@ type Store interface {
 	CreateRule(ctx context.Context, rule FeeRule) error
 	GetParticipantTier(ctx context.Context, participantID string) (string, error)
 	ListFeeTransactions(ctx context.Context, participantID, from, to string) ([]FeeTransaction, error)
+	CreateSchedule(ctx context.Context, input FeeScheduleInput) (*FeeSchedule, error)
+	UpdateRule(ctx context.Context, id string, updates FeeRuleUpdate) (*FeeRule, error)
+	SetParticipantTier(ctx context.Context, participantID, tier string) error
 }
 
 // PgStore implements Store using PostgreSQL.
@@ -201,6 +237,203 @@ func (s *PgStore) ListFeeTransactions(ctx context.Context, participantID, from, 
 		txns = append(txns, t)
 	}
 	return txns, rows.Err()
+}
+
+// CreateSchedule inserts a new fee schedule.
+// Falls back to an in-memory store when no DB connection is available.
+func (s *PgStore) CreateSchedule(ctx context.Context, input FeeScheduleInput) (*FeeSchedule, error) {
+	if s.db == nil {
+		return inMemoryCreateSchedule(input), nil
+	}
+	now := time.Now().UTC()
+	status := input.Status
+	if status == "" {
+		status = "ACTIVE"
+	}
+	effectiveFrom := now
+	if input.EffectiveFrom != "" {
+		if t, err := time.Parse(time.RFC3339, input.EffectiveFrom); err == nil {
+			effectiveFrom = t
+		}
+	}
+	var effectiveTo *time.Time
+	if input.EffectiveTo != nil {
+		if t, err := time.Parse(time.RFC3339, *input.EffectiveTo); err == nil {
+			effectiveTo = &t
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO fees.fee_schedules (id, name, effective_from, effective_to, status)
+		VALUES ($1, $2, $3, $4, $5)
+	`, input.ID, input.Name, effectiveFrom, effectiveTo, status)
+	if err != nil {
+		return nil, err
+	}
+	return &FeeSchedule{
+		ID:            input.ID,
+		Name:          input.Name,
+		EffectiveFrom: effectiveFrom,
+		EffectiveTo:   effectiveTo,
+		Status:        status,
+		CreatedAt:     now,
+	}, nil
+}
+
+func inMemoryCreateSchedule(input FeeScheduleInput) *FeeSchedule {
+	now := time.Now().UTC()
+	status := input.Status
+	if status == "" {
+		status = "ACTIVE"
+	}
+	effectiveFrom := now
+	if input.EffectiveFrom != "" {
+		if t, err := time.Parse(time.RFC3339, input.EffectiveFrom); err == nil {
+			effectiveFrom = t
+		}
+	}
+	sched := &FeeSchedule{
+		ID:            input.ID,
+		Name:          input.Name,
+		EffectiveFrom: effectiveFrom,
+		Status:        status,
+		CreatedAt:     now,
+	}
+	inMemoryFeeStore.mu.Lock()
+	inMemoryFeeStore.schedules[sched.ID] = sched
+	inMemoryFeeStore.mu.Unlock()
+	return sched
+}
+
+// UpdateRule applies a partial update to an existing fee rule.
+// Falls back to an in-memory store when no DB connection is available.
+func (s *PgStore) UpdateRule(ctx context.Context, id string, updates FeeRuleUpdate) (*FeeRule, error) {
+	if s.db == nil {
+		return inMemoryUpdateRule(id, updates)
+	}
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+	if updates.InstrumentPattern != nil {
+		setClauses = append(setClauses, fmt.Sprintf("instrument_pattern = $%d", argIdx))
+		args = append(args, *updates.InstrumentPattern)
+		argIdx++
+	}
+	if updates.ParticipantTier != nil {
+		setClauses = append(setClauses, fmt.Sprintf("participant_tier = $%d", argIdx))
+		args = append(args, *updates.ParticipantTier)
+		argIdx++
+	}
+	if updates.RateBPS != nil {
+		setClauses = append(setClauses, fmt.Sprintf("rate_bps = $%d", argIdx))
+		args = append(args, *updates.RateBPS)
+		argIdx++
+	}
+	if updates.MinFee != nil {
+		setClauses = append(setClauses, fmt.Sprintf("min_fee = $%d", argIdx))
+		args = append(args, *updates.MinFee)
+		argIdx++
+	}
+	if updates.MaxFee != nil {
+		setClauses = append(setClauses, fmt.Sprintf("max_fee = $%d", argIdx))
+		args = append(args, *updates.MaxFee)
+		argIdx++
+	}
+	if updates.PerContractFee != nil {
+		setClauses = append(setClauses, fmt.Sprintf("per_contract_fee = $%d", argIdx))
+		args = append(args, *updates.PerContractFee)
+		argIdx++
+	}
+	if len(setClauses) == 0 {
+		return nil, fmt.Errorf("no updatable fields provided")
+	}
+	args = append(args, id)
+	query := fmt.Sprintf(
+		"UPDATE fees.fee_rules SET %s WHERE id = $%d",
+		joinFeeStrings(setClauses, ", "), argIdx,
+	)
+	result, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return nil, fmt.Errorf("fee rule not found")
+	}
+	// Fetch updated row
+	var rule FeeRule
+	var maxFee sql.NullFloat64
+	err = s.db.QueryRowContext(ctx, `
+		SELECT id, schedule_id, fee_type, instrument_pattern, participant_tier,
+		       rate_bps, min_fee, max_fee, per_contract_fee, created_at
+		FROM fees.fee_rules WHERE id = $1
+	`, id).Scan(&rule.ID, &rule.ScheduleID, &rule.FeeType, &rule.InstrumentPattern,
+		&rule.ParticipantTier, &rule.RateBPS, &rule.MinFee, &maxFee,
+		&rule.PerContractFee, &rule.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if maxFee.Valid {
+		rule.MaxFee = &maxFee.Float64
+	}
+	return &rule, nil
+}
+
+func inMemoryUpdateRule(id string, updates FeeRuleUpdate) (*FeeRule, error) {
+	inMemoryFeeStore.mu.Lock()
+	defer inMemoryFeeStore.mu.Unlock()
+	rule, ok := inMemoryFeeStore.rules[id]
+	if !ok {
+		return nil, fmt.Errorf("fee rule not found")
+	}
+	if updates.InstrumentPattern != nil {
+		rule.InstrumentPattern = *updates.InstrumentPattern
+	}
+	if updates.ParticipantTier != nil {
+		rule.ParticipantTier = *updates.ParticipantTier
+	}
+	if updates.RateBPS != nil {
+		rule.RateBPS = *updates.RateBPS
+	}
+	if updates.MinFee != nil {
+		rule.MinFee = *updates.MinFee
+	}
+	if updates.MaxFee != nil {
+		rule.MaxFee = updates.MaxFee
+	}
+	if updates.PerContractFee != nil {
+		rule.PerContractFee = *updates.PerContractFee
+	}
+	return rule, nil
+}
+
+// SetParticipantTier upserts a participant's fee tier.
+// Falls back to an in-memory store when no DB connection is available.
+func (s *PgStore) SetParticipantTier(ctx context.Context, participantID, tier string) error {
+	if s.db == nil {
+		inMemoryFeeStore.mu.Lock()
+		inMemoryFeeStore.tiers[participantID] = tier
+		inMemoryFeeStore.mu.Unlock()
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO fees.participant_tiers (participant_id, tier, volume_30d, updated_at)
+		VALUES ($1, $2, 0, NOW())
+		ON CONFLICT (participant_id) DO UPDATE
+		  SET tier = EXCLUDED.tier, updated_at = NOW()
+	`, participantID, tier)
+	return err
+}
+
+// joinFeeStrings joins strings with a separator.
+func joinFeeStrings(parts []string, sep string) string {
+	result := ""
+	for i, p := range parts {
+		if i > 0 {
+			result += sep
+		}
+		result += p
+	}
+	return result
 }
 
 func scanSchedules(rows *sql.Rows) ([]FeeSchedule, error) {
