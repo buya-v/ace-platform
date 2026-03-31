@@ -1,7 +1,129 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260331-bot-agent",
+  "feature": "GarudaX Bot Agent — Full Conversational Admin Replacement",
+  "requirement": "Transform the GarudaX bot into a full agent that can replace ALL human UI actions via natural language conversation. The bot acts as a system user linked to the logged-in admin/operator. Every menu click, button tap, form submission, and data lookup must be executable via bot conversation. Users with no deep system knowledge should be able to operate the entire exchange through the bot.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T301",
+      "title": "MCP tools — fill all 13 coverage gaps",
+      "description": "Add the 13 missing MCP tools so the bot can execute EVERY action available in the admin UI.\n\nAdd to `src/admin-bot/mcp-server/src/tools/`:\n\n1. Update `trading.ts` — add:\n   - `set_circuit_breaker(instrument_id, upper_limit_pct, lower_limit_pct, halt_threshold)` → PUT /api/v1/admin/instruments/{id}/circuit-breaker\n   - `bust_trade(trade_id, reason)` → POST /api/v1/admin/trades/{id}/bust\n   - `disable_participant(participant_id)` → POST /api/v1/admin/participants/{id}/disable\n\n2. Update `settlement.ts` — add:\n   - `trigger_settlement_cycle()` → POST /api/v1/settlement/cycle\n\n3. Update `participants.ts` — add:\n   - `get_participant(id)` → GET /api/v1/participants/{id}\n   - `suspend_participant(id, reason)` → POST /api/v1/compliance/participants/{id}/suspend\n   - `reinstate_participant(id)` → POST /api/v1/compliance/participants/{id}/reinstate\n\n4. Update `margin.ts` — add:\n   - `get_portfolio_margin(participant_id?)` → GET /api/v1/margin\n\n5. Update `market_data.ts` — add:\n   - `get_market_trades(instrument_id)` → GET /api/v1/market-data/trades/{id}\n\n6. Update `risk.ts` — add:\n   - `update_order_limits(instrument_id, max_order_qty, max_order_value, price_band_pct)` → PUT /api/v1/admin/risk/order-limits/{id}\n\n7. Update `warehouse.ts` — add:\n   - `get_deliveries(status?)` → GET /api/v1/warehouse/deliveries\n\n8. Update `compliance.ts` — add:\n   - `file_sar(participant_id, reason, details)` → POST /api/v1/compliance/sar\n   - `get_surveillance_alerts(status?, severity?)` → GET /api/v1/compliance/surveillance/alerts\n   - `resolve_surveillance_alert(alert_id)` → POST /api/v1/compliance/surveillance/alerts/{id}/resolve\n\n9. Update `reports.ts` — add:\n   - `get_market_summary_report(date)` → GET /api/v1/admin/reports/market-summary?date=\n   - `get_large_trader_report(date)` → GET /api/v1/admin/reports/large-traders?date=\n\nAfter this task, MCP coverage = 100% of all gateway endpoints.\n\nAcceptance: `npm run build` succeeds. All 45+ tools listed.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/mcp-server/src/tools/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T302",
+      "title": "Action executor — bot executes real API actions with user's JWT",
+      "description": "Transform the bot from a read-only assistant into an action executor. The bot uses the LOGGED-IN USER's JWT token (not a service account) so actions are attributed to the real operator.\n\nModify `src/gateway/internal/bot/handler.go`:\n1. Pass the user's JWT token from the request to the orchestrator/fallback handlers\n2. The bot's API calls use the same token as the logged-in admin\n3. All bot-initiated actions appear in the audit trail under the real user's ID\n\nModify `src/gateway/internal/bot/fallback.go` — complete rewrite to be an action executor:\n1. Parse user intent using keyword + pattern matching\n2. For READ actions: call gateway API, format response as human-readable text\n3. For WRITE actions: call gateway API, confirm success/failure\n4. Action categories:\n   - **Instruments**: list, halt, resume, set circuit breaker limits\n   - **Participants**: list, view details, approve/reject KYC, suspend/reinstate, disable\n   - **Margin**: view calls, view stats, trigger calculation, view portfolio\n   - **Settlement**: view cycles, trigger cycle\n   - **Compliance**: view alerts, resolve alert, file SAR, view audit trail\n   - **Surveillance**: view alerts, resolve alert\n   - **Orders**: view book, cancel orders, bust trade\n   - **Market Data**: view ticker, trades, candles\n   - **Warehouse**: view inventory, receipts, deliveries\n   - **Risk**: view/update order limits\n   - **Reports**: generate market summary, large trader report\n   - **Tickets**: create, list, update, comment\n   - **Fees**: view schedule\n   - **System**: health check\n5. Natural language patterns (examples):\n   - 'halt wheat' → halt_instrument('WHT-HRW-2026M07-UB')\n   - 'approve trader 123' → approve_kyc('123')\n   - 'show margin for trader1' → get_portfolio_margin('trader1')\n   - 'run settlement' → trigger_settlement_cycle()\n   - 'suspend user abc for insider trading' → suspend_participant('abc', 'insider trading')\n\nModify `src/gateway/internal/bot/bridge.go`:\n1. Forward the user's JWT token to orchestrator in request headers\n\nAcceptance: Bot can execute ALL 62+ admin actions via natural language. Actions are audited under the real user.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/handler.go", "src/gateway/internal/bot/fallback.go", "src/gateway/internal/bot/bridge.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T303",
+      "title": "Intent parser — NLP-powered action extraction from natural language",
+      "description": "Create an intelligent intent parser that extracts structured actions from casual natural language. This is the brain that lets non-technical users operate the exchange.\n\nCreate `src/admin-bot/orchestrator/src/intent-parser.ts`:\n\n1. Define 15 intent categories matching all admin actions:\n   ```typescript\n   type Intent = \n     | { action: 'health_check' }\n     | { action: 'list_instruments' }\n     | { action: 'halt_instrument', instrument: string }\n     | { action: 'resume_instrument', instrument: string }\n     | { action: 'set_circuit_breaker', instrument: string, upper: number, lower: number }\n     | { action: 'list_participants', status?: string }\n     | { action: 'approve_kyc', participant_id: string }\n     | { action: 'reject_kyc', participant_id: string, reason: string }\n     | { action: 'suspend_participant', participant_id: string, reason: string }\n     | { action: 'reinstate_participant', participant_id: string }\n     | { action: 'view_margin_calls' }\n     | { action: 'trigger_margin_calc', participant_id?: string }\n     | { action: 'view_positions', participant_id?: string }\n     | { action: 'trigger_settlement' }\n     | { action: 'view_settlement_cycles' }\n     | { action: 'view_alerts', severity?: string }\n     | { action: 'resolve_alert', alert_id: string }\n     | { action: 'file_sar', participant_id: string, reason: string }\n     | { action: 'view_orderbook', instrument?: string }\n     | { action: 'view_ticker', instrument?: string }\n     | { action: 'bust_trade', trade_id: string, reason: string }\n     | { action: 'mass_cancel' }\n     | { action: 'view_inventory' }\n     | { action: 'view_receipts', status?: string }\n     | { action: 'view_deliveries' }\n     | { action: 'view_risk_limits' }\n     | { action: 'update_risk_limits', instrument: string, max_qty: number }\n     | { action: 'generate_report', type: 'market_summary' | 'large_trader', date: string }\n     | { action: 'view_fees' }\n     | { action: 'create_ticket', title: string, description: string, category: string, priority: string }\n     | { action: 'list_tickets', status?: string }\n     | { action: 'update_ticket', id: string, status?: string }\n     | { action: 'view_audit_trail', filters?: Record<string, string> }\n     | { action: 'help', topic?: string }\n     | { action: 'unknown', message: string }\n   ```\n\n2. Instrument name resolver:\n   - 'wheat' | 'WHT' → 'WHT-HRW-2026M07-UB'\n   - 'corn' | 'CRN' → 'CRN-YEL-2026M09-UB'\n   - 'soybeans' | 'soy' | 'SBN' → 'SBN-NO2-2026M11-UB'\n   - 'barley' | 'BRL' → 'BRL-MALT-2026M07-UB'\n   - 'cashmere' | 'CSH' → 'CSH-RAW-2026M09-UB'\n   - 'cattle' | 'livestock' | 'LVS' → 'LVS-CATTLE-2026M10-UB'\n   - Fuzzy match: if no exact match, find closest\n\n3. GPT-nano intent extraction (when OPENAI_API_KEY available):\n   - System prompt with all intents + examples\n   - Function calling to return structured Intent\n   - Fallback to keyword parser if no API key\n\n4. Keyword-based intent extraction (always available):\n   - Pattern rules for each intent\n   - Extract entity values (IDs, names, numbers) from message\n   - Support conversational phrases: 'can you halt trading on wheat?', 'please show me the margin status', 'I need to suspend user xyz'\n\n5. Confirmation prompts for dangerous actions:\n   - halt_instrument, bust_trade, mass_cancel, suspend_participant, file_sar → return confirmation request\n   - User must reply 'yes' / 'confirm' to execute\n   - Store pending action in conversation state\n\nAcceptance: Parser correctly extracts intents from 50+ natural language variations. Instrument aliases work. Dangerous actions require confirmation.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/intent-parser.ts"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T304",
+      "title": "Conversation state — multi-turn context + confirmation flow",
+      "description": "Add conversation state management so the bot can handle multi-turn conversations, confirmations, and follow-up questions.\n\nCreate `src/admin-bot/orchestrator/src/conversation.ts`:\n\n1. ConversationState per user session:\n   ```typescript\n   interface ConversationState {\n     userId: string;\n     history: Message[];  // last 10 messages\n     pendingAction?: Intent;  // action waiting for confirmation\n     context: {\n       lastInstrument?: string;  // remember last referenced instrument\n       lastParticipant?: string;  // remember last referenced participant\n       lastTicketId?: string;\n       currentPage?: string;\n     };\n     createdAt: number;\n     lastActivityAt: number;\n   }\n   ```\n\n2. ConversationManager:\n   - getOrCreate(userId): ConversationState\n   - addMessage(userId, role, content)\n   - setPendingAction(userId, intent)\n   - clearPendingAction(userId)\n   - getContext(userId): resolves pronouns ('it', 'that one', 'same instrument')\n   - cleanup(): remove sessions idle > 30 minutes\n\n3. Confirmation flow:\n   - Dangerous action → bot responds 'Are you sure you want to [action]? Reply YES to confirm.'\n   - User replies 'yes'/'confirm'/'do it' → execute pending action\n   - User replies 'no'/'cancel'/'nevermind' → clear pending action\n   - Any other message → treat as new intent, clear pending\n\n4. Context resolution:\n   - 'halt wheat' → sets lastInstrument = 'WHT-HRW-2026M07-UB'\n   - 'now resume it' → resolves 'it' to lastInstrument\n   - 'show margin for trader1' → sets lastParticipant = 'trader1'\n   - 'approve them' → resolves 'them' to lastParticipant\n\n5. Help system:\n   - 'help' → shows all available commands grouped by category\n   - 'help margin' → shows margin-specific commands\n   - 'what can you do?' → same as help\n\nUpdate `src/admin-bot/orchestrator/src/api.ts`:\n   - POST /chat now includes userId from request\n   - Response includes conversation context for UI\n\nAcceptance: Multi-turn conversations work. Confirmations required for dangerous actions. Context carries across messages.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/conversation.ts", "src/admin-bot/orchestrator/src/api.ts"],
+      "dependencies": ["T303"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T305",
+      "title": "Orchestrator rewrite — intent→action pipeline with all 62+ actions",
+      "description": "Rewrite the orchestrator's main handler to use the intent parser + conversation state + action executor pipeline.\n\nRewrite `src/admin-bot/orchestrator/src/router.ts`:\n1. Remove GPT-nano classification (replaced by intent parser)\n2. Pipeline: message → intent parser → conversation check → action executor → format response\n\nRewrite `src/admin-bot/orchestrator/src/nano-handler.ts` as `src/admin-bot/orchestrator/src/action-executor.ts`:\n1. executeAction(intent: Intent, userToken: string): Promise<ChatResponse>\n2. For each of the 30+ intent types:\n   - Call the appropriate gateway API endpoint\n   - Format the response as clear, human-readable text\n   - Include relevant navigation actions\n3. Response formatting rules:\n   - Lists: numbered items with key fields\n   - Stats: formatted with labels and values\n   - Confirmations: clear success/failure message\n   - Errors: helpful error message with suggestion\n4. Use the user's JWT token for all API calls (not service account)\n\nUpdate `src/admin-bot/orchestrator/src/index.ts` and `src/admin-bot/orchestrator/src/api.ts`:\n1. Wire intent parser → conversation → executor pipeline\n2. POST /chat request now includes `userToken` header\n3. Response includes `requiresConfirmation` flag for dangerous actions\n\nAcceptance: Every admin UI action executable via natural language. Responses are clear and actionable.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/router.ts", "src/admin-bot/orchestrator/src/action-executor.ts", "src/admin-bot/orchestrator/src/index.ts"],
+      "dependencies": ["T303", "T304"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T306",
+      "title": "Chat UI — confirmation dialogs + action result cards + help panel",
+      "description": "Enhance the bot chat panel to support the full agent experience.\n\nUpdate `src/admin-ui/src/components/BotChatPanel.tsx`:\n1. Confirmation dialog inline:\n   - When bot responds with `requiresConfirmation: true`, show YES/NO buttons instead of text input\n   - YES button sends 'yes' as message, NO sends 'no'\n   - Yellow warning border on confirmation messages\n\n2. Action result cards:\n   - Success: green left border, checkmark icon, result summary\n   - Failure: red left border, X icon, error message with suggestion\n   - Data cards: formatted tables for lists (instruments, participants, margin calls)\n   - Render markdown-like formatting: bold, bullet lists, numbers\n\n3. Navigation action buttons:\n   - Bot action links (type: 'link') render as clickable buttons that navigate to dashboard pages\n   - Use react-router navigate() on click\n\nUpdate `src/admin-ui/src/contexts/BotContext.tsx`:\n1. Pass user's JWT token in bot API calls (already in auth context)\n2. Add `requiresConfirmation` state\n3. Add `sendConfirmation(confirmed: boolean)` action\n4. Track conversation context (current page sent with each message)\n\nUpdate `src/admin-ui/src/services/botApi.ts`:\n1. Include Authorization header from logged-in user's token\n2. Parse `requiresConfirmation` from response\n3. Format response data for rich display\n\nCreate `src/admin-ui/src/components/BotMessageCard.tsx` + CSS:\n1. Renders different message types: text, confirmation, data_table, success, error\n2. Data tables: simple grid for structured data (instruments, participants, etc.)\n3. Markdown-lite: parse **bold**, bullet points, numbered lists\n\nAcceptance: Confirmation flow works in UI. Action results show rich cards. Navigation buttons work.",
+      "agent_role": "coder",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/BotChatPanel.tsx", "src/admin-ui/src/components/BotMessageCard.tsx", "src/admin-ui/src/contexts/BotContext.tsx", "src/admin-ui/src/services/botApi.ts"],
+      "dependencies": ["T305"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T307",
+      "title": "Bot gateway — forward user JWT + conversation ID to orchestrator",
+      "description": "Update the gateway bot handler to forward the user's JWT token and conversation tracking to the orchestrator.\n\nUpdate `src/gateway/internal/bot/handler.go`:\n1. Extract user's JWT from Authorization header\n2. Forward to orchestrator as `X-User-Token` header\n3. Extract user ID from JWT claims, include as `X-User-Id` header\n4. Add `X-Conversation-Id` header (from request or generate new)\n\nUpdate `src/gateway/internal/bot/bridge.go`:\n1. Forward X-User-Token, X-User-Id, X-Conversation-Id to orchestrator\n2. Orchestrator uses user's token for all downstream API calls\n\nUpdate `src/gateway/internal/bot/fallback.go`:\n1. Use the user's own JWT token for API calls (not service account)\n2. This ensures all actions appear in audit trail under the real user\n\nUpdate `src/gateway/internal/bot/handler_test.go`:\n1. Test token forwarding\n2. Test conversation ID generation\n3. Test that fallback uses user's token\n\nAcceptance: Bot actions are attributed to the logged-in user in audit trail. Token forwarding works.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/handler.go", "src/gateway/internal/bot/bridge.go", "src/gateway/internal/bot/fallback.go", "src/gateway/internal/bot/handler_test.go"],
+      "dependencies": ["T302"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T308",
+      "title": "Bot help system — contextual command guide for non-technical users",
+      "description": "Create a comprehensive help system that teaches non-technical users what the bot can do.\n\nCreate `src/admin-bot/orchestrator/src/help.ts`:\n\n1. Help categories with plain-language descriptions:\n   ```\n   Trading & Instruments:\n     'show instruments' - List all tradable commodities\n     'halt wheat' - Stop trading on wheat\n     'resume corn' - Restart trading on corn\n     'set price limit on wheat to 15%' - Set circuit breaker\n   \n   Participants & KYC:\n     'show pending applications' - List KYC applications waiting for review\n     'approve trader ABC' - Approve a KYC application\n     'reject trader XYZ because incomplete documents' - Reject with reason\n     'suspend user 123 for suspicious activity' - Suspend a participant\n   \n   Margin & Risk:\n     'show margin calls' - List active margin calls\n     'what is the margin shortfall?' - View aggregate margin stats\n     'recalculate margin for trader1' - Trigger margin recalculation\n   \n   Settlement:\n     'run settlement' - Trigger a settlement cycle\n     'show settlement history' - View past settlement cycles\n   \n   Compliance & Surveillance:\n     'show open alerts' - List unresolved compliance alerts\n     'resolve alert 456' - Close a compliance alert\n     'file SAR on trader ABC for money laundering' - File suspicious activity report\n   \n   Market Data:\n     'wheat price' - Current wheat ticker\n     'show order book for corn' - View corn order book\n   \n   Reports:\n     'generate market summary for today' - Daily market report\n     'show large traders' - Position concentration report\n   \n   Tickets & Support:\n     'report a bug: login page is slow' - Create a bug report\n     'show my tickets' - List your tickets\n   \n   System:\n     'system health' - Check all services\n     'help' - Show this guide\n   ```\n\n2. Context-aware help:\n   - If user is on margin page: show margin commands first\n   - If user is on participants page: show KYC commands first\n\n3. Error recovery:\n   - When intent is 'unknown', suggest closest matching commands\n   - 'Did you mean: halt wheat / show wheat price / wheat order book?'\n\nAcceptance: 'help' shows full command guide. Context-aware suggestions. Unknown intents get helpful suggestions.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/help.ts"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T309",
+      "title": "Intent parser tests — 100+ natural language variations",
+      "description": "Write comprehensive tests for the intent parser covering natural language variations that non-technical users would use.\n\nCreate `src/admin-bot/orchestrator/src/__tests__/intent-parser.test.ts`:\n\n1. Instrument resolution (20 tests):\n   - 'wheat' → WHT-HRW-2026M07-UB\n   - 'corn' → CRN-YEL-2026M09-UB\n   - 'WHT' → WHT-HRW-2026M07-UB\n   - 'cashmere' → CSH-RAW-2026M09-UB\n   - 'unknown commodity' → null\n\n2. Trading intents (20 tests):\n   - 'halt trading on wheat' → halt_instrument\n   - 'stop wheat trading' → halt_instrument\n   - 'please halt the wheat contract' → halt_instrument\n   - 'resume corn' → resume_instrument\n   - 'start trading corn again' → resume_instrument\n   - 'cancel all orders' → mass_cancel\n\n3. KYC intents (15 tests):\n   - 'approve trader abc123' → approve_kyc\n   - 'reject application xyz because documents expired' → reject_kyc with reason\n   - 'show pending KYC' → list_participants with status PENDING\n   - 'suspend user 456' → suspend_participant\n\n4. Margin/Settlement (15 tests):\n   - 'show margin calls' → view_margin_calls\n   - 'what is the total margin shortfall' → view_margin_calls\n   - 'run settlement cycle' → trigger_settlement\n   - 'recalculate margin for trader1' → trigger_margin_calc\n\n5. Compliance (10 tests):\n   - 'show open alerts' → view_alerts\n   - 'resolve alert 789' → resolve_alert\n   - 'file SAR on trader abc for insider trading' → file_sar\n\n6. Conversational (20 tests):\n   - 'what can you do?' → help\n   - 'help me with margin' → help(margin)\n   - 'please' (empty) → help\n   - 'halt it' (with context) → halt_instrument using lastInstrument\n   - 'approve them' (with context) → approve_kyc using lastParticipant\n\n7. Edge cases (10 tests):\n   - Empty string → help\n   - Very long message → truncate and parse\n   - SQL injection attempt → unknown\n   - Special characters → handle gracefully\n\nAcceptance: 100+ tests pass. Parser handles casual, formal, and abbreviated input styles.",
+      "agent_role": "test_writer",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/__tests__/intent-parser.test.ts"],
+      "dependencies": ["T303"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T310",
+      "title": "E2E bot agent test — full conversation workflows",
+      "description": "Write end-to-end tests that simulate complete conversation workflows through the bot.\n\nCreate `src/admin-bot/orchestrator/src/__tests__/e2e-conversations.test.ts`:\n\n1. Health check workflow:\n   - User: 'system health' → Bot lists 9 services with status\n\n2. Instrument management workflow:\n   - User: 'show instruments' → Bot lists 6 instruments\n   - User: 'halt wheat' → Bot asks confirmation\n   - User: 'yes' → Bot executes halt, confirms success\n   - User: 'resume it' → Bot resolves 'it' to wheat, asks confirmation\n   - User: 'confirm' → Bot executes resume\n\n3. KYC approval workflow:\n   - User: 'show pending applications' → Bot lists pending KYC\n   - User: 'approve the first one' → Bot asks confirmation with participant name\n   - User: 'yes' → Bot approves, confirms\n\n4. Margin investigation workflow:\n   - User: 'any margin calls?' → Bot shows stats\n   - User: 'recalculate for trader1' → Bot triggers calculation, shows result\n\n5. Ticket creation workflow:\n   - User: 'the settlement page is loading slowly' → Bot creates bug ticket\n   - Bot: 'Created ticket #123: Settlement page performance issue'\n\n6. Help workflow:\n   - User: 'what can you do?' → Bot shows categorized help\n   - User: 'help with margin' → Bot shows margin-specific commands\n\nAll tests use mocked API responses. Test the full pipeline: intent parsing → conversation state → action execution → response formatting.\n\nAcceptance: All 6 workflows pass. Multi-turn context works correctly.",
+      "agent_role": "test_writer",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/src/__tests__/e2e-conversations.test.ts"],
+      "dependencies": ["T305", "T304"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T311",
+      "title": "Docker rebuild + orchestrator config update",
+      "description": "Update Docker configuration for the enhanced orchestrator and rebuild.\n\nUpdate `src/admin-bot/orchestrator/Dockerfile`:\n1. Ensure all new source files are included\n2. Keep test exclusion (rm -rf src/__tests__)\n\nUpdate `docker-compose.yml`:\n1. Add GARUDAX_PROJECT_ROOT env to orchestrator\n2. Ensure MCP server volume mount is correct\n\nUpdate `src/admin-bot/orchestrator/package.json`:\n1. Ensure all dependencies are listed\n\nRebuild and verify:\n1. `docker compose build admin-bot-orchestrator`\n2. `docker compose up -d admin-bot-orchestrator`\n3. Test: POST /chat with 'system health' → should return service list\n\nAcceptance: Orchestrator container starts and responds to all action types.",
+      "agent_role": "coder",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/orchestrator/Dockerfile", "docker-compose.yml"],
+      "dependencies": ["T305", "T307"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
