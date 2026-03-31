@@ -1,14 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/garudax-platform/compliance-service/internal/onboarding"
 	"github.com/garudax-platform/compliance-service/internal/screening"
 	"github.com/garudax-platform/compliance-service/internal/server"
+	"github.com/garudax-platform/compliance-service/internal/store"
 )
 
 func main() {
@@ -16,12 +20,36 @@ func main() {
 
 	cfg := server.ConfigFromEnv()
 
-	store := onboarding.NewInMemoryStore()
-	onboardingSvc := onboarding.NewService(store)
+	var onboardStore onboarding.Store
+	var screenStore screening.Store
 
-	screeningStore := screening.NewInMemoryStore()
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		log.Println("PostgreSQL mode: connecting to database...")
+		dsn := buildDSN(dbHost)
+		db, err := store.OpenPostgres(dsn)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		defer db.Close()
+
+		if err := db.Ping(); err != nil {
+			log.Fatalf("Failed to ping PostgreSQL: %v", err)
+		}
+		log.Println("PostgreSQL connection established")
+
+		onboardStore = store.NewPostgresOnboardingStore(db)
+		screenStore = store.NewPostgresScreeningStore(db)
+	} else {
+		log.Println("In-memory mode: no DB_HOST set")
+		memOnboard := onboarding.NewInMemoryStore()
+		onboardStore = memOnboard
+		screenStore = screening.NewInMemoryStore()
+	}
+
+	onboardingSvc := onboarding.NewService(onboardStore)
+
 	provider := screening.NewDefaultProvider()
-	screeningSvc := screening.NewService(screeningStore, provider, store)
+	screeningSvc := screening.NewService(screenStore, provider, onboardStore)
 
 	srv := server.NewServer(onboardingSvc, screeningSvc, cfg)
 
@@ -45,4 +73,20 @@ func main() {
 	sig := <-sigCh
 	log.Printf("Received signal %s, shutting down...", sig)
 	lis.Close()
+}
+
+func buildDSN(host string) string {
+	port := envOrDefault("DB_PORT", "5432")
+	user := envOrDefault("DB_USER", "garudax")
+	pass := envOrDefault("DB_PASSWORD", "garudax_dev_password")
+	dbName := envOrDefault("DB_NAME", "garudax")
+	sslMode := envOrDefault("DB_SSL_MODE", "disable")
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, pass, host, port, dbName, sslMode)
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
