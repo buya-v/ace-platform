@@ -1,12 +1,15 @@
 import React from 'react';
-import { Outlet, Navigate, useNavigate } from 'react-router-dom';
+import { Outlet, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { KPIProvider, useKPI } from '../contexts/KPIContext';
 import { ToastProvider } from '../contexts/ToastContext';
+import { BotProvider } from '../contexts/BotContext';
 import { hasComplianceAccess } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { ToastContainer } from '../components/Toast';
+import { BotButton } from '../components/BotButton';
+import { BotChatPanel } from '../components/BotChatPanel';
 import { ShortcutHelp } from '../components/ShortcutHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import styles from './DashboardLayout.module.css';
@@ -33,6 +36,8 @@ function DashboardInner() {
         </div>
       </main>
       <ToastContainer />
+      <BotButton />
+      <BotChatPanel />
       <ShortcutHelp visible={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
@@ -49,10 +54,14 @@ export function DashboardLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  const location = useLocation();
+
   return (
     <ToastProvider>
       <KPIProvider>
-        <DashboardInner />
+        <BotProvider currentPage={location.pathname}>
+          <DashboardInner />
+        </BotProvider>
       </KPIProvider>
     </ToastProvider>
   );

@@ -1,0 +1,96 @@
+.form {
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.formTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.fieldLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  margin-bottom: 2px;
+}
+
+.fieldInput {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  padding: var(--space-1) var(--space-2);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.fieldInput:focus {
+  border-color: var(--accent-blue);
+}
+
+.fieldTextarea {
+  composes: fieldInput;
+  min-height: 60px;
+  resize: vertical;
+}
+
+.fieldSelect {
+  composes: fieldInput;
+  cursor: pointer;
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.submitBtn {
+  flex: 1;
+  background: var(--accent-blue);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.submitBtn:hover {
+  background: #6fb3ff;
+}
+
+.submitBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  color: var(--text-primary);
+}
