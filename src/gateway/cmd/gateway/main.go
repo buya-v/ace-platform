@@ -18,6 +18,7 @@ import (
 	"github.com/garudax-platform/gateway/internal/proxy"
 	"github.com/garudax-platform/gateway/internal/reporting"
 	"github.com/garudax-platform/gateway/internal/router"
+	"github.com/garudax-platform/gateway/internal/tickets"
 	"github.com/garudax-platform/gateway/internal/websocket"
 )
 
@@ -53,6 +54,11 @@ func main() {
 	// Uses a no-op store by default; a real PgStore is injected when DB is configured.
 	reportingHandlers := reporting.NewHandlers(reporting.NewNoOpStore())
 	reportingHandlers.RegisterRoutes(rt)
+
+	// Register ticket routes (support tickets, bug reports, feature requests)
+	// Uses InMemoryStore by default; PgStore when DATABASE_URL is configured.
+	ticketHandlers := tickets.NewHandlers(tickets.NewInMemoryStore())
+	ticketHandlers.RegisterRoutes(rt)
 
 	// Register WebSocket routes (both path-param and query-param styles)
 	wsHandler := websocket.NewHandler()

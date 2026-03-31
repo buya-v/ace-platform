@@ -29,8 +29,8 @@
         "src/gateway/cmd/gateway/main.go"
       ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T203",
