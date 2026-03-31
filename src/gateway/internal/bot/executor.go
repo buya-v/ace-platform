@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+// fillerWordsRe matches common filler words used in natural language queries.
+var fillerWordsRe = regexp.MustCompile(`(?i)\b(please|can you|could you|would you|show me|tell me|give me|let me see|i want to see|i need to|i'd like to|what are the|what is the|what's the|list of|the|a|an|some|all|current|any|check|display|view|get)\b`)
+
+// multiSpaceRe collapses multiple whitespace characters into one.
+var multiSpaceRe = regexp.MustCompile(`\s+`)
+
+// normalizeMessage strips filler words so natural language phrases like
+// "show me the instruments" match the same keyword handlers as "instruments".
+func normalizeMessage(msg string) string {
+	result := fillerWordsRe.ReplaceAllString(strings.ToLower(msg), "")
+	result = multiSpaceRe.ReplaceAllString(result, " ")
+	return strings.TrimSpace(result)
+}
+
 // instrumentAliases maps short names to full instrument IDs.
 var instrumentAliases = map[string]string{
 	"wheat":     "WHT-HRW-2026M07-UB",
@@ -102,10 +116,14 @@ func IsCRUDCommand(message string) bool {
 // Execute processes a message and executes the appropriate action using the user's token.
 func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	lower := strings.ToLower(strings.TrimSpace(message))
+	// norm strips filler words for natural language keyword matching.
+	// Regex CRUD handlers above use 'message'/'lower' for parameter extraction;
+	// only the containsAny keyword handlers also check 'norm'.
+	norm := normalizeMessage(message)
 
 	// --- Profile ---
 	// "who am I", "my profile", "whoami"
-	if containsAny(lower, "who am i", "whoami", "my profile") {
+	if containsAny(lower, "who am i", "whoami", "my profile") || containsAny(norm, "who am i", "whoami", "my profile") {
 		body, status := e.doRequest("GET", "/api/v1/auth/me", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: fmt.Sprintf("👤 Your profile:\n%s", prettyJSON(body))}
@@ -166,7 +184,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Orders: list (my orders / show orders) ---
-	if containsAny(lower, "show orders", "my orders", "list orders", "open orders") {
+	if (containsAny(lower, "show orders", "my orders", "list orders", "open orders") || containsAny(norm, "orders", "open orders")) && !containsAny(lower, "cancel", "mass") {
 		body, status := e.doRequest("GET", "/api/v1/orders", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
@@ -308,7 +326,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Clearing: netting ---
-	if containsAny(lower, "show netting", "netting positions", "netting report") {
+	if containsAny(lower, "show netting", "netting positions", "netting report") || containsAny(norm, "netting") {
 		body, status := e.doRequest("GET", "/api/v1/clearing/netting", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
@@ -354,7 +372,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Risk: show limits ---
-	if containsAny(lower, "show risk limits", "risk limits", "order limits") {
+	if containsAny(lower, "show risk limits", "risk limits", "order limits") || containsAny(norm, "risk limits", "order limits") {
 		body, status := e.doRequest("GET", "/api/v1/admin/risk/order-limits", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
@@ -367,7 +385,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 
 	// --- Reports: market summary ---
 	// Pattern: "market summary today" or "market summary 2026-03-31"
-	if containsAny(lower, "market summary", "daily summary", "trading summary") {
+	if containsAny(lower, "market summary", "daily summary", "trading summary") || containsAny(norm, "market summary", "daily summary", "trading summary") {
 		date := time.Now().Format("2006-01-02")
 		if reDateMatch := regexp.MustCompile(`(\d{4}-\d{2}-\d{2})`).FindString(message); reDateMatch != "" {
 			date = reDateMatch
@@ -384,7 +402,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Reports: large trader ---
-	if containsAny(lower, "large trader report", "large trader") {
+	if containsAny(lower, "large trader report", "large trader") || containsAny(norm, "large trader") {
 		body, status := e.doRequest("GET", "/api/v1/reports/large-traders", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: fmt.Sprintf("📋 Large trader report:\n%s", prettyJSON(body))}
@@ -393,7 +411,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Audit log ---
-	if containsAny(lower, "audit log", "audit trail", "show audit") {
+	if containsAny(lower, "audit log", "audit trail", "show audit") || containsAny(norm, "audit") {
 		body, status := e.doRequest("GET", "/api/v1/compliance/audit-trail", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
@@ -467,7 +485,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Mass cancel ---
-	if containsAny(lower, "mass cancel", "cancel all") {
+	if containsAny(lower, "mass cancel", "cancel all") || containsAny(norm, "mass cancel", "cancel all") {
 		_, status := e.doRequest("POST", "/api/v1/admin/mass-cancel", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: e.withAttribution("✅ Mass cancel executed. All open orders cancelled.", userToken)}
@@ -639,7 +657,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 
 	// --- Batch screen ---
 	// Pattern: "batch screen" or "screen all"
-	if containsAny(lower, "batch screen", "screen all") {
+	if containsAny(lower, "batch screen", "screen all") || containsAny(norm, "batch screen", "screen all") {
 		respBody, status := e.doRequest("POST", "/api/v1/screening/batch", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{
@@ -716,7 +734,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- System health ---
-	if containsAny(lower, "health", "status", "services") {
+	if containsAny(lower, "health", "status", "services") || containsAny(norm, "health", "status", "services") {
 		body, status := e.doRequest("GET", "/api/v1/admin/health", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatHealthResponse(body)
@@ -725,7 +743,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Margin calls ---
-	if containsAny(lower, "margin") {
+	if containsAny(lower, "margin") || containsAny(norm, "margin") {
 		body, status := e.doRequest("GET", "/api/v1/margin/calls/stats", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatMarginResponse(body)
@@ -741,7 +759,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 		return ChatResponse{Reply: "❌ Failed to trigger settlement."}
 	}
-	if containsAny(lower, "settlement") {
+	if containsAny(lower, "settlement") || containsAny(norm, "settlement") {
 		body, status := e.doRequest("GET", "/api/v1/settlement/cycles", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatSettlementResponse(body)
@@ -750,7 +768,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Alerts (generic, after resolve-alert handler above) ---
-	if containsAny(lower, "alert") {
+	if containsAny(lower, "alert") || containsAny(norm, "alert") {
 		body, status := e.doRequest("GET", "/api/v1/compliance/alerts", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatAlertsResponse(body)
@@ -759,7 +777,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Participants / KYC ---
-	if containsAny(lower, "participant", "kyc", "pending application", "pending kyc") {
+	if containsAny(lower, "participant", "kyc", "pending application", "pending kyc") || containsAny(norm, "participant", "kyc") {
 		body, status := e.doRequest("GET", "/api/v1/participants", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatParticipantsResponse(body)
@@ -768,7 +786,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Instruments ---
-	if containsAny(lower, "instrument", "commodity", "contract") && !containsAny(lower, "create", "new", "add") {
+	if (containsAny(lower, "instrument", "commodity", "contract") || containsAny(norm, "instrument", "commodity", "contract")) && !containsAny(lower, "create", "new", "add") {
 		body, status := e.doRequest("GET", "/api/v1/instruments/list", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatInstrumentsResponse(body)
@@ -793,7 +811,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Warehouse ---
-	if containsAny(lower, "inventory", "warehouse") {
+	if containsAny(lower, "inventory", "warehouse") || containsAny(norm, "inventory", "warehouse") {
 		body, status := e.doRequest("GET", "/api/v1/warehouse/inventory", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: fmt.Sprintf("🏭 Warehouse inventory:\n%s", prettyJSON(body))}
@@ -801,7 +819,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Tickets ---
-	if containsAny(lower, "ticket") {
+	if containsAny(lower, "ticket") || containsAny(norm, "ticket") {
 		body, status := e.doRequest("GET", "/api/v1/tickets", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatTicketsResponse(body)
@@ -809,7 +827,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Fees ---
-	if containsAny(lower, "fee") {
+	if containsAny(lower, "fee") || containsAny(norm, "fee") {
 		body, status := e.doRequest("GET", "/api/v1/admin/fees", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: fmt.Sprintf("💰 Fee schedule:\n%s", prettyJSON(body))}
@@ -817,7 +835,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Positions (clearing, all) ---
-	if containsAny(lower, "position") {
+	if containsAny(lower, "position") || containsAny(norm, "position") {
 		body, status := e.doRequest("GET", "/api/v1/clearing/positions", nil, userToken)
 		if status >= 200 && status < 300 {
 			return ChatResponse{Reply: fmt.Sprintf("📊 Clearing positions:\n%s", prettyJSON(body))}
@@ -825,7 +843,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Help ---
-	if containsAny(lower, "help", "what can you do") {
+	if containsAny(lower, "help", "what can you do") || containsAny(norm, "help") {
 		return ChatResponse{
 			Reply: "I can execute these actions for you:\n\n" +
 				"📊 **Trading & Instruments**\n" +
