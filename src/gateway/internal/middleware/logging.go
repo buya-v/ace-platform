@@ -2,13 +2,18 @@ package middleware
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
+
+// defaultLogger is the package-level slog logger used by the Logging middleware.
+var defaultLogger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	Level: slog.LevelInfo,
+})).With(slog.String("service_name", "gateway"))
 
 // statusWriter wraps http.ResponseWriter to capture the status code.
 type statusWriter struct {
@@ -37,21 +42,7 @@ func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("underlying ResponseWriter does not support hijacking")
 }
 
-// logEntry is the structured JSON log format.
-type logEntry struct {
-	Timestamp  string `json:"timestamp"`
-	Level      string `json:"level"`
-	Method     string `json:"method"`
-	Path       string `json:"path"`
-	Status     int    `json:"status"`
-	Duration   string `json:"duration_ms"`
-	Size       int    `json:"response_bytes"`
-	RemoteAddr string `json:"remote_addr"`
-	RequestID  string `json:"request_id,omitempty"`
-	UserID     string `json:"user_id,omitempty"`
-}
-
-// Logging creates structured JSON logging middleware.
+// Logging creates structured JSON logging middleware using slog.
 func Logging() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,34 +52,32 @@ func Logging() func(http.Handler) http.Handler {
 			next.ServeHTTP(sw, r)
 
 			duration := time.Since(start)
-			entry := logEntry{
-				Timestamp:  start.UTC().Format(time.RFC3339Nano),
-				Level:      "info",
-				Method:     r.Method,
-				Path:       r.URL.Path,
-				Status:     sw.status,
-				Duration:   duration.String(),
-				Size:       sw.size,
-				RemoteAddr: r.RemoteAddr,
-				RequestID:  RequestIDFromContext(r.Context()),
-			}
 
-			if claims := ClaimsFromContext(r.Context()); claims != nil {
-				entry.UserID = claims.Sub
-			}
-
+			level := slog.LevelInfo
 			if sw.status >= 500 {
-				entry.Level = "error"
+				level = slog.LevelError
 			} else if sw.status >= 400 {
-				entry.Level = "warn"
+				level = slog.LevelWarn
 			}
 
-			data, err := json.Marshal(entry)
-			if err != nil {
-				log.Printf("failed to marshal log entry: %v", err)
-				return
+			attrs := []slog.Attr{
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.Int("status", sw.status),
+				slog.String("duration", duration.String()),
+				slog.Int64("duration_ms", duration.Milliseconds()),
+				slog.Int("response_bytes", sw.size),
+				slog.String("remote_addr", r.RemoteAddr),
 			}
-			log.Println(string(data))
+
+			if reqID := RequestIDFromContext(r.Context()); reqID != "" {
+				attrs = append(attrs, slog.String("request_id", reqID))
+			}
+			if claims := ClaimsFromContext(r.Context()); claims != nil {
+				attrs = append(attrs, slog.String("user_id", claims.Sub))
+			}
+
+			defaultLogger.LogAttrs(r.Context(), level, "http_request", attrs...)
 		})
 	}
 }

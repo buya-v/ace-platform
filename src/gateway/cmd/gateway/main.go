@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,16 +14,17 @@ import (
 	"github.com/garudax-platform/gateway/internal/config"
 	"github.com/garudax-platform/gateway/internal/handler"
 	"github.com/garudax-platform/gateway/internal/middleware"
+	"github.com/garudax-platform/gateway/internal/observability"
 	"github.com/garudax-platform/gateway/internal/proxy"
-	"github.com/garudax-platform/gateway/internal/refdata"
 	"github.com/garudax-platform/gateway/internal/router"
 	"github.com/garudax-platform/gateway/internal/websocket"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
-	log.Println("GarudaX API Gateway starting...")
+	logger := observability.NewLogger("gateway")
+	metrics := observability.NewMetrics("gateway")
+
+	logger.Info("GarudaX API Gateway starting...")
 
 	cfg := config.FromEnv()
 
@@ -56,40 +56,19 @@ func main() {
 	rt.Handle("GET", "/api/v1/ws/book", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/executions", wsHandler.ExecutionsHandler)
 
-	// Register reference data routes (direct DB queries, public)
-	if cfg.DatabaseURL != "" {
-		db, err := sql.Open("pgx", cfg.DatabaseURL)
-		if err != nil {
-			log.Printf("WARNING: Failed to open reference data DB: %v (reference data endpoints disabled)", err)
-		} else {
-			db.SetMaxOpenConns(5)
-			db.SetMaxIdleConns(2)
-			store := refdata.NewPgStore(db)
-			refHandlers := refdata.NewHandlers(store)
-			refHandlers.RegisterRoutes(rt)
-			log.Println("Reference data endpoints enabled")
-
-			defer db.Close()
-		}
-	} else {
-		log.Println("DATABASE_URL not set — reference data endpoints disabled")
-	}
-
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{
 		PublicPaths: map[string]bool{
-			"/healthz":                            true,
-			"/readyz":                             true,
-			"POST /api/v1/auth/login":             true,
-			"POST /api/v1/auth/register":          true,
-			"POST /api/v1/auth/password/reset":    true,
-			"POST /api/v1/auth/refresh":           true,
-			"GET /api/v1/instruments":             true,
-			"GET /api/v1/commodities":             true,
+			"/healthz":                         true,
+			"/readyz":                          true,
+			"/metrics":                         true,
+			"POST /api/v1/auth/login":          true,
+			"POST /api/v1/auth/register":       true,
+			"POST /api/v1/auth/password/reset":  true,
+			"POST /api/v1/auth/refresh":         true,
 		},
 		PublicPrefixes: []string{
 			"/api/v1/instruments/",
-			"/api/v1/commodities/",
 			"/api/v1/market-data/",
 			"/api/v1/ws/",
 		},
@@ -129,14 +108,15 @@ func main() {
 		return r.RemoteAddr
 	}
 
-	// Build middleware chain
+	// Build middleware chain: RequestID → Tracing → Metrics → BodyLimit → Auth → RateLimit → Router
 	var httpHandler http.Handler = rt
 	if cfg.RateLimitEnabled {
 		httpHandler = middleware.RateLimit(rateLimitGroup, groupFn, keyFn)(httpHandler)
 	}
 	httpHandler = middleware.Auth(jwtValidator, authCfg)(httpHandler)
 	httpHandler = middleware.BodyLimit(cfg.MaxBodySize)(httpHandler)
-	httpHandler = middleware.Logging()(httpHandler)
+	httpHandler = metrics.MetricsMiddleware()(httpHandler)
+	httpHandler = observability.TracingMiddleware(logger)(httpHandler)
 	httpHandler = middleware.RequestID()(httpHandler)
 
 	// Create HTTP server
@@ -167,6 +147,10 @@ func main() {
 			w.Write([]byte(`{"status":"not_ready"}`))
 		}
 	})
+	// Metrics endpoint on health port (Prometheus scraping)
+	healthMux.Handle("/metrics", metrics.MetricsHandler())
+	healthMux.Handle("/metrics.json", metrics.MetricsJSON())
+
 	healthSrv := &http.Server{
 		Addr:    healthAddr,
 		Handler: healthMux,
@@ -174,17 +158,19 @@ func main() {
 
 	// Start servers
 	go func() {
-		log.Printf("Health server listening on %s", healthAddr)
+		logger.Info("health server listening", slog.String("addr", healthAddr))
 		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Health server error: %v", err)
+			logger.Error("health server error", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}()
 
 	go func() {
 		handler.SetReady()
-		log.Printf("GarudaX API Gateway ready on %s", httpAddr)
+		logger.Info("GarudaX API Gateway ready", slog.String("addr", httpAddr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
+			logger.Error("HTTP server error", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}()
 
@@ -192,17 +178,17 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
-	log.Printf("Received signal %s, shutting down gracefully...", sig)
+	logger.Info("received signal, shutting down gracefully...", slog.String("signal", sig.String()))
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		logger.Error("HTTP server shutdown error", slog.String("error", err.Error()))
 	}
 	if err := healthSrv.Shutdown(ctx); err != nil {
-		log.Printf("Health server shutdown error: %v", err)
+		logger.Error("health server shutdown error", slog.String("error", err.Error()))
 	}
 
-	log.Println("GarudaX API Gateway stopped")
+	logger.Info("GarudaX API Gateway stopped")
 }
