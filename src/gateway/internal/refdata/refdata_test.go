@@ -60,7 +60,7 @@ func (m *mockStore) CreateInstrument(_ context.Context, input InstrumentInput) (
 		return nil, m.err
 	}
 	return &Instrument{ID: input.ID, CommodityID: input.CommodityID, Name: input.Name,
-		ContractSize: input.ContractSize, TickSize: input.TickSize,
+		ContractSize: input.ContractSize.String(), TickSize: input.TickSize.String(),
 		Currency: input.Currency, SettlementType: input.SettlementType,
 		Status: "active"}, nil
 }

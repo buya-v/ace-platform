@@ -109,6 +109,17 @@ func NewPgStore(db *sql.DB) *PgStore {
 
 // ListActiveSchedules returns fee schedules with status ACTIVE.
 func (s *PgStore) ListActiveSchedules(ctx context.Context) ([]FeeSchedule, error) {
+	if s.db == nil {
+		inMemoryFeeStore.mu.RLock()
+		defer inMemoryFeeStore.mu.RUnlock()
+		out := []FeeSchedule{}
+		for _, sched := range inMemoryFeeStore.schedules {
+			if sched.Status == "ACTIVE" {
+				out = append(out, *sched)
+			}
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, effective_from, effective_to, status, created_at
 		FROM fees.fee_schedules
@@ -125,6 +136,15 @@ func (s *PgStore) ListActiveSchedules(ctx context.Context) ([]FeeSchedule, error
 
 // ListAllSchedules returns all fee schedules regardless of status.
 func (s *PgStore) ListAllSchedules(ctx context.Context) ([]FeeSchedule, error) {
+	if s.db == nil {
+		inMemoryFeeStore.mu.RLock()
+		defer inMemoryFeeStore.mu.RUnlock()
+		out := make([]FeeSchedule, 0, len(inMemoryFeeStore.schedules))
+		for _, sched := range inMemoryFeeStore.schedules {
+			out = append(out, *sched)
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, effective_from, effective_to, status, created_at
 		FROM fees.fee_schedules
@@ -140,6 +160,17 @@ func (s *PgStore) ListAllSchedules(ctx context.Context) ([]FeeSchedule, error) {
 
 // GetRulesForSchedule returns all rules belonging to a specific schedule.
 func (s *PgStore) GetRulesForSchedule(ctx context.Context, scheduleID string) ([]FeeRule, error) {
+	if s.db == nil {
+		inMemoryFeeStore.mu.RLock()
+		defer inMemoryFeeStore.mu.RUnlock()
+		out := []FeeRule{}
+		for _, rule := range inMemoryFeeStore.rules {
+			if rule.ScheduleID == scheduleID {
+				out = append(out, *rule)
+			}
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, schedule_id, fee_type, instrument_pattern, participant_tier,
 		       rate_bps, min_fee, max_fee, per_contract_fee, created_at
@@ -157,6 +188,15 @@ func (s *PgStore) GetRulesForSchedule(ctx context.Context, scheduleID string) ([
 
 // GetActiveRules returns all rules from active schedules.
 func (s *PgStore) GetActiveRules(ctx context.Context) ([]FeeRule, error) {
+	if s.db == nil {
+		inMemoryFeeStore.mu.RLock()
+		defer inMemoryFeeStore.mu.RUnlock()
+		out := []FeeRule{}
+		for _, rule := range inMemoryFeeStore.rules {
+			out = append(out, *rule)
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.id, r.schedule_id, r.fee_type, r.instrument_pattern, r.participant_tier,
 		       r.rate_bps, r.min_fee, r.max_fee, r.per_contract_fee, r.created_at
@@ -175,6 +215,12 @@ func (s *PgStore) GetActiveRules(ctx context.Context) ([]FeeRule, error) {
 
 // CreateRule inserts a new fee rule.
 func (s *PgStore) CreateRule(ctx context.Context, rule FeeRule) error {
+	if s.db == nil {
+		inMemoryFeeStore.mu.Lock()
+		inMemoryFeeStore.rules[rule.ID] = &rule
+		inMemoryFeeStore.mu.Unlock()
+		return nil
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO fees.fee_rules (id, schedule_id, fee_type, instrument_pattern, participant_tier,
 		                            rate_bps, min_fee, max_fee, per_contract_fee)
@@ -187,6 +233,14 @@ func (s *PgStore) CreateRule(ctx context.Context, rule FeeRule) error {
 // GetParticipantTier returns the fee tier for a participant.
 // Returns "speculator" as default if participant is not found.
 func (s *PgStore) GetParticipantTier(ctx context.Context, participantID string) (string, error) {
+	if s.db == nil {
+		inMemoryFeeStore.mu.RLock()
+		defer inMemoryFeeStore.mu.RUnlock()
+		if tier, ok := inMemoryFeeStore.tiers[participantID]; ok {
+			return tier, nil
+		}
+		return "speculator", nil
+	}
 	var tier string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT tier FROM fees.participant_tiers WHERE participant_id = $1
@@ -202,6 +256,9 @@ func (s *PgStore) GetParticipantTier(ctx context.Context, participantID string) 
 
 // ListFeeTransactions returns fee transactions for a participant within a date range.
 func (s *PgStore) ListFeeTransactions(ctx context.Context, participantID, from, to string) ([]FeeTransaction, error) {
+	if s.db == nil {
+		return []FeeTransaction{}, nil
+	}
 	query := `
 		SELECT id, trade_id, participant_id, fee_type, amount, currency, created_at
 		FROM fees.fee_transactions

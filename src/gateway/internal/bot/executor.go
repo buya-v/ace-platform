@@ -46,6 +46,59 @@ func NewActionExecutor(gatewayAddr string) *ActionExecutor {
 	}
 }
 
+// IsCRUDCommand returns true if the message matches a deterministic executor
+// command pattern that should bypass the LLM orchestrator.
+// This ensures commands like "create commodity", "halt wheat", "show margin"
+// are always handled by the executor's regex patterns, not routed to AI.
+func IsCRUDCommand(message string) bool {
+	lower := strings.ToLower(strings.TrimSpace(message))
+	crudPrefixes := []string{
+		// Reference data CRUD
+		"create commodity", "list commodities", "show commodities",
+		"create instrument", "update instrument", "list instruments", "show instruments",
+		// Fee management
+		"create fee schedule", "add fee rule", "set tier ", "set fee ",
+		"show fees", "show fee",
+		// Market controls
+		"halt ", "resume ", "mass cancel", "cancel all",
+		"bust trade", "set circuit breaker", "disable participant",
+		// KYC/compliance
+		"approve ", "reject ", "suspend ", "reinstate ",
+		"show pending", "show participants", "show kyc",
+		"screen participant", "screen trader", "batch screen", "screen all",
+		"show alerts", "resolve alert", "file sar", "show audit",
+		// Warehouse
+		"issue receipt", "pledge receipt", "show inventory", "show receipts",
+		// Trading
+		"show orders", "my orders", "cancel order", "modify order",
+		"show margin", "margin calls", "show margin calls",
+		"show netting", "position for",
+		"show settlement", "run settlement",
+		"show positions", "show risk", "show risk limits",
+		// Reporting
+		"market summary", "large trader", "generate market",
+		// Tickets
+		"show tickets", "show ticket",
+		// System
+		"system health", "show health",
+		"help", "who am i", "whoami", "what can you do",
+	}
+	for _, prefix := range crudPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	// Also match buy/sell order commands and instrument tickers/candles/book
+	if regexp.MustCompile(`^(buy|sell)\s+\d`).MatchString(lower) {
+		return true
+	}
+	// Match "show/list X" commands broadly
+	if regexp.MustCompile(`^(show|list|get|my)\s+`).MatchString(lower) {
+		return true
+	}
+	return false
+}
+
 // Execute processes a message and executes the appropriate action using the user's token.
 func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	lower := strings.ToLower(strings.TrimSpace(message))

@@ -48,16 +48,17 @@ type InstrumentDetail struct {
 }
 
 // InstrumentInput holds fields for creating a new instrument.
+// ContractSize and TickSize accept both JSON strings and numbers.
 type InstrumentInput struct {
-	ID             string `json:"id"`
-	CommodityID    string `json:"commodity_id"`
-	Name           string `json:"name"`
-	DeliveryMonth  int    `json:"delivery_month"`
-	DeliveryYear   int    `json:"delivery_year"`
-	ContractSize   string `json:"contract_size"`
-	TickSize       string `json:"tick_size"`
-	Currency       string `json:"currency"`
-	SettlementType string `json:"settlement_type"`
+	ID             string      `json:"id"`
+	CommodityID    string      `json:"commodity_id"`
+	Name           string      `json:"name"`
+	DeliveryMonth  int         `json:"delivery_month"`
+	DeliveryYear   int         `json:"delivery_year"`
+	ContractSize   json.Number `json:"contract_size"`
+	TickSize       json.Number `json:"tick_size"`
+	Currency       string      `json:"currency"`
+	SettlementType string      `json:"settlement_type"`
 }
 
 // CommodityInput holds fields for creating a new commodity.
@@ -99,8 +100,8 @@ func inMemoryCreateInstrument(input InstrumentInput) *Instrument {
 		Name:           input.Name,
 		DeliveryMonth:  input.DeliveryMonth,
 		DeliveryYear:   input.DeliveryYear,
-		ContractSize:   input.ContractSize,
-		TickSize:       input.TickSize,
+		ContractSize:   input.ContractSize.String(),
+		TickSize:       input.TickSize.String(),
 		Currency:       input.Currency,
 		SettlementType: input.SettlementType,
 		Status:         "active",
@@ -170,6 +171,15 @@ func NewPgStore(db *sql.DB) *PgStore {
 
 // ListCommodities returns all commodities ordered by category and name.
 func (s *PgStore) ListCommodities(ctx context.Context) ([]Commodity, error) {
+	if s.db == nil {
+		inMemoryStore.mu.RLock()
+		defer inMemoryStore.mu.RUnlock()
+		out := make([]Commodity, 0, len(inMemoryStore.commodities))
+		for _, c := range inMemoryStore.commodities {
+			out = append(out, *c)
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, category, unit, grade_specs, created_at
 		FROM reference.commodities
@@ -197,6 +207,17 @@ func (s *PgStore) ListCommodities(ctx context.Context) ([]Commodity, error) {
 
 // ListInstruments returns instruments, optionally filtered by status.
 func (s *PgStore) ListInstruments(ctx context.Context, status string) ([]Instrument, error) {
+	if s.db == nil {
+		inMemoryStore.mu.RLock()
+		defer inMemoryStore.mu.RUnlock()
+		out := make([]Instrument, 0, len(inMemoryStore.instruments))
+		for _, inst := range inMemoryStore.instruments {
+			if status == "" || inst.Status == status {
+				out = append(out, *inst)
+			}
+		}
+		return out, nil
+	}
 	var rows *sql.Rows
 	var err error
 
@@ -271,8 +292,8 @@ func (s *PgStore) CreateInstrument(ctx context.Context, input InstrumentInput) (
 		Name:           input.Name,
 		DeliveryMonth:  input.DeliveryMonth,
 		DeliveryYear:   input.DeliveryYear,
-		ContractSize:   input.ContractSize,
-		TickSize:       input.TickSize,
+		ContractSize:   input.ContractSize.String(),
+		TickSize:       input.TickSize.String(),
 		Currency:       input.Currency,
 		SettlementType: input.SettlementType,
 		Status:         "active",
@@ -383,6 +404,19 @@ func joinStrings(parts []string, sep string) string {
 // GetInstrument returns a single instrument with its commodity detail.
 // Returns nil, nil if the instrument is not found.
 func (s *PgStore) GetInstrument(ctx context.Context, id string) (*InstrumentDetail, error) {
+	if s.db == nil {
+		inMemoryStore.mu.RLock()
+		defer inMemoryStore.mu.RUnlock()
+		inst, ok := inMemoryStore.instruments[id]
+		if !ok {
+			return nil, nil
+		}
+		detail := &InstrumentDetail{Instrument: *inst}
+		if c, ok := inMemoryStore.commodities[inst.CommodityID]; ok {
+			detail.Commodity = c
+		}
+		return detail, nil
+	}
 	var detail InstrumentDetail
 
 	err := s.db.QueryRowContext(ctx, `

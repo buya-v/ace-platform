@@ -2091,7 +2091,7 @@ func TestExecutor_Help(t *testing.T) {
 	exec := NewActionExecutor(srv.URL)
 	resp := exec.Execute("help", "test-token")
 	// Check all major categories are listed
-	categories := []string{"Orders", "Market Data", "Trading Controls", "KYC", "Compliance", "Settlement", "Warehouse", "System"}
+	categories := []string{"Orders", "Market Data", "Trading & Instruments", "KYC", "Compliance", "Settlement", "Warehouse", "System"}
 	for _, cat := range categories {
 		if !strings.Contains(resp.Reply, cat) {
 			t.Errorf("expected category %q in help, got: %s", cat, resp.Reply)
@@ -2609,6 +2609,708 @@ func TestExecutor_ShowFees(t *testing.T) {
 	}
 	if !strings.Contains(resp.Reply, "💰") {
 		t.Errorf("expected fee emoji, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — CREATE COMMODITY
+// =====================================================================
+
+func TestExecutor_CreateCommodity(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/commodities" && r.Method == "POST" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"rice","name":"Rice","category":"grain","unit":"kg"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create commodity rice grain kg", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "rice") {
+		t.Errorf("expected commodity id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["id"] != "rice" {
+		t.Errorf("body id = %q, want rice", capturedBody["id"])
+	}
+	if capturedBody["category"] != "grain" {
+		t.Errorf("body category = %q, want grain", capturedBody["category"])
+	}
+	if capturedBody["unit"] != "kg" {
+		t.Errorf("body unit = %q, want kg", capturedBody["unit"])
+	}
+}
+
+func TestExecutor_CreateCommodityMissingFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If reached, return error — the handler should not be called
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	// Only provides id (missing category and unit) — should not match the CRUD handler
+	resp := exec.Execute("create commodity rice", "test-token")
+	// Should either return an error or fall through to instruments/commodity list endpoint
+	// Either way, it must not contain a create-commodity success message
+	if strings.Contains(resp.Reply, "Commodity 'rice' created") {
+		t.Errorf("expected no create-commodity success for missing fields, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — CREATE INSTRUMENT
+// =====================================================================
+
+func TestExecutor_CreateInstrument(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/instruments" && r.Method == "POST" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"RIC-2027M07","status":"pending"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "RIC-2027M07") {
+		t.Errorf("expected instrument id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["id"] != "RIC-2027M07" {
+		t.Errorf("body id = %q, want RIC-2027M07", capturedBody["id"])
+	}
+	if capturedBody["commodity_id"] != "rice" {
+		t.Errorf("body commodity_id = %q, want rice", capturedBody["commodity_id"])
+	}
+	if capturedBody["contract_size"] != "5000" {
+		t.Errorf("body contract_size = %q, want 5000", capturedBody["contract_size"])
+	}
+	if capturedBody["tick_size"] != "0.01" {
+		t.Errorf("body tick_size = %q, want 0.01", capturedBody["tick_size"])
+	}
+}
+
+func TestExecutor_CreateInstrumentAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/instruments" && r.Method == "POST" {
+			w.WriteHeader(409)
+			w.Write([]byte(`{"error":"instrument already exists"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected error reply on 409, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — UPDATE INSTRUMENT
+// =====================================================================
+
+func TestExecutor_UpdateInstrument(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/instruments/WHT-HRW-2026M07-UB" && r.Method == "PUT" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(200)
+			w.Write([]byte(`{"id":"WHT-HRW-2026M07-UB","status":"suspended"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("update instrument WHT-HRW-2026M07-UB status suspended", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "WHT-HRW-2026M07-UB") {
+		t.Errorf("expected instrument id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["status"] != "suspended" {
+		t.Errorf("body status = %q, want suspended", capturedBody["status"])
+	}
+}
+
+func TestExecutor_UpdateInstrumentAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/instruments/WHT-HRW-2026M07-UB" && r.Method == "PUT" {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"not found"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("update instrument WHT-HRW-2026M07-UB status suspended", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 404, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — LIST / SHOW COMMODITIES
+// =====================================================================
+
+func TestExecutor_ListCommodities(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `[{"id":"wheat","name":"Wheat","category":"grain","unit":"mt"},{"id":"corn","name":"Corn","category":"grain","unit":"mt"}]`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "test-token")
+	if !h.called.Load() {
+		t.Error("list commodities: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🌾") {
+		t.Errorf("expected commodity emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_ShowCommodities(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `[{"id":"barley","name":"Barley","category":"grain","unit":"mt"}]`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("show commodities", "test-token")
+	if !h.called.Load() {
+		t.Error("show commodities: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🌾") {
+		t.Errorf("expected commodity emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_ListCommoditiesAPIError(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 503,
+		body:   `{"error":"unavailable"}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 503, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — CREATE FEE SCHEDULE
+// =====================================================================
+
+func TestExecutor_CreateFeeSchedule(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/schedules" && r.Method == "POST" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"fee-001","name":"Standard","effective_year":"2027"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create fee schedule Standard 2027", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "Standard") {
+		t.Errorf("expected schedule name in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["name"] != "Standard" {
+		t.Errorf("body name = %q, want Standard", capturedBody["name"])
+	}
+	if capturedBody["effective_year"] != "2027" {
+		t.Errorf("body effective_year = %q, want 2027", capturedBody["effective_year"])
+	}
+}
+
+func TestExecutor_CreateFeeScheduleAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/schedules" && r.Method == "POST" {
+			w.WriteHeader(422)
+			w.Write([]byte(`{"error":"schedule already exists"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("create fee schedule Standard 2027", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 422, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — SET TIER
+// =====================================================================
+
+func TestExecutor_SetTierForm1(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/tiers/trader1" && r.Method == "PUT" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(200)
+			w.Write([]byte(`{"participant_id":"trader1","tier":"farmer"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("set tier farmer for trader1", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "farmer") {
+		t.Errorf("expected tier name in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["tier"] != "farmer" {
+		t.Errorf("body tier = %q, want farmer", capturedBody["tier"])
+	}
+}
+
+func TestExecutor_SetTierForm2(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/tiers/trader1" && r.Method == "PUT" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(200)
+			w.Write([]byte(`{"participant_id":"trader1","tier":"farmer"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("set trader1 tier to farmer", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "trader1") {
+		t.Errorf("expected participant id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["tier"] != "farmer" {
+		t.Errorf("body tier = %q, want farmer", capturedBody["tier"])
+	}
+}
+
+func TestExecutor_SetTierAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/tiers/trader1" && r.Method == "PUT" {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"participant not found"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("set tier farmer for trader1", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 404, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — ADD FEE RULE
+// =====================================================================
+
+func TestExecutor_AddFeeRule(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/rules" && r.Method == "POST" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"id":"rule-001","fee_type":"trading","tier":"farmer","rate":"10bps"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("add fee rule trading farmer 10bps", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "trading") {
+		t.Errorf("expected fee type in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["fee_type"] != "trading" {
+		t.Errorf("body fee_type = %q, want trading", capturedBody["fee_type"])
+	}
+	if capturedBody["tier"] != "farmer" {
+		t.Errorf("body tier = %q, want farmer", capturedBody["tier"])
+	}
+	if capturedBody["rate"] != "10bps" {
+		t.Errorf("body rate = %q, want 10bps", capturedBody["rate"])
+	}
+}
+
+func TestExecutor_AddFeeRuleAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/admin/fees/rules" && r.Method == "POST" {
+			w.WriteHeader(500)
+			w.Write([]byte(`{"error":"internal server error"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("add fee rule trading farmer 10bps", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 500, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — ISSUE RECEIPT
+// =====================================================================
+
+func TestExecutor_IssueReceipt(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/warehouse/receipts" && r.Method == "POST" {
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(201)
+			w.Write([]byte(`{"receipt_id":"RCP-001","holder_id":"farmer1","commodity_id":"wheat","quantity":"5000"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("issue receipt farmer1 wheat 5000", "test-token")
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "farmer1") {
+		t.Errorf("expected holder id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["holder_id"] != "farmer1" {
+		t.Errorf("body holder_id = %q, want farmer1", capturedBody["holder_id"])
+	}
+	if capturedBody["commodity_id"] != "wheat" {
+		t.Errorf("body commodity_id = %q, want wheat", capturedBody["commodity_id"])
+	}
+	if capturedBody["quantity"] != "5000" {
+		t.Errorf("body quantity = %q, want 5000", capturedBody["quantity"])
+	}
+}
+
+func TestExecutor_IssueReceiptAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/warehouse/receipts" && r.Method == "POST" {
+			w.WriteHeader(400)
+			w.Write([]byte(`{"error":"insufficient inventory"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("issue receipt farmer1 wheat 5000", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 400, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — PLEDGE RECEIPT
+// =====================================================================
+
+func TestExecutor_PledgeReceipt(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/warehouse/receipts/RCP-001/pledge",
+		method: "POST",
+		status: 200,
+		body:   `{"receipt_id":"RCP-001","status":"pledged"}`,
+	}
+	// Use a multi-handler to also serve /auth/me
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/warehouse/receipts/RCP-001/pledge" && r.Method == "POST" {
+			h.called.Store(true)
+			w.WriteHeader(200)
+			w.Write([]byte(`{"receipt_id":"RCP-001","status":"pledged"}`))
+			return
+		}
+		if r.URL.Path == "/api/v1/auth/me" {
+			w.Write([]byte(`{"email":"admin@test.com"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("pledge receipt RCP-001", "test-token")
+	if !h.called.Load() {
+		t.Error("pledge receipt: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "✅") {
+		t.Errorf("expected success, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "RCP-001") {
+		t.Errorf("expected receipt id in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_PledgeReceiptAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/warehouse/receipts/") && r.Method == "POST" {
+			w.WriteHeader(409)
+			w.Write([]byte(`{"error":"receipt already pledged"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("pledge receipt RCP-001", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 409, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — SCREEN PARTICIPANT
+// =====================================================================
+
+func TestExecutor_ScreenParticipant(t *testing.T) {
+	var capturedBody map[string]string
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/screening/check" && r.Method == "POST" {
+			called = true
+			json.NewDecoder(r.Body).Decode(&capturedBody)
+			w.WriteHeader(200)
+			w.Write([]byte(`{"participant_id":"ABC","status":"clear","checked_at":"2026-03-31T10:00:00Z"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("screen participant ABC", "test-token")
+	if !called {
+		t.Error("screen participant: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected screening emoji in reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "ABC") {
+		t.Errorf("expected participant id in reply, got: %s", resp.Reply)
+	}
+	if capturedBody["participant_id"] != "ABC" {
+		t.Errorf("body participant_id = %q, want ABC", capturedBody["participant_id"])
+	}
+}
+
+func TestExecutor_ScreenTrader(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/screening/check" && r.Method == "POST" {
+			called = true
+			w.WriteHeader(200)
+			w.Write([]byte(`{"participant_id":"TRD-007","status":"flagged"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("screen trader TRD-007", "test-token")
+	if !called {
+		t.Error("screen trader: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected screening emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_ScreenParticipantAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/screening/check" && r.Method == "POST" {
+			w.WriteHeader(503)
+			w.Write([]byte(`{"error":"screening service unavailable"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("screen participant ABC", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 503, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — BATCH SCREEN
+// =====================================================================
+
+func TestExecutor_BatchScreen(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/screening/batch",
+		method: "POST",
+		status: 202,
+		body:   `{"job_id":"batch-001","queued":47}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("batch screen", "test-token")
+	if !h.called.Load() {
+		t.Error("batch screen: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected screening emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_ScreenAll(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/screening/batch",
+		method: "POST",
+		status: 202,
+		body:   `{"job_id":"batch-002","queued":12}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("screen all", "test-token")
+	if !h.called.Load() {
+		t.Error("screen all: endpoint not called")
+	}
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected screening emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+func TestExecutor_BatchScreenAPIError(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/screening/batch",
+		method: "POST",
+		status: 500,
+		body:   `{"error":"batch service error"}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("batch screen", "test-token")
+	if !strings.Contains(resp.Reply, "❌") {
+		t.Errorf("expected failure on 500, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// CRUD — HELP LISTS CRUD KEYWORDS
+// =====================================================================
+
+func TestExecutor_HelpListsCRUD(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected API call to %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("help", "test-token")
+
+	crudKeywords := []string{"commodity", "instrument", "fee", "warehouse", "receipt", "screen"}
+	for _, kw := range crudKeywords {
+		if !strings.Contains(strings.ToLower(resp.Reply), kw) {
+			t.Errorf("expected CRUD keyword %q in help output, got: %s", kw, resp.Reply)
+		}
 	}
 }
 

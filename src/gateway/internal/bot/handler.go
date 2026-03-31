@@ -69,7 +69,29 @@ func (h *Handlers) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try orchestrator first if available
+	// For deterministic CRUD commands, use the executor directly (bypass orchestrator).
+	// This ensures exact command patterns are handled reliably without LLM inference.
+	if IsCRUDCommand(req.Message) {
+		userToken := ""
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			userToken = strings.TrimPrefix(auth, "Bearer ")
+		}
+		execResp := h.executor.Execute(req.Message, userToken)
+		page := ""
+		if req.Context != nil {
+			page = req.Context["page"]
+		}
+		if len(execResp.Suggestions) == 0 {
+			execResp.Suggestions = GetSuggestions(page)
+		}
+		if execResp.Actions == nil {
+			execResp.Actions = []Action{}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": execResp})
+		return
+	}
+
+	// Try orchestrator for conversational/analysis queries
 	if h.bridge.IsAvailable() {
 		orchResp, err := h.bridge.ProxyToOrchestrator(req.Message, req.Context)
 		if err == nil {

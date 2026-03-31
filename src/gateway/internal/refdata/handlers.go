@@ -79,6 +79,10 @@ func (h *Handlers) ListInstruments(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetInstrument(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
+		// Try path parameter {id} from the router
+		id = r.PathValue("id")
+	}
+	if id == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing instrument id")
 		return
 	}
@@ -165,7 +169,10 @@ func (h *Handlers) UpdateInstrument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.URL.Query().Get("id")
+	id := r.PathValue("id")
+	if id == "" {
+		id = r.URL.Query().Get("id")
+	}
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "Missing instrument id")
 		return
