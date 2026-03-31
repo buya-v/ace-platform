@@ -12,8 +12,7 @@ map $http_origin $cors_origin {
 
 # ── admin.garudax.asla.mn — Admin Dashboard ──────────────────────────────
 server {
-    # Primary + legacy alias (remove legacy after DNS cutover)
-    server_name admin.garudax.asla.mn  *.ace.asla.mn;
+    server_name admin.garudax.asla.mn;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;

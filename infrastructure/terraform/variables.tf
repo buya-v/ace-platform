@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "Project identifier used in resource naming and tags"
   type        = string
-  default     = "ace-platform"
+  default     = "garudax-platform"
 }
 
 variable "environment" {

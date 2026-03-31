@@ -3,7 +3,7 @@
 # NEVER commit actual tfvars with secrets — only .example files
 
 # --- General ---
-project_name    = "ace-platform"
+project_name    = "garudax-platform"
 environment     = "dev"       # dev | staging | prod
 aws_region      = "ap-northeast-1"
 dr_region       = "ap-southeast-1"
@@ -50,7 +50,7 @@ redis_replicas_per_shard = 1
 
 # --- Tags ---
 tags = {
-  Project     = "ace-platform"
+  Project     = "garudax-platform"
   Environment = "dev"
   ManagedBy   = "terraform"
   CostCenter  = "engineering"

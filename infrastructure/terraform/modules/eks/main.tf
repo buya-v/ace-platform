@@ -24,7 +24,7 @@ locals {
       max_size      = 4
       desired_size  = 2
       labels = {
-        "ace-platform/node-role" = "system"
+        "garudax-platform/node-role" = "system"
       }
       taints = []
     }
@@ -34,10 +34,10 @@ locals {
       max_size      = 8
       desired_size  = 2
       labels = {
-        "ace-platform/node-role" = "exchange-core"
+        "garudax-platform/node-role" = "exchange-core"
       }
       taints = [{
-        key    = "ace-platform/exchange-core"
+        key    = "garudax-platform/exchange-core"
         value  = "true"
         effect = "NO_SCHEDULE"
       }]
@@ -48,7 +48,7 @@ locals {
       max_size      = 10
       desired_size  = 2
       labels = {
-        "ace-platform/node-role" = "app-general"
+        "garudax-platform/node-role" = "app-general"
       }
       taints = []
     }
@@ -58,10 +58,10 @@ locals {
       max_size      = 3
       desired_size  = 1
       labels = {
-        "ace-platform/node-role" = "monitoring"
+        "garudax-platform/node-role" = "monitoring"
       }
       taints = [{
-        key    = "ace-platform/monitoring"
+        key    = "garudax-platform/monitoring"
         value  = "true"
         effect = "NO_SCHEDULE"
       }]
@@ -72,10 +72,10 @@ locals {
       max_size      = 6
       desired_size  = 1
       labels = {
-        "ace-platform/node-role" = "data-pipeline"
+        "garudax-platform/node-role" = "data-pipeline"
       }
       taints = [{
-        key    = "ace-platform/data-pipeline"
+        key    = "garudax-platform/data-pipeline"
         value  = "true"
         effect = "NO_SCHEDULE"
       }]
