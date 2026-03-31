@@ -102,6 +102,9 @@ func (ob *OrderBook) SubmitOrder(order *types.Order) MatchResult {
 	order.Status = types.OrderStatusNew
 	order.RemainingQty = order.Quantity
 
+	// Initialize iceberg fields (adjusts RemainingQty to DisplayQty)
+	initIceberg(order)
+
 	// Emit NEW execution report
 	result.ExecutionReports = append(result.ExecutionReports, types.ExecutionReport{
 		ExecID:        ob.idGen.NewID(),
@@ -347,6 +350,15 @@ func (ob *OrderBook) validateOrder(order *types.Order) string {
 	if order.InstrumentID != "" && order.InstrumentID != ob.InstrumentID {
 		return fmt.Sprintf("instrument mismatch: order has %s, book is %s", order.InstrumentID, ob.InstrumentID)
 	}
+	// Iceberg validation: only limit orders can be icebergs, and display must be < quantity
+	if order.DisplayQty > 0 {
+		if order.OrderType != types.OrderTypeLimit {
+			return "iceberg orders must be limit orders"
+		}
+		if order.DisplayQty >= order.Quantity {
+			return "iceberg display quantity must be less than total quantity"
+		}
+	}
 	return ""
 }
 
@@ -456,8 +468,9 @@ func (ob *OrderBook) match(incoming *types.Order, result *MatchResult, now time.
 			})
 
 			// Resting order report
+			// For iceberg orders, only report FILL when entire iceberg is exhausted
 			restingExecType := types.ExecTypePartialFill
-			if resting.RemainingQty == 0 {
+			if resting.RemainingQty == 0 && resting.HiddenQty == 0 {
 				restingExecType = types.ExecTypeFill
 			}
 			result.ExecutionReports = append(result.ExecutionReports, types.ExecutionReport{
@@ -479,11 +492,17 @@ func (ob *OrderBook) match(incoming *types.Order, result *MatchResult, now time.
 				AccountID:     resting.AccountID,
 			})
 
-			// Remove filled resting order from book
+			// Remove filled resting order from book, or replenish if iceberg
 			if resting.RemainingQty == 0 {
-				bestLevel.Dequeue()
-				delete(ob.orderIndex, resting.OrderID)
-				delete(ob.orderLevelIndex, resting.OrderID)
+				if ob.replenishIceberg(resting, bestLevel, now) {
+					// Iceberg was replenished: order stays on book with new time priority.
+					// The exec report above already shows FILL for this slice.
+					// Continue matching — the replenished order is now at back of queue.
+				} else {
+					bestLevel.Dequeue()
+					delete(ob.orderIndex, resting.OrderID)
+					delete(ob.orderLevelIndex, resting.OrderID)
+				}
 			}
 		}
 

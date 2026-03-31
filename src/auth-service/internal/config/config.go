@@ -24,6 +24,9 @@ type Config struct {
 	BcryptCost          int
 	MaxFailedAttempts   int
 	LockoutDurationMins int
+
+	// Redis
+	RedisURL string
 }
 
 func DefaultConfig() Config {
@@ -107,6 +110,9 @@ func ConfigFromEnv() Config {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.LockoutDurationMins = n
 		}
+	}
+	if v := os.Getenv("REDIS_URL"); v != "" {
+		cfg.RedisURL = v
 	}
 
 	return cfg

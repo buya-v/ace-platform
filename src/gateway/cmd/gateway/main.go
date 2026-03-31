@@ -111,7 +111,19 @@ func main() {
 	// Build middleware chain: RequestID → Tracing → Metrics → BodyLimit → Auth → RateLimit → Router
 	var httpHandler http.Handler = rt
 	if cfg.RateLimitEnabled {
-		httpHandler = middleware.RateLimit(rateLimitGroup, groupFn, keyFn)(httpHandler)
+		if cfg.RedisURL != "" {
+			redisRL, err := middleware.NewRedisRateLimiter(cfg.RedisURL, rateLimitGroup, 0)
+			if err != nil {
+				logger.Warn("Redis rate limiter unavailable, using in-memory fallback",
+					slog.String("error", err.Error()))
+				httpHandler = middleware.RateLimit(rateLimitGroup, groupFn, keyFn)(httpHandler)
+			} else {
+				logger.Info("Using Redis rate limiter", slog.String("redis", cfg.RedisURL))
+				httpHandler = middleware.RedisRateLimit(redisRL, groupFn, keyFn)(httpHandler)
+			}
+		} else {
+			httpHandler = middleware.RateLimit(rateLimitGroup, groupFn, keyFn)(httpHandler)
+		}
 	}
 	httpHandler = middleware.Auth(jwtValidator, authCfg)(httpHandler)
 	httpHandler = middleware.BodyLimit(cfg.MaxBodySize)(httpHandler)

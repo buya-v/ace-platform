@@ -45,6 +45,21 @@ func main() {
 		log.Println("Using in-memory store (set DB_HOST to enable PostgreSQL)")
 	}
 
+	// Layer Redis session store on top when REDIS_URL is set.
+	// Sessions are stored in Redis with TTL; all other data stays in the
+	// underlying store (Postgres or in-memory).
+	if cfg.RedisURL != "" {
+		sessionTTL := time.Duration(cfg.RefreshTokenTTLSecs) * time.Second
+		redisStore, err := store.NewRedisSessionStore(repo, cfg.RedisURL, sessionTTL)
+		if err != nil {
+			log.Printf("WARNING: Redis session store unavailable (%v) — using fallback", err)
+		} else {
+			repo = redisStore
+			defer redisStore.Close()
+			log.Printf("Using Redis session store (%s)", store.ParseRedisURL(cfg.RedisURL))
+		}
+	}
+
 	lockoutDuration := time.Duration(cfg.LockoutDurationMins) * time.Minute
 	authSvc := auth.NewService(repo, jwtSvc, cfg.BcryptCost, cfg.MaxFailedAttempts, lockoutDuration)
 

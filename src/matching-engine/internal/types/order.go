@@ -152,6 +152,16 @@ type Order struct {
 	ExpireAt       time.Time // Zero for GTC
 	CreatedAt      time.Time
 	SequenceNumber uint64 // Global sequence assigned on acceptance
+
+	// Iceberg order fields
+	DisplayQty uint64 // Visible quantity on the book (0 = not iceberg)
+	TotalQty   uint64 // Total iceberg quantity (including hidden)
+	HiddenQty  uint64 // Currently hidden quantity
+}
+
+// IsIceberg returns true if this is an iceberg order.
+func (o *Order) IsIceberg() bool {
+	return o.DisplayQty > 0 && o.TotalQty > 0
 }
 
 // IsFilled returns true if the order is fully filled.
