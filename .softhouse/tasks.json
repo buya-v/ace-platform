@@ -57,8 +57,8 @@
         "src/admin-ui/src/services/botApi.ts"
       ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T505",

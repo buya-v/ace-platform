@@ -92,6 +92,19 @@ export function normalizeSuggestion(raw: Record<string, string>, idx: number): S
   };
 }
 
+/**
+ * Normalize a raw action from the gateway (which may use `url` instead of `payload`)
+ * into the canonical UI Action shape.
+ */
+export function normalizeAction(raw: Record<string, string>, idx: number): Action {
+  return {
+    id: raw.id ?? `act-${idx}`,
+    label: raw.label ?? '',
+    type: (raw.type as Action['type']) ?? 'action',
+    payload: raw.payload ?? raw.url ?? raw.target ?? '',
+  };
+}
+
 export async function getBotSuggestions(page: string): Promise<Suggestion[]> {
   const url = buildBotUrl(`/suggestions?page=${encodeURIComponent(page)}`);
   const response = await fetch(url, {

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useBot } from '../contexts/BotContext';
 import { formatMessageTime } from '../contexts/BotContext';
 import { BotTicketForm } from './BotTicketForm';
+import { BotMessageCard } from './BotMessageCard';
 import styles from './BotChatPanel.module.css';
 
 export function BotChatPanel() {
@@ -82,9 +83,13 @@ export function BotChatPanel() {
               msg.role === 'user' ? styles.userMessage : styles.botMessage
             }`}
           >
-            {msg.content}
+            {msg.role === 'bot' ? (
+              <BotMessageCard reply={msg.content} actions={msg.actions} />
+            ) : (
+              msg.content
+            )}
             <div className={styles.messageTime}>{formatMessageTime(msg.timestamp)}</div>
-            {msg.actions && msg.actions.length > 0 && (
+            {msg.role === 'user' && msg.actions && msg.actions.length > 0 && (
               <div className={styles.actionChips}>
                 {msg.actions.map((action) => (
                   <button

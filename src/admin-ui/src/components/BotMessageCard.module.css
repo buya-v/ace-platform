@@ -1,0 +1,95 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.segment {
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+/* Typed segments */
+.success {
+  border-left: 3px solid var(--accent-green);
+  padding-left: var(--space-2);
+  color: var(--text-primary);
+}
+
+.error {
+  border-left: 3px solid var(--accent-red);
+  padding-left: var(--space-2);
+  color: var(--text-primary);
+}
+
+.warning {
+  border-left: 3px solid var(--accent-yellow);
+  padding-left: var(--space-2);
+  color: var(--text-primary);
+}
+
+.bullet {
+  padding-left: var(--space-4);
+  position: relative;
+  color: var(--text-primary);
+}
+
+.bullet::before {
+  content: '•';
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-muted);
+}
+
+.heading {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 2px;
+}
+
+.kv {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.kvKey {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.kvValue {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.text {
+  color: var(--text-primary);
+}
+
+/* Action buttons (pill buttons) */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.actionPill {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--accent-blue);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.actionPill:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+}
