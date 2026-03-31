@@ -9,11 +9,11 @@ import (
 
 // WarehouseService implements the business logic for the warehouse domain.
 type WarehouseService struct {
-	store *store.Store
+	store store.DataStore
 }
 
-// New creates a new WarehouseService.
-func New(s *store.Store) *WarehouseService {
+// New creates a new WarehouseService with the given DataStore implementation.
+func New(s store.DataStore) *WarehouseService {
 	return &WarehouseService{store: s}
 }
 
