@@ -43,4 +43,26 @@ export function registerParticipantTools(server: McpServer, client: GatewayClien
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     },
   );
+
+  server.tool(
+    "screen_participant",
+    "Run a compliance screening check on a participant",
+    {
+      participant_id: z.string().describe("Participant ID to screen"),
+    },
+    async ({ participant_id }) => {
+      const data = await client.request("POST", "/api/v1/screening/check", { participant_id });
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    "batch_screen",
+    "Run a batch compliance screening check on all participants",
+    {},
+    async () => {
+      const data = await client.request("POST", "/api/v1/screening/batch", {});
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    },
+  );
 }
