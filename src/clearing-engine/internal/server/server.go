@@ -50,6 +50,11 @@ func (s *Server) NetObligations() []types.NettingResult {
 	return s.engine.NetObligations()
 }
 
+// DefaultFund returns the total default fund balance.
+func (s *Server) DefaultFundTotal() types.Decimal {
+	return s.engine.GetTotalDefaultFund()
+}
+
 // StartHealthServer starts HTTP health and readiness endpoints.
 func (s *Server) StartHealthServer() error {
 	mux := http.NewServeMux()
@@ -86,6 +91,13 @@ func (s *Server) StartHealthServer() error {
 		results := s.engine.NetObligations()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(results)
+	})
+
+	mux.HandleFunc("/default-fund", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"total_fund": s.engine.GetTotalDefaultFund().String(),
+		})
 	})
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)

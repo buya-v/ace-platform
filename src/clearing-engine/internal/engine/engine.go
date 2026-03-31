@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/garudax-platform/clearing-engine/internal/defaultmgmt"
 	"github.com/garudax-platform/clearing-engine/internal/netting"
 	"github.com/garudax-platform/clearing-engine/internal/novation"
 	"github.com/garudax-platform/clearing-engine/internal/position"
@@ -25,6 +26,10 @@ type Engine struct {
 	nettingSvc  *netting.Service
 	oblStore    store.ObligationStore
 
+	// Default fund management and waterfall
+	defaultFundMgr *defaultmgmt.DefaultFundManager
+	waterfall      *defaultmgmt.DefaultWaterfall
+
 	tradeHandler TradeHandler
 
 	// Track processed trades to ensure idempotency
@@ -35,11 +40,14 @@ func NewEngine(
 	idGen types.IDGenerator,
 	oblStore store.ObligationStore,
 ) *Engine {
+	fundMgr := defaultmgmt.NewDefaultFundManager()
 	return &Engine{
 		novationSvc:     novation.NewService(idGen),
 		positionMgr:     position.NewManager(),
 		nettingSvc:      netting.NewService(),
 		oblStore:        oblStore,
+		defaultFundMgr:  fundMgr,
+		waterfall:       defaultmgmt.NewDefaultWaterfall(fundMgr),
 		processedTrades: make(map[string]bool),
 	}
 }
@@ -149,6 +157,44 @@ func (e *Engine) GetPositionsByInstrument(instrumentID string) []types.Position 
 // GetObligations returns all clearing obligations for a trade.
 func (e *Engine) GetObligations(tradeID string) []types.ClearingObligation {
 	return e.oblStore.ByTrade(tradeID)
+}
+
+// --- Default Fund Management ---
+
+// AddDefaultFundContribution records a participant's contribution to the default fund.
+func (e *Engine) AddDefaultFundContribution(participantID string, amount types.Decimal) error {
+	return e.defaultFundMgr.AddContribution(participantID, amount)
+}
+
+// GetDefaultFundContribution returns a participant's default fund contribution.
+func (e *Engine) GetDefaultFundContribution(participantID string) types.Decimal {
+	return e.defaultFundMgr.GetContribution(participantID)
+}
+
+// GetTotalDefaultFund returns the total default fund balance.
+func (e *Engine) GetTotalDefaultFund() types.Decimal {
+	return e.defaultFundMgr.GetTotalFund()
+}
+
+// SetCCPSkinInTheGame sets the CCP's own capital in the waterfall.
+func (e *Engine) SetCCPSkinInTheGame(amount types.Decimal) error {
+	return e.defaultFundMgr.SetCCPSkinInTheGame(amount)
+}
+
+// SetCCPAdditionalCapital sets the CCP's additional capital (last waterfall layer).
+func (e *Engine) SetCCPAdditionalCapital(amount types.Decimal) error {
+	return e.defaultFundMgr.SetCCPAdditionalCapital(amount)
+}
+
+// ExecuteDefaultWaterfall runs the five-layer default waterfall for a defaulting participant.
+func (e *Engine) ExecuteDefaultWaterfall(
+	defaultingParticipantID string,
+	totalLoss types.Decimal,
+	defaulterMargin types.Decimal,
+) (*defaultmgmt.WaterfallResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.waterfall.ExecuteWaterfall(defaultingParticipantID, totalLoss, defaulterMargin)
 }
 
 // ClearingResult captures the full output of clearing a single trade.
