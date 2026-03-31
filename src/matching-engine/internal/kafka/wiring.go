@@ -1,11 +1,31 @@
 package kafka
 
+import (
+	"log"
+	"os"
+	"strings"
+)
+
 // Matching-engine Kafka wiring:
 //   Producer: ace.trades.executed (partition key: instrument_id)
 
 const (
 	ServiceName = "matching-engine"
 )
+
+// NewProducerFromEnv creates a Producer based on environment configuration.
+// If KAFKA_BROKERS is set and non-empty, returns a real KafkaProducer using
+// kafka-go Writer. Otherwise returns a ChannelProducer for local/test use.
+func NewProducerFromEnv() Producer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConfigFromEnv()
+		log.Printf("[%s] using real Kafka producer, brokers=%v", ServiceName, cfg.Brokers)
+		return NewKafkaProducer(cfg)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based producer", ServiceName)
+	return NewTradeProducer(DefaultProducerConfig())
+}
 
 // TradeExecutedPayload is the event payload for ace.trades.executed.
 type TradeExecutedPayload struct {

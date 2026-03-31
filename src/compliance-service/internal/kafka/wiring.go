@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 )
 
 // Compliance-service Kafka wiring:
@@ -12,6 +15,20 @@ import (
 //   Producer: ace.compliance.status-changed (partition key: participant_id)
 
 const ServiceName = "compliance-service"
+
+// NewProducerFromEnv creates a Producer based on environment configuration.
+func NewProducerFromEnv() Producer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConfigFromEnv()
+		log.Printf("[%s] using real Kafka producer, brokers=%v", ServiceName, cfg.Brokers)
+		return NewKafkaProducer(cfg)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based producer", ServiceName)
+	p := NewChannelProducer(DefaultProducerConfig())
+	p.RegisterTopic(TopicComplianceChanged, 1000)
+	return p
+}
 
 // ComplianceStatusChangedPayload is the event payload for ace.compliance.status-changed.
 type ComplianceStatusChangedPayload struct {
@@ -82,4 +99,20 @@ func UserRegisteredHandler(cb UserRegisteredCallback) Handler {
 		}
 		return cb(ctx, payload, event.CorrelationID)
 	}
+}
+
+// NewConsumerFromEnv creates a Consumer based on environment configuration.
+func NewConsumerFromEnv(dlqProducer Producer) Consumer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	groupID := os.Getenv("KAFKA_GROUP_ID")
+	if groupID == "" {
+		groupID = ServiceName
+	}
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConsumerConfigFromEnv(groupID)
+		log.Printf("[%s] using real Kafka consumer, brokers=%v, group=%s", ServiceName, cfg.Brokers, cfg.GroupID)
+		return NewKafkaConsumer(cfg, dlqProducer)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based consumer", ServiceName)
+	return NewChannelConsumer(DefaultConsumerConfig(groupID), dlqProducer)
 }

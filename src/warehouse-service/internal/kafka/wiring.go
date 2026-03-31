@@ -1,10 +1,31 @@
 package kafka
 
+import (
+	"log"
+	"os"
+	"strings"
+)
+
 // Warehouse-service Kafka wiring:
 //   Producer: ace.warehouse.receipt-pledged (partition key: participant_id)
 //   Producer: ace.warehouse.delivery-completed (partition key: instrument_id)
 
 const ServiceName = "warehouse-service"
+
+// NewProducerFromEnv creates a Producer based on environment configuration.
+func NewProducerFromEnv() Producer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConfigFromEnv()
+		log.Printf("[%s] using real Kafka producer, brokers=%v", ServiceName, cfg.Brokers)
+		return NewKafkaProducer(cfg)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based producer", ServiceName)
+	p := NewChannelProducer(DefaultProducerConfig())
+	p.RegisterTopic(TopicWarehouseReceiptPledged, 1000)
+	p.RegisterTopic(TopicWarehouseDeliveryCompleted, 1000)
+	return p
+}
 
 // ReceiptPledgedPayload is the event payload for ace.warehouse.receipt-pledged.
 type ReceiptPledgedPayload struct {

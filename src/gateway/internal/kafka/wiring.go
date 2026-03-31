@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 )
 
 // Gateway Kafka wiring:
@@ -11,6 +14,24 @@ import (
 //   Consumer: ace.compliance.status-changed (push to WebSocket clients)
 
 const ServiceName = "gateway"
+
+// NewConsumerFromEnv creates a Consumer based on environment configuration.
+// If KAFKA_BROKERS is set and non-empty, returns a real KafkaConsumer.
+// Otherwise returns a ChannelConsumer for local/test use.
+func NewConsumerFromEnv(dlqProducer Producer) Consumer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	groupID := os.Getenv("KAFKA_GROUP_ID")
+	if groupID == "" {
+		groupID = ServiceName
+	}
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConsumerConfigFromEnv(groupID)
+		log.Printf("[%s] using real Kafka consumer, brokers=%v, group=%s", ServiceName, cfg.Brokers, cfg.GroupID)
+		return NewKafkaConsumer(cfg, dlqProducer)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based consumer", ServiceName)
+	return NewChannelConsumer(DefaultConsumerConfig(groupID), dlqProducer)
+}
 
 // MarginCallIssuedPayload mirrors margin-engine's published payload.
 type MarginCallIssuedPayload struct {

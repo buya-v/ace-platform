@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
 )
 
 // Clearing-engine Kafka wiring:
@@ -13,6 +16,22 @@ import (
 //   Producer: ace.clearing.novated (partition key: instrument_id)
 
 const ServiceName = "clearing-engine"
+
+// NewProducerFromEnv creates a Producer based on environment configuration.
+// If KAFKA_BROKERS is set and non-empty, returns a real KafkaProducer.
+// Otherwise returns a ChannelProducer for local/test use.
+func NewProducerFromEnv() Producer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConfigFromEnv()
+		log.Printf("[%s] using real Kafka producer, brokers=%v", ServiceName, cfg.Brokers)
+		return NewKafkaProducer(cfg)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based producer", ServiceName)
+	p := NewChannelProducer(DefaultProducerConfig())
+	p.RegisterTopic(TopicClearingNovated, 1000)
+	return p
+}
 
 // ClearingNovatedPayload is the event payload for ace.clearing.novated.
 type ClearingNovatedPayload struct {
@@ -74,4 +93,21 @@ func TradeExecutedHandler(cb TradeCallback) Handler {
 func SetupConsumer(cfg ConsumerConfig, dlqProducer Producer) *ChannelConsumer {
 	c := NewChannelConsumer(cfg, dlqProducer)
 	return c
+}
+
+// NewConsumerFromEnv creates a Consumer based on environment configuration.
+// If KAFKA_BROKERS is set, returns a real KafkaConsumer. Otherwise ChannelConsumer.
+func NewConsumerFromEnv(dlqProducer Producer) Consumer {
+	brokers := os.Getenv("KAFKA_BROKERS")
+	groupID := os.Getenv("KAFKA_GROUP_ID")
+	if groupID == "" {
+		groupID = ServiceName
+	}
+	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+		cfg := ConsumerConfigFromEnv(groupID)
+		log.Printf("[%s] using real Kafka consumer, brokers=%v, group=%s", ServiceName, cfg.Brokers, cfg.GroupID)
+		return NewKafkaConsumer(cfg, dlqProducer)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based consumer", ServiceName)
+	return NewChannelConsumer(DefaultConsumerConfig(groupID), dlqProducer)
 }
