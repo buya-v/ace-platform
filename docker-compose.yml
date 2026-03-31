@@ -333,6 +333,7 @@ services:
       COMPLIANCE_SERVICE_ADDR: compliance-service:50056
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
+      BOT_ORCHESTRATOR_URL: "http://admin-bot-orchestrator:3100"
     ports:
       - "8080:8080"
     healthcheck:
@@ -381,6 +382,32 @@ services:
       <<: *healthcheck-http
     networks:
       - garudax-network
+
+  # ─── Bot Services ──────────────────────────────────────────────────
+
+  admin-bot-orchestrator:
+    build:
+      context: ./src/admin-bot/orchestrator
+      dockerfile: Dockerfile
+    container_name: garudax-bot-orchestrator
+    depends_on:
+      gateway:
+        condition: service_started
+    environment:
+      PORT: "3100"
+      GARUDAX_GATEWAY_URL: "http://gateway:8080"
+      GARUDAX_ADMIN_EMAIL: "${BOT_ADMIN_EMAIL:-admin@garudax.mn}"
+      GARUDAX_ADMIN_PASSWORD: "${BOT_ADMIN_PASSWORD:-Adm1n@GarudaX!}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      MCP_SERVER_PATH: "/mcp/dist/index.js"
+      BOT_DAILY_REPORT_HOUR: "9"
+    volumes:
+      - ./src/admin-bot/mcp-server:/mcp:ro
+    ports:
+      - "3100:3100"
+    networks:
+      - garudax-network
+    restart: unless-stopped
 
   # ─── Reverse Proxy ────────────────────────────────────────────────
 
