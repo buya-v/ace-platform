@@ -1,7 +1,56 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260331-bot-conversation",
+  "feature": "Bot Conversation Intelligence — Guided Prompts + Intent Disambiguation",
+  "requirement": "Improve bot conversation capability. When user says 'create new instrument' without parameters, bot should ask for the required fields instead of listing instruments. Add guided prompts for all CRUD operations and intent disambiguation for ambiguous commands.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T801",
+      "title": "Guided prompts — ask for missing fields on incomplete CRUD commands",
+      "description": "When a user says 'create new instrument' or 'create commodity' without providing all required fields, the bot should respond with a guided prompt asking for the missing information, instead of falling through to the list handler.\n\nUpdate `src/gateway/internal/bot/executor.go`:\n\n1. **Add intent detection BEFORE keyword handlers** — check if the message contains a CREATE/UPDATE verb + entity noun without full parameters:\n   ```go\n   // Detect incomplete create commands and guide the user\n   if containsAny(lower, \"create\", \"new\", \"add\") {\n       if containsAny(lower, \"instrument\") && !reCreateInstrument.MatchString(message) {\n           return ChatResponse{\n               Reply: \"To create a new instrument, please provide:\\n\\n\" +\n                   \"`create instrument <ID> <commodity> <month> <year> contract <size> tick <tick_size>`\\n\\n\" +\n                   \"Example: `create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01`\\n\\n\" +\n                   \"Available commodities: wheat, corn, soybeans, barley, cashmere, cattle\\n\" +\n                   \"Or type `list commodities` to see all.\",\n           }\n       }\n       if containsAny(lower, \"commodity\") && !reCreateCommodity.MatchString(message) {\n           return ChatResponse{\n               Reply: \"To create a new commodity, provide:\\n\\n\" +\n                   \"`create commodity <id> <category> <unit>`\\n\\n\" +\n                   \"Example: `create commodity rice grain kg`\\n\\n\" +\n                   \"Categories: grain, oilseed, livestock, dairy, fiber\",\n           }\n       }\n       if containsAny(lower, \"fee\") {\n           // Guide for fee schedule vs fee rule\n           return ChatResponse{\n               Reply: \"Fee management commands:\\n\\n\" +\n                   \"`create fee schedule <name> <year>` — create new fee schedule\\n\" +\n                   \"`add fee rule <type> <tier> <rate_bps>` — add fee rule\\n\" +\n                   \"`set tier <tier> for <participant>` — set participant tier\\n\\n\" +\n                   \"Example: `add fee rule trading farmer 10bps`\",\n           }\n       }\n       if containsAny(lower, \"ticket\", \"bug\", \"issue\") {\n           return ChatResponse{\n               Reply: \"To create a ticket, describe the issue:\\n\\n\" +\n                   \"`report a bug: <description>`\\n\" +\n                   \"`create ticket: <title> - <description>`\\n\\n\" +\n                   \"Example: `report a bug: the margin page loads slowly`\",\n           }\n       }\n       if containsAny(lower, \"receipt\") {\n           return ChatResponse{\n               Reply: \"To issue a warehouse receipt:\\n\\n\" +\n                   \"`issue receipt <holder_id> <commodity> <quantity>`\\n\\n\" +\n                   \"Example: `issue receipt farmer1 wheat 5000`\",\n           }\n       }\n       if containsAny(lower, \"facility\", \"warehouse\") {\n           return ChatResponse{\n               Reply: \"To register a warehouse facility:\\n\\n\" +\n                   \"`register facility <name>`\\n\\n\" +\n                   \"Example: `register facility UB Grain Storage`\",\n           }\n       }\n   }\n   ```\n\n2. **Add intent disambiguation for ambiguous verbs** — when user says just 'instrument' or 'margin' without a verb:\n   ```go\n   // If message is just a noun without verb, ask what they want to do\n   if isJustNoun(lower) {\n       return ChatResponse{\n           Reply: fmt.Sprintf(\"What would you like to do with %s?\\n\\n\" +\n               \"• `show %s` — view current data\\n\" +\n               \"• `create %s` — create new\\n\" +\n               \"• Type `help` for all commands\", noun, noun, noun),\n       }\n   }\n   ```\n\n3. **Improve the 'show'/'view' prefix handling** — currently 'show instruments' and 'create instrument' both match `containsAny(lower, \"instrument\")`. Add explicit show/list prefix detection:\n   ```go\n   // Explicit show/list/view commands → always list data\n   if strings.HasPrefix(lower, \"show \") || strings.HasPrefix(lower, \"list \") || strings.HasPrefix(lower, \"view \") {\n       // ... route to list handlers\n   }\n   ```\n\n4. **Move the keyword handlers (`containsAny`) to ONLY fire for show/list/query intent**, not for create/update:\n   - `containsAny(lower, \"instrument\")` should NOT fire when the message also contains \"create\" or \"new\"\n   - Add guard: `if !containsAny(lower, \"create\", \"new\", \"add\", \"update\", \"set\", \"register\") { ... list handler ... }`\n\n5. **Add friendly error messages** instead of raw JSON dumps:\n   - When API returns error, show: \"❌ Could not create [entity]. Error: [friendly message]. Try: [example command]\"\n   - When API returns success, show: \"✅ [Entity] '[name]' created successfully.\" (not raw JSON)\n\nAcceptance:\n- 'create new instrument' → asks for parameters (not lists instruments)\n- 'create commodity' → asks for id/category/unit\n- 'create commodity rice grain kg' → creates (existing behavior preserved)\n- 'show instruments' → lists (existing behavior preserved)\n- 'instrument' (just noun) → asks what they want to do\n- All existing executor tests still pass",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/executor.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T802",
+      "title": "Go tests — guided prompt and disambiguation tests",
+      "description": "Write Go tests verifying the guided prompt behavior.\n\nUpdate `src/gateway/internal/bot/executor_test.go` — add tests:\n\n1. 'create new instrument' → response contains 'provide' and example command (NOT instrument list)\n2. 'create instrument' → same guided prompt\n3. 'new instrument' → same guided prompt\n4. 'create commodity' (no params) → asks for id/category/unit\n5. 'add fee' → shows fee management options\n6. 'create ticket' → shows ticket creation format\n7. 'new receipt' → shows receipt format\n8. 'create facility' → shows facility format\n9. 'instrument' (just noun) → asks what to do\n10. 'show instruments' → lists instruments (NOT guided prompt)\n11. 'list commodities' → lists commodities (NOT guided prompt)\n12. 'create commodity rice grain kg' → creates (NOT guided prompt)\n13. 'create instrument RIC-2027 rice jul 2027 contract 5000 tick 0.01' → creates (NOT guided prompt)\n14. 'margin' (just noun) → asks what to do with margin\n15. 'help' → still shows full help\n\n15+ tests. Use httptest.NewServer mock.\n\nAcceptance: All tests pass. Guided prompts fire correctly. Existing behavior preserved.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/bot/executor_test.go"],
+      "dependencies": ["T801"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T803",
+      "title": "Playwright UAT — bot guided conversation tests",
+      "description": "Write Playwright tests verifying the bot guides users through CRUD operations.\n\nUpdate `tests/playwright/uat/bot-crud.spec.ts` — add tests:\n\n1. 'create new instrument' → bot responds with format instructions (not instrument list)\n2. 'create commodity' → bot asks for parameters\n3. 'add fee' → bot shows fee management options\n4. 'new receipt' → bot shows receipt format\n5. User follows guided prompt → successful creation\n\nOr create separate `tests/playwright/uat/bot-guided.spec.ts` with 8+ tests.\n\nAcceptance: Bot guides users correctly. All tests pass.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["tests/playwright/uat/bot-guided.spec.ts"],
+      "dependencies": ["T801"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T804",
+      "title": "Docker rebuild + UAT verify guided prompts",
+      "description": "Rebuild gateway, deploy, and verify guided prompts work in live system.\n\n1. `cd src/gateway && go build ./... && go test ./internal/bot/`\n2. `docker compose build gateway && docker restart garudax-gateway`\n3. Re-register admin\n4. Test: POST /bot/chat 'create new instrument' → verify guided prompt\n5. Test: POST /bot/chat 'show instruments' → verify list (not prompt)\n6. Run UAT: `cd tests/playwright && npx playwright test uat/bot-crud.spec.ts uat/bot-agent.spec.ts --project=uat`\n\nAcceptance: All UAT tests pass. Guided prompts work in live browser.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["docker-compose.yml"],
+      "dependencies": ["T801", "T802"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
