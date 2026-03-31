@@ -550,8 +550,8 @@
         "T103",
         "T104"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P8",
       "estimate_minutes": 12
     },
@@ -608,8 +608,8 @@
         "T110",
         "T111"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "phase": "P7",
       "estimate_minutes": 10
     }
