@@ -422,6 +422,181 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: "❌ Mass cancel failed."}
 	}
 
+	// --- Create commodity ---
+	// Pattern: "create commodity rice grain kg"
+	if reCreateCommodity := regexp.MustCompile(`(?i)^create\s+commodity\s+(\S+)\s+(\S+)\s+(\S+)`).FindStringSubmatch(message); len(reCreateCommodity) >= 4 {
+		id := strings.ToLower(reCreateCommodity[1])
+		category := reCreateCommodity[2]
+		unit := reCreateCommodity[3]
+		name := strings.ToUpper(id[:1]) + id[1:]
+		payload := map[string]string{"id": id, "name": name, "category": category, "unit": unit}
+		respBody, status := e.doRequest("POST", "/api/v1/admin/commodities", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Commodity '%s' created (category: %s, unit: %s).", id, category, unit), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create commodity: %s", respBody)}
+	}
+
+	// --- Create instrument ---
+	// Pattern: "create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01"
+	if reCreateInst := regexp.MustCompile(`(?i)^create\s+instrument\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d{4})\s+contract\s+(\d+(?:\.\d+)?)\s+tick\s+(\d+(?:\.\d+)?)`).FindStringSubmatch(message); len(reCreateInst) == 7 {
+		instID := strings.ToUpper(reCreateInst[1])
+		commodity := strings.ToLower(reCreateInst[2])
+		month := reCreateInst[3]
+		year := reCreateInst[4]
+		contractSize := reCreateInst[5]
+		tickSize := reCreateInst[6]
+		payload := map[string]string{
+			"id":            instID,
+			"commodity_id":  commodity,
+			"expiry_month":  month,
+			"expiry_year":   year,
+			"contract_size": contractSize,
+			"tick_size":     tickSize,
+		}
+		respBody, status := e.doRequest("POST", "/api/v1/admin/instruments", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Instrument '%s' created (commodity: %s, contract: %s, tick: %s).", instID, commodity, contractSize, tickSize), userToken),
+				Actions: []Action{{Label: "Instruments", Type: "link", URL: "/dashboard/orderbook"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create instrument: %s", respBody)}
+	}
+
+	// --- Update instrument ---
+	// Pattern: "update instrument WHT-HRW-2026M07-UB status suspended"
+	if reUpdateInst := regexp.MustCompile(`(?i)^update\s+instrument\s+(\S+)\s+(\S+)\s+(\S+)`).FindStringSubmatch(message); len(reUpdateInst) == 4 {
+		instID := strings.ToUpper(reUpdateInst[1])
+		field := strings.ToLower(reUpdateInst[2])
+		value := strings.ToLower(reUpdateInst[3])
+		payload := map[string]string{field: value}
+		respBody, status := e.doRequest("PUT", "/api/v1/admin/instruments/"+instID, payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Instrument '%s' updated: %s → %s.", instID, field, value), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to update instrument %s: %s", instID, respBody)}
+	}
+
+	// --- List commodities ---
+	// Pattern: "list commodities" / "show commodities"
+	if containsAny(lower, "list commodities", "show commodities") {
+		respBody, status := e.doRequest("GET", "/api/v1/commodities", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: fmt.Sprintf("🌾 Commodities:\n%s", prettyJSON(respBody))}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to list commodities: %s", respBody)}
+	}
+
+	// --- Create fee schedule ---
+	// Pattern: "create fee schedule Standard 2027"
+	if reCreateFee := regexp.MustCompile(`(?i)^create\s+fee\s+schedule\s+(\S+)\s+(\d{4})`).FindStringSubmatch(message); len(reCreateFee) == 3 {
+		name := reCreateFee[1]
+		year := reCreateFee[2]
+		payload := map[string]string{"name": name, "effective_year": year}
+		respBody, status := e.doRequest("POST", "/api/v1/admin/fees/schedules", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Fee schedule '%s' (%s) created.", name, year), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create fee schedule: %s", respBody)}
+	}
+
+	// --- Set tier ---
+	// Pattern: "set tier farmer for trader1" or "set trader1 tier to farmer"
+	if reSetTier1 := regexp.MustCompile(`(?i)^set\s+tier\s+(\S+)\s+for\s+(\S+)`).FindStringSubmatch(message); len(reSetTier1) == 3 {
+		tier := strings.ToLower(reSetTier1[1])
+		participantID := reSetTier1[2]
+		payload := map[string]string{"tier": tier}
+		respBody, status := e.doRequest("PUT", "/api/v1/admin/fees/tiers/"+participantID, payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Tier for participant '%s' set to '%s'.", participantID, tier), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to set tier: %s", respBody)}
+	}
+	if reSetTier2 := regexp.MustCompile(`(?i)^set\s+(\S+)\s+tier\s+to\s+(\S+)`).FindStringSubmatch(message); len(reSetTier2) == 3 {
+		participantID := reSetTier2[1]
+		tier := strings.ToLower(reSetTier2[2])
+		payload := map[string]string{"tier": tier}
+		respBody, status := e.doRequest("PUT", "/api/v1/admin/fees/tiers/"+participantID, payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Tier for participant '%s' set to '%s'.", participantID, tier), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to set tier: %s", respBody)}
+	}
+
+	// --- Add fee rule ---
+	// Pattern: "add fee rule trading farmer 10bps"
+	if reAddFeeRule := regexp.MustCompile(`(?i)^add\s+fee\s+rule\s+(\S+)\s+(\S+)\s+(\S+)`).FindStringSubmatch(message); len(reAddFeeRule) == 4 {
+		feeType := strings.ToLower(reAddFeeRule[1])
+		tier := strings.ToLower(reAddFeeRule[2])
+		rate := strings.ToLower(reAddFeeRule[3])
+		payload := map[string]string{"fee_type": feeType, "tier": tier, "rate": rate}
+		respBody, status := e.doRequest("POST", "/api/v1/admin/fees/rules", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{Reply: e.withAttribution(fmt.Sprintf("✅ Fee rule added: %s/%s at %s.", feeType, tier, rate), userToken)}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to add fee rule: %s", respBody)}
+	}
+
+	// --- Issue receipt ---
+	// Pattern: "issue receipt farmer1 wheat 5000"
+	if reIssueReceipt := regexp.MustCompile(`(?i)^issue\s+receipt\s+(\S+)\s+(\S+)\s+(\d+(?:\.\d+)?)`).FindStringSubmatch(message); len(reIssueReceipt) == 4 {
+		holderID := reIssueReceipt[1]
+		commodityID := strings.ToLower(reIssueReceipt[2])
+		quantity := reIssueReceipt[3]
+		payload := map[string]string{"holder_id": holderID, "commodity_id": commodityID, "quantity": quantity}
+		respBody, status := e.doRequest("POST", "/api/v1/warehouse/receipts", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Warehouse receipt issued: %s kg of %s for %s.", quantity, commodityID, holderID), userToken),
+				Actions: []Action{{Label: "Warehouse", Type: "link", URL: "/dashboard/warehouse"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to issue receipt: %s", respBody)}
+	}
+
+	// --- Pledge receipt ---
+	// Pattern: "pledge receipt RCP-001"
+	if rePledgeReceipt := regexp.MustCompile(`(?i)^pledge\s+receipt\s+(\S+)`).FindStringSubmatch(message); len(rePledgeReceipt) == 2 {
+		receiptID := strings.ToUpper(rePledgeReceipt[1])
+		respBody, status := e.doRequest("POST", "/api/v1/warehouse/receipts/"+receiptID+"/pledge", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   e.withAttribution(fmt.Sprintf("✅ Receipt %s pledged as collateral.", receiptID), userToken),
+				Actions: []Action{{Label: "Warehouse", Type: "link", URL: "/dashboard/warehouse"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to pledge receipt %s: %s", receiptID, respBody)}
+	}
+
+	// --- Screen participant ---
+	// Pattern: "screen participant ABC" or "screen trader ABC"
+	if reScreenParticipant := regexp.MustCompile(`(?i)^screen\s+(?:participant|trader)\s+(\S+)`).FindStringSubmatch(message); len(reScreenParticipant) == 2 {
+		participantID := reScreenParticipant[1]
+		payload := map[string]string{"participant_id": participantID}
+		respBody, status := e.doRequest("POST", "/api/v1/screening/check", payload, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("🔍 Screening result for %s:\n%s", participantID, prettyJSON(respBody)),
+				Actions: []Action{{Label: "Compliance", Type: "link", URL: "/dashboard/surveillance"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to screen participant %s: %s", participantID, respBody)}
+	}
+
+	// --- Batch screen ---
+	// Pattern: "batch screen" or "screen all"
+	if containsAny(lower, "batch screen", "screen all") {
+		respBody, status := e.doRequest("POST", "/api/v1/screening/batch", nil, userToken)
+		if status >= 200 && status < 300 {
+			return ChatResponse{
+				Reply:   fmt.Sprintf("🔍 Batch screening initiated:\n%s", prettyJSON(respBody)),
+				Actions: []Action{{Label: "Compliance", Type: "link", URL: "/dashboard/surveillance"}},
+			}
+		}
+		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to run batch screening: %s", respBody)}
+	}
+
 	// --- System health ---
 	if containsAny(lower, "health", "status", "services") {
 		body, status := e.doRequest("GET", "/api/v1/admin/health", nil, userToken)
@@ -535,55 +710,73 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	if containsAny(lower, "help", "what can you do") {
 		return ChatResponse{
 			Reply: "I can execute these actions for you:\n\n" +
+				"📊 **Trading & Instruments**\n" +
+				"  `halt wheat` — suspend trading on an instrument\n" +
+				"  `resume corn` — re-enable trading\n" +
+				"  `set circuit breaker wheat 15` — set price limit %\n" +
+				"  `mass cancel` / `cancel all` — cancel all open orders\n" +
+				"  `create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01` — create new instrument\n" +
+				"  `update instrument WHT-HRW-2026M07-UB status suspended` — update instrument field\n" +
+				"  `list instruments` — view all instruments\n\n" +
+				"🌾 **Commodities**\n" +
+				"  `create commodity rice grain kg` — create new commodity\n" +
+				"  `list commodities` / `show commodities` — view all commodities\n\n" +
 				"📋 **Orders**\n" +
 				"  `buy 10 wheat at 325` — place a limit buy order\n" +
 				"  `sell 5 corn at 450` — place a limit sell order\n" +
 				"  `show orders` / `my orders` — list your open orders\n" +
 				"  `cancel order <id>` — cancel a specific order\n" +
 				"  `modify order <id> price 330` — change order price\n\n" +
-				"📊 **Market Data**\n" +
+				"📈 **Market Data**\n" +
 				"  `wheat price` / `corn ticker` — live ticker\n" +
 				"  `wheat order book` — L2 order book\n" +
 				"  `wheat candles` — OHLCV candle data\n" +
 				"  `corn trades` — recent trade history\n" +
 				"  `last trade wheat` — latest executed trade\n\n" +
-				"🛑 **Trading Controls**\n" +
-				"  `halt wheat` — suspend trading on an instrument\n" +
-				"  `resume corn` — re-enable trading\n" +
-				"  `set circuit breaker wheat 15` — set price limit %\n" +
-				"  `mass cancel` — cancel all open orders\n\n" +
-				"👥 **KYC / Participants**\n" +
-				"  `show pending KYC` — list applications\n" +
+				"👥 **Participants & KYC**\n" +
+				"  `show participants` / `show pending KYC` — list applications\n" +
 				"  `approve trader <id>` — approve KYC\n" +
 				"  `reject trader <id> reason: <text>` — reject KYC\n" +
-				"  `disable participant <id>` — disable a participant\n\n" +
-				"⚖️ **Compliance**\n" +
 				"  `suspend trader <id> for <reason>` — suspend access\n" +
 				"  `reinstate trader <id>` — restore access\n" +
-				"  `file SAR on trader <id> for <reason>` — file SAR\n" +
-				"  `show alerts` — view compliance alerts\n" +
-				"  `resolve alert <id>` — resolve an alert\n" +
-				"  `show audit log` — view audit trail\n\n" +
+				"  `disable participant <id>` — disable a participant\n" +
+				"  `screen participant <id>` / `screen trader <id>` — run screening check\n" +
+				"  `batch screen` / `screen all` — screen all participants\n\n" +
 				"💰 **Clearing & Margin**\n" +
 				"  `show netting` — netting positions\n" +
 				"  `position for wheat` — per-instrument position\n" +
-				"  `show margin calls` — margin call stats\n\n" +
+				"  `show margin` / `margin calls` — margin call stats\n\n" +
+				"⚖️ **Settlement**\n" +
+				"  `run settlement` — trigger settlement cycle\n" +
+				"  `show settlement` — cycle history\n\n" +
+				"🔍 **Compliance**\n" +
+				"  `show alerts` — view compliance alerts\n" +
+				"  `resolve alert <id>` — resolve an alert\n" +
+				"  `file SAR on trader <id> for <reason>` — file SAR\n" +
+				"  `show audit log` — view audit trail\n\n" +
+				"🏭 **Warehouse**\n" +
+				"  `show inventory` — warehouse inventory\n" +
+				"  `show receipts` — list warehouse receipts\n" +
+				"  `issue receipt <holder_id> <commodity> <quantity>` — issue warehouse receipt\n" +
+				"  `pledge receipt <receipt_id>` — pledge receipt as collateral\n\n" +
+				"💵 **Fees**\n" +
+				"  `show fees` — fee schedule\n" +
+				"  `create fee schedule <name> <year>` — create new fee schedule\n" +
+				"  `set tier <tier> for <participant_id>` — assign fee tier\n" +
+				"  `set <participant_id> tier to <tier>` — assign fee tier (alt form)\n" +
+				"  `add fee rule <type> <tier> <rate>` — add fee rule (e.g. trading farmer 10bps)\n\n" +
 				"⚠️ **Risk**\n" +
 				"  `set wheat max order 500` — order size limit\n" +
 				"  `show risk limits` — all order limits\n\n" +
-				"⚖️ **Settlement**\n" +
-				"  `run settlement` — trigger settlement cycle\n" +
-				"  `show settlement cycles` — cycle history\n\n" +
 				"📈 **Reports**\n" +
 				"  `market summary today` — daily market summary\n" +
 				"  `large trader report` — large position holders\n\n" +
-				"🏭 **Warehouse**\n" +
-				"  `show inventory` — warehouse inventory\n\n" +
+				"🎫 **Tickets**\n" +
+				"  `show tickets` — list support tickets\n\n" +
 				"🏥 **System**\n" +
 				"  `system health` — service status\n" +
-				"  `show fees` — fee schedule\n" +
 				"  `who am I` — your profile\n" +
-				"  `show tickets` — support tickets\n",
+				"  `help` — show this message\n",
 		}
 	}
 
