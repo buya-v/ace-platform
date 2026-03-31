@@ -63,3 +63,5 @@ docker-compose.override.yml
 __pycache__/
 *.pyc
 .venv/
+tests/playwright/test-results/
+tests/playwright/playwright-report/data/
