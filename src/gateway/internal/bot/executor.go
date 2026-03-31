@@ -650,6 +650,71 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to run batch screening: %s", respBody)}
 	}
 
+	// ── Guided prompts for incomplete CRUD commands ──────────────────
+	// When user says "create X" or "new X" but doesn't provide all required fields,
+	// guide them with the required format instead of falling through to list handlers.
+	// This section runs AFTER all regex CRUD handlers (which catch fully-formed commands)
+	// and BEFORE keyword list handlers (which would otherwise list instead of guide).
+	if containsAny(lower, "create", "new", "add", "register") {
+		if containsAny(lower, "instrument") {
+			return ChatResponse{
+				Reply: "To create a new instrument, please provide:\n\n" +
+					"`create instrument <ID> <commodity> <month> <year> contract <size> tick <tick_size>`\n\n" +
+					"**Example:**\n`create instrument RIC-2027M07 rice jul 2027 contract 5000 tick 0.01`\n\n" +
+					"Available commodities: wheat, corn, soybeans, barley, cashmere, cattle\n" +
+					"Or type `list commodities` to see all.",
+			}
+		}
+		if containsAny(lower, "commodity") {
+			return ChatResponse{
+				Reply: "To create a new commodity, provide:\n\n" +
+					"`create commodity <id> <category> <unit>`\n\n" +
+					"**Example:** `create commodity rice grain kg`\n\n" +
+					"Categories: grain, oilseed, livestock, dairy, fiber\n" +
+					"Units: bushel, cwt, lb, kg, mt",
+			}
+		}
+		if containsAny(lower, "fee", "schedule", "rule") {
+			return ChatResponse{
+				Reply: "Fee management commands:\n\n" +
+					"• `create fee schedule <name> <year>` — new schedule\n" +
+					"• `add fee rule <type> <tier> <rate_bps>` — add rule\n" +
+					"• `set tier <tier> for <participant>` — set participant tier\n\n" +
+					"**Example:** `add fee rule trading farmer 10bps`",
+			}
+		}
+		if containsAny(lower, "ticket", "bug", "issue", "report") {
+			return ChatResponse{
+				Reply: "To create a support ticket:\n\n" +
+					"`report a bug: <description>`\n" +
+					"`create ticket: <title>`\n\n" +
+					"**Example:** `report a bug: the margin page loads slowly`",
+			}
+		}
+		if containsAny(lower, "receipt") {
+			return ChatResponse{
+				Reply: "To issue a warehouse receipt:\n\n" +
+					"`issue receipt <holder_id> <commodity> <quantity>`\n\n" +
+					"**Example:** `issue receipt farmer1 wheat 5000`",
+			}
+		}
+		if containsAny(lower, "facility", "warehouse") {
+			return ChatResponse{
+				Reply: "To register a warehouse facility:\n\n" +
+					"`register facility <name>`\n\n" +
+					"**Example:** `register facility UB Grain Storage`",
+			}
+		}
+		if containsAny(lower, "order") {
+			return ChatResponse{
+				Reply: "To place an order:\n\n" +
+					"`buy <qty> <instrument> at <price>`\n" +
+					"`sell <qty> <instrument> at <price>`\n\n" +
+					"**Example:** `buy 10 wheat at 325`",
+			}
+		}
+	}
+
 	// --- System health ---
 	if containsAny(lower, "health", "status", "services") {
 		body, status := e.doRequest("GET", "/api/v1/admin/health", nil, userToken)
@@ -703,7 +768,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Instruments ---
-	if containsAny(lower, "instrument", "commodity", "contract") {
+	if containsAny(lower, "instrument", "commodity", "contract") && !containsAny(lower, "create", "new", "add") {
 		body, status := e.doRequest("GET", "/api/v1/instruments/list", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatInstrumentsResponse(body)
@@ -835,7 +900,14 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 
 	// Default
 	return ChatResponse{
-		Reply: "I can help with system health, alerts, margin status, and tickets. What would you like to know?",
+		Reply: "I didn't understand that. Here are some things I can do:\n\n" +
+			"📊 `show instruments` — view active instruments\n" +
+			"➕ `create instrument` — create new instrument\n" +
+			"📋 `show margin calls` — view margin status\n" +
+			"🔧 `halt wheat` — halt trading\n" +
+			"👥 `show participants` — view KYC applications\n" +
+			"🎫 `report a bug: ...` — create support ticket\n" +
+			"❓ `help` — see all 50+ commands",
 	}
 }
 

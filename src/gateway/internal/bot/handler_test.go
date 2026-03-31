@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/garudax-platform/gateway/internal/auth"
@@ -223,7 +224,7 @@ func TestChat_FallbackMode_DefaultKeyword(t *testing.T) {
 	resp := decodeBody(t, rec)
 	data := resp["data"].(map[string]interface{})
 	reply := data["reply"].(string)
-	if reply != "I can help with system health, alerts, margin status, and tickets. What would you like to know?" {
+	if !strings.Contains(reply, "I didn't understand that") {
 		t.Errorf("unexpected default reply: %s", reply)
 	}
 }
