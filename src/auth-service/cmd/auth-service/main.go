@@ -12,6 +12,8 @@ import (
 	"github.com/garudax-platform/auth-service/internal/handler"
 	"github.com/garudax-platform/auth-service/internal/server"
 	"github.com/garudax-platform/auth-service/internal/store"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -24,7 +26,25 @@ func main() {
 	}
 
 	jwtSvc := auth.NewJWTService(cfg.JWTSigningKey, cfg.AccessTokenTTLSecs, cfg.RefreshTokenTTLSecs)
-	repo := store.NewInMemoryStore()
+
+	// Use PostgreSQL store when DB_HOST is explicitly set, otherwise fall back to in-memory.
+	var repo auth.Store
+	if os.Getenv("DB_HOST") != "" {
+		db, err := store.ConnectPostgres(
+			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPass, cfg.DBName, cfg.DBSSLMode,
+		)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		defer db.Close()
+		pgStore := store.NewPostgresStore(db)
+		repo = pgStore
+		log.Printf("Using PostgreSQL store (%s:%d/%s)", cfg.DBHost, cfg.DBPort, cfg.DBName)
+	} else {
+		repo = store.NewInMemoryStore()
+		log.Println("Using in-memory store (set DB_HOST to enable PostgreSQL)")
+	}
+
 	lockoutDuration := time.Duration(cfg.LockoutDurationMins) * time.Minute
 	authSvc := auth.NewService(repo, jwtSvc, cfg.BcryptCost, cfg.MaxFailedAttempts, lockoutDuration)
 
