@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/garudax-platform/market-data-service/internal/server"
+	"github.com/garudax-platform/market-data-service/internal/store"
 	"github.com/garudax-platform/market-data-service/internal/types"
 )
 
@@ -16,7 +18,36 @@ func main() {
 	log.Println("GarudaX Market Data Service starting...")
 
 	cfg := server.ConfigFromEnv()
-	srv := server.NewServer(cfg)
+
+	var srv *server.Server
+
+	// Use PostgreSQL stores when DB_HOST is set, otherwise fall back to in-memory
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		dbPort := envOrDefault("DB_PORT", "5432")
+		dbUser := envOrDefault("DB_USER", "garudax")
+		dbPass := envOrDefault("DB_PASSWORD", "")
+		dbName := envOrDefault("DB_NAME", "garudax")
+		dbSSL := envOrDefault("DB_SSLMODE", "disable")
+
+		dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			dbUser, dbPass, dbHost, dbPort, dbName, dbSSL)
+
+		db, err := store.OpenDB(dsn)
+		if err != nil {
+			log.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		}
+		defer db.Close()
+		log.Printf("Connected to PostgreSQL at %s:%s/%s", dbHost, dbPort, dbName)
+
+		tradeRepo := store.NewPGTradeStore(db)
+		candleRepo := store.NewPGCandleStore(db)
+		tickerRepo := store.NewPGTickerStore(db)
+
+		srv = server.NewServerWithStores(cfg, tradeRepo, candleRepo, tickerRepo)
+	} else {
+		log.Println("No DB_HOST set, using in-memory stores")
+		srv = server.NewServer(cfg)
+	}
 
 	// Register instrument symbols from environment
 	instruments := os.Getenv("INSTRUMENTS")
@@ -82,4 +113,11 @@ func main() {
 	sig := <-sigCh
 	log.Printf("Received signal %s, shutting down...", sig)
 	lis.Close()
+}
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

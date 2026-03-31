@@ -4,9 +4,13 @@ package retention
 import (
 	"time"
 
-	"github.com/garudax-platform/market-data-service/internal/store"
 	"github.com/garudax-platform/market-data-service/internal/types"
 )
+
+// CandleDeleter is the subset of CandleRepository needed by retention policy.
+type CandleDeleter interface {
+	DeleteBefore(interval types.CandleInterval, before time.Time) int
+}
 
 // Rule defines a retention rule for a candle interval.
 type Rule struct {
@@ -38,7 +42,7 @@ func DefaultPolicy() *Policy {
 }
 
 // Enforce deletes candles that exceed their retention period.
-func (p *Policy) Enforce(cs *store.CandleStore) int {
+func (p *Policy) Enforce(cs CandleDeleter) int {
 	now := time.Now().UTC()
 	total := 0
 	for _, rule := range p.Rules {

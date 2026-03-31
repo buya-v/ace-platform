@@ -21,37 +21,54 @@ import (
 
 // Server is the market data service server.
 type Server struct {
-	config       Config
-	tradeStore   *store.TradeStore
-	candleStore  *store.CandleStore
+	config        Config
+	tradeStore    store.TradeRepository
+	candleStore   store.CandleRepository
+	tickerStore   store.TickerRepository
 	candleBuilder *candle.Builder
-	tickerEngine *ticker.Engine
-	hub          *streaming.Hub
-	retention    *retention.Policy
-	ready        int32
+	tickerEngine  *ticker.Engine
+	hub           *streaming.Hub
+	retention     *retention.Policy
+	ready         int32
 }
 
-// NewServer creates a new market data server with all components wired together.
+// NewServer creates a new market data server with in-memory stores.
 func NewServer(cfg Config) *Server {
+	return NewServerWithStores(cfg, nil, nil, nil)
+}
+
+// NewServerWithStores creates a new market data server with the given store implementations.
+// Pass nil for any store to use the default in-memory implementation.
+func NewServerWithStores(cfg Config, tradeRepo store.TradeRepository, candleRepo store.CandleRepository, tickerRepo store.TickerRepository) *Server {
 	hub := streaming.NewHub()
-	candleStore := store.NewCandleStore()
 	tickerEng := ticker.NewEngine()
 	retPolicy := retention.DefaultPolicy()
 
+	if tradeRepo == nil {
+		tradeRepo = store.NewTradeStore()
+	}
+	if candleRepo == nil {
+		candleRepo = store.NewCandleStore()
+	}
+	if tickerRepo == nil {
+		tickerRepo = store.NewTickerStore()
+	}
+
 	s := &Server{
-		config:      cfg,
-		tradeStore:  store.NewTradeStore(),
-		candleStore: candleStore,
+		config:       cfg,
+		tradeStore:   tradeRepo,
+		candleStore:  candleRepo,
+		tickerStore:  tickerRepo,
 		tickerEngine: tickerEng,
-		hub:         hub,
-		retention:   retPolicy,
+		hub:          hub,
+		retention:    retPolicy,
 	}
 
 	// Wire candle builder to publish updates via hub and persist closed candles
 	s.candleBuilder = candle.NewBuilder(func(c types.Candle) {
 		hub.PublishCandle(c)
 		if c.IsClosed {
-			candleStore.Store(c)
+			candleRepo.Store(c)
 		}
 	})
 
@@ -64,6 +81,11 @@ func (s *Server) IngestTrade(trade types.Trade) {
 	s.candleBuilder.IngestTrade(trade)
 	s.tickerEngine.IngestTrade(trade)
 	s.hub.PublishTrade(trade)
+
+	// Persist ticker snapshot to store after each trade
+	if tick, ok := s.tickerEngine.GetTicker(trade.InstrumentID); ok {
+		s.tickerStore.Upsert(tick)
+	}
 }
 
 // GetCandles returns historical candles for an instrument.
@@ -221,8 +243,8 @@ func (s *Server) StartHealthServer() error {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"instrument_id": instrumentID,
 			"interval":      interval.String(),
-			"candles":        candles,
-			"count":          len(candles),
+			"candles":       candles,
+			"count":         len(candles),
 		})
 	})
 
