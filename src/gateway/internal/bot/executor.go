@@ -683,7 +683,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 					"Or type `list commodities` to see all.",
 			}
 		}
-		if containsAny(lower, "commodity") {
+		if containsAny(lower, "commodity", "commodities") {
 			return ChatResponse{
 				Reply: "To create a new commodity, provide:\n\n" +
 					"`create commodity <id> <category> <unit>`\n\n" +
@@ -786,7 +786,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 	}
 
 	// --- Instruments ---
-	if (containsAny(lower, "instrument", "commodity", "contract") || containsAny(norm, "instrument", "commodity", "contract")) && !containsAny(lower, "create", "new", "add") {
+	if (containsAny(lower, "instrument", "commodity", "commodities", "contract") || containsAny(norm, "instrument", "commodity", "commodities", "contract")) && !containsAny(lower, "create", "new", "add") {
 		body, status := e.doRequest("GET", "/api/v1/instruments/list", nil, userToken)
 		if status >= 200 && status < 300 {
 			return formatInstrumentsResponse(body)

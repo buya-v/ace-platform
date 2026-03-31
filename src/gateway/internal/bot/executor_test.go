@@ -4010,3 +4010,345 @@ func TestListCommoditiesCommand(t *testing.T) {
 		t.Errorf("expected commodity ID, got: %s", resp.Reply)
 	}
 }
+
+// =====================================================================
+// NL NORMALIZATION — natural language phrase routing
+// =====================================================================
+
+// Test 1: "list commodities" is a CRUD command that hits /api/v1/commodities.
+// Verifies that the explicit "list commodities" phrase routes to the commodities endpoint
+// rather than falling through to the instruments list (which handles generic "commodity" keyword).
+func TestNL_ListCommoditiesRoutesToCommoditiesEndpoint(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `{"data":[{"id":"wht-hrw","name":"Hard Red Winter Wheat","category":"grain","unit":"bushel"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "test-token")
+	if !h.called.Load() {
+		t.Error("list commodities: commodities endpoint was not called")
+	}
+	// Response must contain commodity info
+	lower := strings.ToLower(resp.Reply)
+	if !strings.Contains(lower, "commodit") {
+		t.Errorf("expected commodity info in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 2: "show me the instruments" → norm="instruments" → instrument handler
+func TestNL_ShowMeTheInstruments(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/instruments/list",
+		method: "GET",
+		status: 200,
+		body:   `{"data":[{"id":"WHT-HRW-2026M07-UB","status":"active"},{"id":"CRN-YEL-2026M09-UB","status":"active"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("show me the instruments", "test-token")
+	if !h.called.Load() {
+		t.Error("show me the instruments: instrument endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "WHT-HRW-2026M07-UB") {
+		t.Errorf("expected instrument ID in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 3: "what are the margin calls" → norm="margin calls" → margin handler
+func TestNL_WhatAreTheMarginCalls(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/margin/calls/stats",
+		method: "GET",
+		status: 200,
+		body:   `{"total_active":2,"total_shortfall":"40000","participants_in_call":2}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("what are the margin calls", "test-token")
+	if !h.called.Load() {
+		t.Error("what are the margin calls: margin endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "💰") {
+		t.Errorf("expected margin emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 4: "please show health" → norm="show health" → health handler
+func TestNL_PleaseShowHealth(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/admin/health",
+		method: "GET",
+		status: 200,
+		body:   `{"overall_status":"healthy","services":[{"name":"matching-engine","status":"healthy"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("please show health", "test-token")
+	if !h.called.Load() {
+		t.Error("please show health: health endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "🏥") {
+		t.Errorf("expected health emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 5: "can you check system status" → lower contains "status" → health handler
+func TestNL_CanYouCheckSystemStatus(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/admin/health",
+		method: "GET",
+		status: 200,
+		body:   `{"overall_status":"healthy","services":[{"name":"auth-service","status":"healthy"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("can you check system status", "test-token")
+	if !h.called.Load() {
+		t.Error("can you check system status: health endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "🏥") {
+		t.Errorf("expected health emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 6: "display positions" → norm="positions" → positions handler
+func TestNL_DisplayPositions(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/clearing/positions",
+		method: "GET",
+		status: 200,
+		body:   `{"positions":[{"participant":"TRD-001","net_qty":"500"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("display positions", "test-token")
+	if !h.called.Load() {
+		t.Error("display positions: clearing positions endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "📊") {
+		t.Errorf("expected position emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 7: "view alerts" → norm="alerts" → alerts handler
+func TestNL_ViewAlerts(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/compliance/alerts",
+		method: "GET",
+		status: 200,
+		body:   `{"alerts":[{"id":"ALT-001","severity":"HIGH","type":"large_trade","status":"open"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("view alerts", "test-token")
+	if !h.called.Load() {
+		t.Error("view alerts: compliance alerts endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "🔍") {
+		t.Errorf("expected compliance emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 8: "get orders" → norm="orders" → orders handler
+func TestNL_GetOrders(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/orders",
+		method: "GET",
+		status: 200,
+		body:   `{"orders":[{"id":"ORD-001","side":"BUY","instrument":"WHT-HRW-2026M07-UB"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("get orders", "test-token")
+	if !h.called.Load() {
+		t.Error("get orders: orders endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "📋") {
+		t.Errorf("expected orders emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 9: "any margin calls?" → norm="margin calls?" contains "margin" → margin handler
+func TestNL_AnyMarginCalls(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/margin/calls/stats",
+		method: "GET",
+		status: 200,
+		body:   `{"total_active":1,"total_shortfall":"20000","participants_in_call":1}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("any margin calls?", "test-token")
+	if !h.called.Load() {
+		t.Error("any margin calls?: margin endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "💰") {
+		t.Errorf("expected margin emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 10: "check settlement cycles" → norm="settlement cycles" → settlement handler
+func TestNL_CheckSettlementCycles(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/settlement/cycles",
+		method: "GET",
+		status: 200,
+		body:   `{"cycles":[{"id":"CYC-001","status":"completed","created_at":"2026-03-31T10:00:00Z"}]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("check settlement cycles", "test-token")
+	if !h.called.Load() {
+		t.Error("check settlement cycles: settlement endpoint was not called")
+	}
+	if !strings.Contains(resp.Reply, "⚖️") {
+		t.Errorf("expected settlement emoji in reply, got: %s", resp.Reply)
+	}
+}
+
+// =====================================================================
+// RESPONSE FORMATTING — human-readable output (not raw JSON)
+// =====================================================================
+
+// Test 11: Health response contains service names like "matching-engine", not raw JSON braces
+func TestFormatHealthResponse_ServiceNamesNotRawJSON(t *testing.T) {
+	raw := `{
+		"overall_status": "healthy",
+		"services": [
+			{"name": "matching-engine", "status": "healthy"},
+			{"name": "clearing-engine", "status": "healthy"},
+			{"name": "settlement-engine", "status": "healthy"}
+		]
+	}`
+	resp := formatHealthResponse(raw)
+	// Must contain service names
+	if !strings.Contains(resp.Reply, "matching-engine") {
+		t.Errorf("expected 'matching-engine' in health reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "clearing-engine") {
+		t.Errorf("expected 'clearing-engine' in health reply, got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "settlement-engine") {
+		t.Errorf("expected 'settlement-engine' in health reply, got: %s", resp.Reply)
+	}
+	// Must NOT contain raw JSON syntax (curly braces indicate raw JSON dump)
+	if strings.Contains(resp.Reply, `{"name"`) {
+		t.Errorf("reply contains raw JSON — expected formatted output, got: %s", resp.Reply)
+	}
+}
+
+// Test 12: Empty commodity list returns helpful message, not raw {"data":[]}
+func TestExecutor_EmptyCommodityList_HelpfulMessage(t *testing.T) {
+	h := &mockHandler{
+		path:   "/api/v1/commodities",
+		method: "GET",
+		status: 200,
+		body:   `{"data":[]}`,
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("list commodities", "test-token")
+	if !h.called.Load() {
+		t.Error("list commodities (empty): endpoint was not called")
+	}
+	// Must contain a helpful message
+	if !strings.Contains(resp.Reply, "No commodities") {
+		t.Errorf("expected 'No commodities' helpful message, got: %s", resp.Reply)
+	}
+	// Must NOT return raw JSON
+	if strings.Contains(resp.Reply, `{"data":[]}`) {
+		t.Errorf("reply should not contain raw JSON, got: %s", resp.Reply)
+	}
+}
+
+// Test 13: Margin stats contain "Active calls" label and numeric values, not <nil>
+func TestFormatMarginResponse_ContainsActiveCallsLabel(t *testing.T) {
+	raw := `{"total_active":4,"total_shortfall":"75000.00","participants_in_call":3}`
+	resp := formatMarginResponse(raw)
+	if !strings.Contains(resp.Reply, "Active calls") {
+		t.Errorf("expected 'Active calls' label in margin reply, got: %s", resp.Reply)
+	}
+	if strings.Contains(resp.Reply, "<nil>") {
+		t.Errorf("reply must not contain '<nil>', got: %s", resp.Reply)
+	}
+	if !strings.Contains(resp.Reply, "Margin") {
+		t.Errorf("expected 'Margin' in reply, got: %s", resp.Reply)
+	}
+}
+
+// Test 14: Help response contains all major command categories
+func TestExecutor_Help_ContainsAllMajorCategories(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Help must not make any API calls
+		t.Errorf("unexpected API call to %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(500)
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	resp := exec.Execute("help", "test-token")
+
+	requiredCategories := []string{
+		"Trading", "Instruments",
+		"Orders",
+		"Participants", "KYC",
+		"Settlement",
+		"Compliance",
+		"Warehouse",
+		"System",
+		"Fees",
+		"Risk",
+	}
+	for _, cat := range requiredCategories {
+		if !strings.Contains(resp.Reply, cat) {
+			t.Errorf("help reply missing category %q, got: %s", cat, resp.Reply)
+		}
+	}
+}
+
+// Test 15: Default unknown command contains "didn't understand" and command suggestions
+func TestExecutor_DefaultReply_ContainsSuggestions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Unknown command may call various endpoints — return 404 for all
+		w.WriteHeader(404)
+		w.Write([]byte(`{"error":"not found"}`))
+	}))
+	defer srv.Close()
+
+	exec := NewActionExecutor(srv.URL)
+	// A genuinely unrecognizable phrase that won't match any keyword handler
+	resp := exec.Execute("quux frob baz zork", "test-token")
+
+	if !strings.Contains(resp.Reply, "didn't understand") {
+		t.Errorf("expected \"didn't understand\" in default reply, got: %s", resp.Reply)
+	}
+	// Should include suggestions/examples
+	if !strings.Contains(resp.Reply, "help") {
+		t.Errorf("expected 'help' suggestion in default reply, got: %s", resp.Reply)
+	}
+}
