@@ -218,6 +218,17 @@ export function FileTextIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function TicketIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="1" y="3" width="14" height="10" rx="1.5" />
+      <line x1="1" y1="8" x2="4" y2="8" />
+      <line x1="12" y1="8" x2="15" y2="8" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  );
+}
+
 export function InfoIcon({ size = 16, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>

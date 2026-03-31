@@ -335,6 +335,50 @@ export function fetchLargeTraderReport(date: string, signal?: AbortSignal) {
   );
 }
 
+// Tickets
+export function fetchTickets(params?: { category?: string; priority?: string; status?: string }, signal?: AbortSignal) {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.priority) qs.set('priority', params.priority);
+  if (params?.status) qs.set('status', params.status);
+  const query = qs.toString();
+  return apiFetch<{ data: import('../pages/Tickets').Ticket[]; total: number }>(
+    `/tickets${query ? `?${query}` : ''}`,
+    {},
+    signal,
+  );
+}
+
+export function fetchTicket(id: string, signal?: AbortSignal) {
+  return apiFetch<{ ticket: import('../pages/Tickets').Ticket; comments: import('../pages/Tickets').TicketComment[] }>(
+    `/tickets/${id}`,
+    {},
+    signal,
+  );
+}
+
+export function updateTicket(id: string, updates: Record<string, unknown>) {
+  return apiFetch<import('../pages/Tickets').Ticket>(`/tickets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function addTicketComment(ticketId: string, body: string) {
+  return apiFetch<import('../pages/Tickets').TicketComment>(`/tickets/${ticketId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function fetchTicketStats(signal?: AbortSignal) {
+  return apiFetch<{ total: number; open: number; in_progress: number; resolved: number; closed: number }>(
+    '/tickets/stats',
+    {},
+    signal,
+  );
+}
+
 // Audit
 export function fetchAuditTrail(params?: { actor?: string; action?: string; from?: string; to?: string; page?: number }, signal?: AbortSignal) {
   const qs = new URLSearchParams();

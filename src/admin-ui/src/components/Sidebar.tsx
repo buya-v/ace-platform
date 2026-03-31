@@ -20,6 +20,7 @@ import {
   EyeIcon,
   DollarIcon as FeeIcon,
   FileTextIcon,
+  TicketIcon,
 } from './icons';
 import styles from './Sidebar.module.css';
 
@@ -43,6 +44,7 @@ const operationsNav: NavItem[] = [
   { label: 'Surveillance', path: '/dashboard/surveillance', adminOnly: true, icon: EyeIcon },
   { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
   { label: 'Reports', path: '/dashboard/reports', adminOnly: true, icon: FileTextIcon },
+  { label: 'Tickets', path: '/dashboard/tickets', adminOnly: true, icon: TicketIcon },
 ];
 
 const complianceNav: NavItem[] = [
