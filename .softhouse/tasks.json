@@ -1,7 +1,92 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "sprint-2026-04-21-garudax",
+  "feature": "GarudaX Sprint: Fix e2e failures + Admin-UI CX",
+  "requirement": "Fix the 6 e2e test failures (gateway middleware ordering, compliance KYC response format, cross-service response mismatches), merge T062 WebSocket hook, add loading/empty states to admin-ui, and verify all fixes with integration tests.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T101",
+      "title": "Fix gateway middleware ordering (auth before routing causes 401 on unknown paths)",
+      "description": "The gateway's middleware chain runs Auth before Router. Unknown paths get 401 instead of 404. Fix by moving auth middleware to run AFTER routing, or add a pre-routing path-existence check that returns 404 for unregistered routes before auth runs. Run existing gateway tests to verify no regressions.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/gateway/internal/middleware/", "src/gateway/cmd/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T102",
+      "title": "Fix compliance KYC endpoint response format (array vs object)",
+      "description": "The compliance KYC submission endpoint returns a JSON array where e2e tests expect a JSON object. Investigate the handler: if it's a single-resource creation, return an object. If it's a list endpoint, update the e2e test expectations. Run compliance-service unit tests to verify.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/compliance-service/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T103",
+      "title": "Fix e2e test expectations for clearing/netting/margin/settlement endpoints",
+      "description": "4 e2e tests fail because they expect single objects but endpoints return arrays (which is correct for list endpoints). Update the e2e tests in tests/e2e/ to handle array responses from clearing positions, netting, margin calls, and settlement cycle endpoints. The services are correct — the tests need updating.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["tests/e2e/"],
+      "dependencies": ["T101", "T102"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T104",
+      "title": "Merge T062 WebSocket hook from worktree branch",
+      "description": "T062 (Admin UI WebSocket Real-Time Hook) was APPROVED by review (17 tests, zero required fixes) but never merged. Check for feature/T062-* worktree branch. Cherry-pick or merge the approved code into main. Verify the 17 tests pass after merge. This is the third instance of the merge-gate failure pattern.",
+      "agent_role": "coder",
+      "model": "haiku",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T105",
+      "title": "Add loading spinners and empty states to admin-ui pages",
+      "description": "Add consistent loading and empty state UI to admin-ui pages that currently show blank screens while data loads or when no data exists. Pages: monitoring, orderbook, positions, risk, margin, settlement, compliance, audit, tickets. Use existing component patterns from the project.\n\nCX ACCEPTANCE CRITERIA (all must pass):\n[] Loading state: shows skeleton/spinner while data loads\n[] Empty state: meaningful message when no data exists (not blank screen)\n[] Error state: user-friendly error message with retry action (not raw error dump)\n[] Responsive: works on mobile (375px), tablet (768px), desktop (1280px+)\n[] Keyboard navigation: all interactive elements reachable via Tab, activatable via Enter/Space\n[] Accessible: proper ARIA labels, semantic HTML (nav, main, button not div), color contrast 4.5:1+\n[] Toast/feedback: user actions produce visible confirmation\n[] No raw technical errors visible to user (no stack traces, no undefined, no NaN)\n[] Consistent styling: uses project design tokens/theme, not arbitrary colors/sizes",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/", "src/admin-ui/src/pages/"],
+      "dependencies": ["T104"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T105-cx",
+      "title": "CX review: admin-ui loading/empty/error states",
+      "description": "Review T105 implementation against the CX checklist. Score each of the 10 items as pass/fail. Fix any gaps directly in the code. Target: CX score >= 7/10. Write handoff with CX score and fixes made.",
+      "agent_role": "cx_reviewer",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/", "src/admin-ui/src/pages/"],
+      "dependencies": ["T105"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T106",
+      "title": "Integration test: verify all 6 previously failing e2e tests pass",
+      "description": "Run the full e2e test suite after T101-T103 fixes. Verify that all 6 previously failing tests now pass: (1) gateway unknown path 404, (2) compliance KYC format, (3-6) clearing/netting/margin/settlement response handling. Report pass/fail/skip counts. Run Go unit tests too to verify no regressions.",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["tests/e2e/"],
+      "dependencies": ["T103"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
