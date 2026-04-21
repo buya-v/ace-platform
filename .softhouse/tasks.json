@@ -2,7 +2,7 @@
   "run_id": "sprint-2026-04-21-garudax",
   "feature": "GarudaX Sprint: Fix e2e failures + Admin-UI CX",
   "requirement": "Fix the 6 e2e test failures (gateway middleware ordering, compliance KYC response format, cross-service response mismatches), merge T062 WebSocket hook, add loading/empty states to admin-ui, and verify all fixes with integration tests.",
-  "status": "executing",
+  "status": "complete",
   "tasks": [
     {
       "id": "T101",
@@ -47,8 +47,8 @@
         "T101",
         "T102"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T104",
@@ -78,8 +78,8 @@
       "dependencies": [
         "T104"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T105-cx",
@@ -95,8 +95,8 @@
       "dependencies": [
         "T105"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T106",
@@ -111,8 +111,8 @@
       "dependencies": [
         "T103"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     }
   ]
 }
