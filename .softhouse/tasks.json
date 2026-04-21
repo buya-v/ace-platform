@@ -2,7 +2,7 @@
   "run_id": "sprint-2026-04-21-garudax",
   "feature": "GarudaX Sprint: Fix e2e failures + Admin-UI CX",
   "requirement": "Fix the 6 e2e test failures (gateway middleware ordering, compliance KYC response format, cross-service response mismatches), merge T062 WebSocket hook, add loading/empty states to admin-ui, and verify all fixes with integration tests.",
-  "status": "planning",
+  "status": "executing",
   "tasks": [
     {
       "id": "T101",
@@ -11,10 +11,13 @@
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/gateway/internal/middleware/", "src/gateway/cmd/"],
+      "files_hint": [
+        "src/gateway/internal/middleware/",
+        "src/gateway/cmd/"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T102",
@@ -23,20 +26,27 @@
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/compliance-service/"],
+      "files_hint": [
+        "src/compliance-service/"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T103",
       "title": "Fix e2e test expectations for clearing/netting/margin/settlement endpoints",
-      "description": "4 e2e tests fail because they expect single objects but endpoints return arrays (which is correct for list endpoints). Update the e2e tests in tests/e2e/ to handle array responses from clearing positions, netting, margin calls, and settlement cycle endpoints. The services are correct — the tests need updating.",
+      "description": "4 e2e tests fail because they expect single objects but endpoints return arrays (which is correct for list endpoints). Update the e2e tests in tests/e2e/ to handle array responses from clearing positions, netting, margin calls, and settlement cycle endpoints. The services are correct \u2014 the tests need updating.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["tests/e2e/"],
-      "dependencies": ["T101", "T102"],
+      "files_hint": [
+        "tests/e2e/"
+      ],
+      "dependencies": [
+        "T101",
+        "T102"
+      ],
       "status": "pending",
       "attempts": 0
     },
@@ -47,10 +57,12 @@
       "agent_role": "coder",
       "model": "haiku",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/"],
+      "files_hint": [
+        "src/admin-ui/"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T105",
@@ -59,8 +71,13 @@
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/src/components/", "src/admin-ui/src/pages/"],
-      "dependencies": ["T104"],
+      "files_hint": [
+        "src/admin-ui/src/components/",
+        "src/admin-ui/src/pages/"
+      ],
+      "dependencies": [
+        "T104"
+      ],
       "status": "pending",
       "attempts": 0
     },
@@ -71,8 +88,13 @@
       "agent_role": "cx_reviewer",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/src/components/", "src/admin-ui/src/pages/"],
-      "dependencies": ["T105"],
+      "files_hint": [
+        "src/admin-ui/src/components/",
+        "src/admin-ui/src/pages/"
+      ],
+      "dependencies": [
+        "T105"
+      ],
       "status": "pending",
       "attempts": 0
     },
@@ -83,8 +105,12 @@
       "agent_role": "test_writer",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["tests/e2e/"],
-      "dependencies": ["T103"],
+      "files_hint": [
+        "tests/e2e/"
+      ],
+      "dependencies": [
+        "T103"
+      ],
       "status": "pending",
       "attempts": 0
     }
