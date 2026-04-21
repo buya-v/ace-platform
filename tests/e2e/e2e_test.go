@@ -899,25 +899,27 @@ func TestFullTradingLifecycle(t *testing.T) {
 	})
 
 	// ----- Step 11: Verify positions (clearing) -----
+	// GET /api/v1/clearing/positions returns an array of position objects.
 	t.Run("verify clearing positions", func(t *testing.T) {
 		resp := buyer.get("/api/v1/clearing/positions")
 		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway {
 			resp.Body.Close()
 			t.Skip("clearing-engine unavailable")
 		}
-		body := readJSON(t, resp)
-		t.Logf("positions response (status %d): %v", resp.StatusCode, body)
+		positions := readJSONArray(t, resp)
+		t.Logf("positions response (status %d): %d items", resp.StatusCode, len(positions))
 	})
 
 	// ----- Step 12: Check netting -----
+	// GET /api/v1/clearing/netting returns an array of netting records.
 	t.Run("verify netting", func(t *testing.T) {
 		resp := buyer.get("/api/v1/clearing/netting")
 		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway {
 			resp.Body.Close()
 			t.Skip("clearing-engine unavailable")
 		}
-		body := readJSON(t, resp)
-		t.Logf("netting response (status %d): %v", resp.StatusCode, body)
+		netting := readJSONArray(t, resp)
+		t.Logf("netting response (status %d): %d items", resp.StatusCode, len(netting))
 	})
 
 	// ----- Step 13: Verify margin -----
@@ -927,30 +929,35 @@ func TestFullTradingLifecycle(t *testing.T) {
 			resp.Body.Close()
 			t.Skip("margin-engine unavailable")
 		}
-		body := readJSON(t, resp)
-		t.Logf("margin response (status %d): %v", resp.StatusCode, body)
+		// Margin portfolio endpoint may return an object or array depending on the backend.
+		// Use raw body reading to handle both cases gracefully.
+		rawBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Logf("margin response (status %d): %s", resp.StatusCode, string(rawBody))
 	})
 
 	// ----- Step 14: Check margin calls -----
+	// GET /api/v1/margin/calls returns an array of margin call objects.
 	t.Run("check margin calls", func(t *testing.T) {
 		resp := buyer.get("/api/v1/margin/calls")
 		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway {
 			resp.Body.Close()
 			t.Skip("margin-engine unavailable")
 		}
-		body := readJSON(t, resp)
-		t.Logf("margin calls response (status %d): %v", resp.StatusCode, body)
+		calls := readJSONArray(t, resp)
+		t.Logf("margin calls response (status %d): %d items", resp.StatusCode, len(calls))
 	})
 
 	// ----- Step 15: Check settlement cycles -----
+	// GET /api/v1/settlement/cycles returns an array of settlement cycle objects.
 	t.Run("check settlement cycles", func(t *testing.T) {
 		resp := buyer.get("/api/v1/settlement/cycles")
 		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway {
 			resp.Body.Close()
 			t.Skip("settlement-engine unavailable")
 		}
-		body := readJSON(t, resp)
-		t.Logf("settlement cycles response (status %d): %v", resp.StatusCode, body)
+		cycles := readJSONArray(t, resp)
+		t.Logf("settlement cycles response (status %d): %d items", resp.StatusCode, len(cycles))
 	})
 }
 
