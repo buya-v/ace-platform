@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/garudax-platform/platform-service/internal/provisioning"
 	"github.com/garudax-platform/platform-service/internal/store"
 	"github.com/garudax-platform/platform-service/internal/types"
 )
@@ -34,6 +35,7 @@ func DefaultConfig() Config {
 type Server struct {
 	cfg         Config
 	tenantStore store.TenantStore
+	provisioner *provisioning.Provisioner
 	ready       atomic.Int32
 }
 
@@ -42,6 +44,17 @@ func New(tenantStore store.TenantStore, cfg Config) *Server {
 	return &Server{
 		cfg:         cfg,
 		tenantStore: tenantStore,
+		provisioner: provisioning.New(nil), // nil db = dry-run mode for MVP
+	}
+}
+
+// NewWithProvisioner creates a new Server with an explicit Provisioner.
+// Use this when you want to inject a non-default provisioner (e.g. with a real DB).
+func NewWithProvisioner(tenantStore store.TenantStore, cfg Config, p *provisioning.Provisioner) *Server {
+	return &Server{
+		cfg:         cfg,
+		tenantStore: tenantStore,
+		provisioner: p,
 	}
 }
 

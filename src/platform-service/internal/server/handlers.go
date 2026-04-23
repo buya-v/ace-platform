@@ -163,11 +163,24 @@ func (s *Server) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use newUUID to generate a correlation ID for the provision result.
-	correlationID, _ := newUUID()
-	_ = correlationID // reserved for async provisioning workflow
+	// Provision schemas and topic prefixes for the new tenant.
+	provResult, err := s.provisioner.ProvisionTenant(t)
+	if err != nil {
+		// Provisioning failure is non-fatal for MVP — log and return a partial result.
+		s.writeJSON(w, http.StatusCreated, map[string]interface{}{
+			"tenant": t,
+			"provisioning": map[string]interface{}{
+				"status": "FAILED",
+				"error":  err.Error(),
+			},
+		})
+		return
+	}
 
-	s.writeJSON(w, http.StatusCreated, t)
+	s.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"tenant":       t,
+		"provisioning": provResult,
+	})
 }
 
 // handleUpdateTenant handles PATCH /platform/v1/tenants/{id}.

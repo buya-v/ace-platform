@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -47,6 +49,7 @@ func main() {
 		"market-data-service":  fmt.Sprintf("http://%s", strings.Replace(cfg.MarketDataServiceAddr, ":50057", ":8087", 1)),
 		"warehouse-service":    fmt.Sprintf("http://%s", strings.Replace(cfg.WarehouseServiceAddr, ":50058", ":8088", 1)),
 		"securities-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.SecuritiesServiceAddr, ":50059", ":8089", 1)),
+		"platform-service":     fmt.Sprintf("http://%s", cfg.PlatformServiceAddr),
 	})
 
 	// Initialize handler and router
@@ -111,6 +114,26 @@ func main() {
 	rt.Handle("GET", "/api/v1/ws/book/{instrument_id}", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/book", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/executions", wsHandler.ExecutionsHandler)
+
+	// Register platform-service routes: /platform/v1/* → platform-service:8090
+	// These routes SKIP tenant middleware (platform API is above tenant scope).
+	// The bypass is handled in TenantMiddleware via tenantBypassPrefixes.
+	platformBaseURL := fmt.Sprintf("http://%s", cfg.PlatformServiceAddr)
+	platformTarget, err := url.Parse(platformBaseURL)
+	if err != nil {
+		logger.Error("invalid platform service address", slog.String("addr", cfg.PlatformServiceAddr), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	platformProxy := httputil.NewSingleHostReverseProxy(platformTarget)
+	platformHandler := func(w http.ResponseWriter, r *http.Request) {
+		platformProxy.ServeHTTP(w, r)
+	}
+	rt.Handle("GET", "/platform/v1/tenants", platformHandler)
+	rt.Handle("POST", "/platform/v1/tenants", platformHandler)
+	rt.Handle("GET", "/platform/v1/tenants/{id}", platformHandler)
+	rt.Handle("PATCH", "/platform/v1/tenants/{id}", platformHandler)
+	rt.Handle("PUT", "/platform/v1/tenants/{id}/status", platformHandler)
+	logger.Info("platform-service routes registered", slog.String("upstream", platformBaseURL))
 
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{

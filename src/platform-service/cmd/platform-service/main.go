@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/garudax-platform/platform-service/internal/provisioning"
 	"github.com/garudax-platform/platform-service/internal/server"
 	"github.com/garudax-platform/platform-service/internal/store"
 )
@@ -40,7 +41,12 @@ func main() {
 	tenantStore := store.NewInMemoryTenantStore()
 	logger.Info("using in-memory tenant store, seeded with ace-commodities and mse-equities")
 
-	srv := server.New(tenantStore, cfg)
+	// Init provisioner — nil db = dry-run mode for MVP.
+	// Swap in a real *sql.DB when DATABASE_URL is configured to create actual schemas.
+	provisioner := provisioning.New(nil)
+	logger.Info("provisioner running in dry-run mode (no DATABASE_URL configured)")
+
+	srv := server.NewWithProvisioner(tenantStore, cfg, provisioner)
 
 	// Start health server on port 9090.
 	go func() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // tenantContextKey is an unexported type to prevent context key collisions.
@@ -21,6 +22,12 @@ var tenantHealthPaths = map[string]bool{
 	"/healthz": true,
 	"/readyz":  true,
 	"/metrics": true,
+}
+
+// tenantBypassPrefixes are path prefixes that bypass tenant enforcement.
+// These are platform-level APIs that operate above tenant scope.
+var tenantBypassPrefixes = []string{
+	"/platform/",
 }
 
 // tenantErrorBody is the JSON error shape for tenant errors.
@@ -66,6 +73,16 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 			if tenantHealthPaths[r.URL.Path] {
 				next.ServeHTTP(w, r)
 				return
+			}
+
+			// Bypass tenant enforcement for platform-level API prefixes.
+			// Platform APIs (e.g. /platform/v1/tenants) are above tenant scope
+			// and must not require an X-GarudaX-Tenant header.
+			for _, prefix := range tenantBypassPrefixes {
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
 
 			header := r.Header.Get("X-GarudaX-Tenant")

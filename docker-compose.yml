@@ -330,6 +330,34 @@ services:
       - garudax-network
     restart: unless-stopped
 
+  platform-service:
+    build:
+      context: ./src/platform-service
+      dockerfile: Dockerfile
+    container_name: garudax-platform-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      API_PORT: "8090"
+      HEALTH_PORT: "9090"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-garudax}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-garudax_dev_password}
+      DB_NAME: ${POSTGRES_DB:-garudax}
+      DB_SSL_MODE: disable
+    ports:
+      - "8090:8090"
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - garudax-network
+    restart: unless-stopped
+
   # ─── API Gateway ───────────────────────────────────────────────────
 
   gateway:
@@ -350,6 +378,8 @@ services:
         condition: service_healthy
       compliance-service:
         condition: service_healthy
+      platform-service:
+        condition: service_healthy
     environment:
       <<: *common-env
       HTTP_PORT: "8080"
@@ -366,6 +396,7 @@ services:
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
       SECURITIES_SERVICE_ADDR: securities-service:50059
+      PLATFORM_SERVICE_ADDR: platform-service:8090
       BOT_ORCHESTRATOR_URL: "http://admin-bot-orchestrator:3100"
     ports:
       - "8080:8080"

@@ -37,6 +37,7 @@ type Config struct {
 	MarketDataServiceAddr string
 	WarehouseServiceAddr  string
 	SecuritiesServiceAddr string
+	PlatformServiceAddr   string
 
 	// Rate limiting
 	RateLimitEnabled bool
@@ -79,6 +80,7 @@ func FromEnv() *Config {
 		MarketDataServiceAddr: envStr("MARKET_DATA_SERVICE_ADDR", "localhost:50057"),
 		WarehouseServiceAddr:  envStr("WAREHOUSE_SERVICE_ADDR", "localhost:50058"),
 		SecuritiesServiceAddr: envStr("SECURITIES_SERVICE_ADDR", "localhost:50059"),
+		PlatformServiceAddr:   envStr("PLATFORM_SERVICE_ADDR", "platform-service:8090"),
 
 		RateLimitEnabled: envBool("RATE_LIMIT_ENABLED", true),
 
