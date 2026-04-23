@@ -32,10 +32,21 @@ func RequestIDFromContext(ctx context.Context) string {
 	return ""
 }
 
+// RouteChecker is satisfied by any router that can report whether a path matches
+// any registered route. The gateway wires *router.Router here so the auth
+// middleware can return 404 for unknown paths before inspecting credentials.
+type RouteChecker interface {
+	RouteExists(path string) bool
+}
+
 // AuthConfig defines which paths are public (no auth needed).
 type AuthConfig struct {
-	PublicPaths map[string]bool
+	PublicPaths    map[string]bool
 	PublicPrefixes []string
+	// RouteChecker, when non-nil, is consulted before auth enforcement.
+	// Requests to paths that match no registered route receive 404 immediately,
+	// preventing the auth layer from leaking a 401 on nonexistent endpoints.
+	RouteChecker RouteChecker
 }
 
 // Auth creates JWT authentication middleware.
@@ -47,6 +58,14 @@ func Auth(validator *auth.JWTValidator, cfg *AuthConfig) func(http.Handler) http
 			// CORS preflight requests are always allowed
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			// Pre-auth route existence check: return 404 for unknown paths before
+			// ever inspecting credentials. This prevents leaking a 401 on endpoints
+			// that don't exist, which would confuse clients and e2e tests alike.
+			if cfg != nil && cfg.RouteChecker != nil && !cfg.RouteChecker.RouteExists(r.URL.Path) {
+				types.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Endpoint not found", reqID)
 				return
 			}
 

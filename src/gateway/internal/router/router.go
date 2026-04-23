@@ -52,6 +52,18 @@ func (rt *Router) GetRoutes() []Route {
 	return rt.routes
 }
 
+// RouteExists reports whether any registered route has a pattern matching path,
+// regardless of HTTP method. Used by the pre-auth 404 guard to reject requests
+// to unknown paths before auth middleware runs.
+func (rt *Router) RouteExists(path string) bool {
+	for _, route := range rt.routes {
+		if _, ok := matchPath(route.Pattern, path); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // ServeHTTP implements http.Handler.
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path

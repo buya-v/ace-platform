@@ -1,3 +1,52 @@
+# GarudaX — Universal Exchange Platform
+
+## Product Vision
+
+GarudaX is a **complete exchange platform for securities and commodities** with an **AI-powered administration layer** that eliminates IT operations by enabling business users to manage the platform through natural language.
+
+### Three Pillars
+
+**1. Universal Exchange Core** — Multi-asset trading engine
+- Commodities (current): wheat, barley, cattle, cashmere, wool — physical delivery via eWR
+- Securities (planned): equities, bonds, ETFs — T+2 settlement, CSD integration
+- Derivatives (planned): futures, options — SPAN margin already built
+- Unified order book across asset classes
+- FIX 4.4/5.0 protocol gateway for broker connectivity
+
+**2. AI Administration Bot** — Zero IT operations
+- Business users manage the entire platform via natural language (Telegram, web chat)
+- Bot handles: user provisioning, risk parameters, fee schedules, circuit breakers, market phases, compliance rules, settlement triggers, reporting
+- MCP tools give the bot direct access to all platform operations
+- Approval workflow: bot proposes → user approves via Telegram → bot executes
+- Scheduled tasks: EOD settlement, daily reconciliation, margin calls, regulatory reports
+
+**3. Business Self-Service** — No-code configuration
+- Natural language queries: "top 10 traders by volume this week"
+- Rule builder: "set wheat margin to 15%", "add circuit breaker at 5% move"
+- Alert system: "notify when cashmere crosses 500k MNT"
+- Dashboard builder: drag-and-drop KPIs for exchange operators
+- Member portal: broker onboarding, fee management, self-service
+
+### Target Market
+- Mongolian commodity exchanges (MNT currency, Ulaanbaatar timezone)
+- Regional securities exchanges seeking modern infrastructure
+- Exchange operators who want AI-driven operations instead of IT teams
+
+### Current State (Phase 6 complete)
+- 10 Go services running (matching, clearing, margin, settlement, auth, compliance, market-data, warehouse, gateway, admin-bot)
+- 3 React SPAs (trading terminal, admin dashboard, demo runner)
+- 1,199+ tests, 16 Docker containers, 23 DB migrations, 67 softhouse tasks completed
+- Production-ready for commodities; securities module not started
+
+### Roadmap
+- **Phase 7**: Securities module (equities + bonds + T+2 settlement)
+- **Phase 8**: FIX protocol gateway (broker connectivity)
+- **Phase 9**: AI bot expansion (full admin coverage, natural language queries)
+- **Phase 10**: Business self-service (rule builder, alerts, dashboards)
+- **Phase 11**: Regulatory reporting (central bank integration, MNT-specific)
+
+---
+
 # Self-Learning Softhouse — Architecture Reference
 
 This file is the persistent memory for an AI-driven software development pipeline.

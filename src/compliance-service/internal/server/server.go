@@ -64,10 +64,9 @@ func (s *Server) SetReady() {
 	s.ready.Store(true)
 }
 
-// StartHealthServer starts HTTP health, readiness, and query endpoints.
-func (s *Server) StartHealthServer() error {
-	mux := http.NewServeMux()
-
+// mountRoutes registers all HTTP route handlers onto the provided mux.
+// Extracted for testability — tests can call this directly with httptest.
+func (s *Server) mountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "ok")
@@ -83,176 +82,206 @@ func (s *Server) StartHealthServer() error {
 		}
 	})
 
-	mux.HandleFunc("/application", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			// Submit new KYC application
-			var req struct {
-				ParticipantID   string `json:"participant_id"`
-				ParticipantType string `json:"participant_type"`
-				LegalName       string `json:"legal_name"`
-				TradingName     string `json:"trading_name"`
-				Nationality     string `json:"nationality"`
-				SourceOfFunds   string `json:"source_of_funds"`
-				Contact         struct {
-					Email             string `json:"email"`
-					Phone             string `json:"phone"`
-					ContactPersonName string `json:"contact_person_name"`
-				} `json:"contact"`
-				RegisteredAddress struct {
-					Line1      string `json:"line1"`
-					Line2      string `json:"line2"`
-					City       string `json:"city"`
-					Province   string `json:"province"`
-					PostalCode string `json:"postal_code"`
-					Country    string `json:"country"`
-				} `json:"registered_address"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "invalid JSON", http.StatusBadRequest)
-				return
-			}
-			pt := types.ParticipantType(req.ParticipantType)
-			if pt == "" {
-				pt = types.ParticipantIndividual
-			}
-			contact := types.ContactInfo{
-				Email:             req.Contact.Email,
-				Phone:             req.Contact.Phone,
-				ContactPersonName: req.Contact.ContactPersonName,
-			}
-			addr := types.Address{
-				Line1:      req.RegisteredAddress.Line1,
-				Line2:      req.RegisteredAddress.Line2,
-				City:       req.RegisteredAddress.City,
-				Province:   req.RegisteredAddress.Province,
-				PostalCode: req.RegisteredAddress.PostalCode,
-				Country:    req.RegisteredAddress.Country,
-			}
-			app, err := s.onboarding.SubmitApplication(req.ParticipantID, pt, req.LegalName, req.TradingName, req.Nationality, contact, addr, req.SourceOfFunds)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			addAuditEvent("APPLICATION_SUBMITTED", req.ParticipantID, "KYC application submitted: "+req.LegalName, "")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(app)
+	mux.HandleFunc("/application", s.handleApplication)
+	mux.HandleFunc("/applications", s.handleApplications)
+	mux.HandleFunc("/participant-status", s.handleParticipantStatus)
+	mux.HandleFunc("/alerts", s.handleAlerts)
+	mux.HandleFunc("/audit-trail", s.handleAuditTrail)
+	mux.HandleFunc("/risk-score", s.handleRiskScore)
+}
+
+// handleApplication handles single-application creation (POST) and retrieval (GET).
+// POST /application — submit a new KYC application; returns a JSON object.
+// GET /application?id=<app_id> — retrieve an application by ID.
+func (s *Server) handleApplication(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		var req struct {
+			ParticipantID   string `json:"participant_id"`
+			ParticipantType string `json:"participant_type"`
+			LegalName       string `json:"legal_name"`
+			TradingName     string `json:"trading_name"`
+			Nationality     string `json:"nationality"`
+			SourceOfFunds   string `json:"source_of_funds"`
+			Contact         struct {
+				Email             string `json:"email"`
+				Phone             string `json:"phone"`
+				ContactPersonName string `json:"contact_person_name"`
+			} `json:"contact"`
+			RegisteredAddress struct {
+				Line1      string `json:"line1"`
+				Line2      string `json:"line2"`
+				City       string `json:"city"`
+				Province   string `json:"province"`
+				PostalCode string `json:"postal_code"`
+				Country    string `json:"country"`
+			} `json:"registered_address"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		// GET
-		appID := r.URL.Query().Get("id")
-		if appID == "" {
-			http.Error(w, "id required", http.StatusBadRequest)
-			return
+		pt := types.ParticipantType(req.ParticipantType)
+		if pt == "" {
+			pt = types.ParticipantIndividual
 		}
-		app, err := s.onboarding.GetApplication(appID)
+		contact := types.ContactInfo{
+			Email:             req.Contact.Email,
+			Phone:             req.Contact.Phone,
+			ContactPersonName: req.Contact.ContactPersonName,
+		}
+		addr := types.Address{
+			Line1:      req.RegisteredAddress.Line1,
+			Line2:      req.RegisteredAddress.Line2,
+			City:       req.RegisteredAddress.City,
+			Province:   req.RegisteredAddress.Province,
+			PostalCode: req.RegisteredAddress.PostalCode,
+			Country:    req.RegisteredAddress.Country,
+		}
+		app, err := s.onboarding.SubmitApplication(req.ParticipantID, pt, req.LegalName, req.TradingName, req.Nationality, contact, addr, req.SourceOfFunds)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		addAuditEvent("APPLICATION_SUBMITTED", req.ParticipantID, "KYC application submitted: "+req.LegalName, "")
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(app)
-	})
+		return
+	}
+	// GET
+	appID := r.URL.Query().Get("id")
+	if appID == "" {
+		http.Error(w, "id required", http.StatusBadRequest)
+		return
+	}
+	app, err := s.onboarding.GetApplication(appID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(app)
+}
 
-	mux.HandleFunc("/applications", func(w http.ResponseWriter, r *http.Request) {
-		statusFilter := types.KYCStatus(r.URL.Query().Get("status"))
-		typeFilter := types.ParticipantType(r.URL.Query().Get("type"))
-		apps, err := s.onboarding.ListApplications(statusFilter, typeFilter, 100)
+// handleApplications handles list queries for KYC applications.
+// GET /applications — returns {"applications":[...], "total":N}.
+func (s *Server) handleApplications(w http.ResponseWriter, r *http.Request) {
+	statusFilter := types.KYCStatus(r.URL.Query().Get("status"))
+	typeFilter := types.ParticipantType(r.URL.Query().Get("type"))
+	apps, err := s.onboarding.ListApplications(statusFilter, typeFilter, 100)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Ensure we return an empty array (not null) when there are no applications.
+	if apps == nil {
+		apps = []*types.KYCApplication{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"applications": apps,
+		"total":        len(apps),
+	})
+}
+
+// handleParticipantStatus handles participant clearance status checks.
+func (s *Server) handleParticipantStatus(w http.ResponseWriter, r *http.Request) {
+	participantID := r.URL.Query().Get("participant_id")
+	if participantID == "" {
+		http.Error(w, "participant_id required", http.StatusBadRequest)
+		return
+	}
+	status, err := s.onboarding.CheckParticipantStatus(participantID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
+// handleAlerts handles alert creation (POST) and listing (GET).
+func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		var req struct {
+			ParticipantID string `json:"participant_id"`
+			RuleID        string `json:"rule_id"`
+			Description   string `json:"description"`
+			Details       string `json:"details"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		alert, err := s.screening.CreateAlert(req.ParticipantID, req.RuleID, req.Description, req.Details)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		addAuditEvent("ALERT_CREATED", req.ParticipantID, "Alert created: "+req.Description, "")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"applications": apps,
-			"total":        len(apps),
-		})
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(alert)
+		return
+	}
+	// GET — list alerts (participant_id is optional)
+	statusFilter := types.AlertStatus(r.URL.Query().Get("status"))
+	participantID := r.URL.Query().Get("participant_id")
+	alerts, err := s.screening.ListAlerts(statusFilter, participantID, 100)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if alerts == nil {
+		alerts = []*types.MonitoringAlert{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"alerts": alerts,
+		"total":  len(alerts),
 	})
+}
 
-	mux.HandleFunc("/participant-status", func(w http.ResponseWriter, r *http.Request) {
-		participantID := r.URL.Query().Get("participant_id")
-		if participantID == "" {
-			http.Error(w, "participant_id required", http.StatusBadRequest)
-			return
+// handleAuditTrail returns compliance audit events.
+func (s *Server) handleAuditTrail(w http.ResponseWriter, r *http.Request) {
+	participantID := r.URL.Query().Get("participant_id")
+	auditMu.Lock()
+	var filtered []AuditEvent
+	for _, e := range auditEvents {
+		if participantID == "" || e.ParticipantID == participantID {
+			filtered = append(filtered, e)
 		}
-		status, err := s.onboarding.CheckParticipantStatus(participantID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
+	}
+	auditMu.Unlock()
+	if filtered == nil {
+		filtered = []AuditEvent{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"events": filtered,
+		"total":  len(filtered),
 	})
+}
 
-	mux.HandleFunc("/alerts", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			// Create a new alert
-			var req struct {
-				ParticipantID string `json:"participant_id"`
-				RuleID        string `json:"rule_id"`
-				Description   string `json:"description"`
-				Details       string `json:"details"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				http.Error(w, "invalid JSON", http.StatusBadRequest)
-				return
-			}
-			alert, err := s.screening.CreateAlert(req.ParticipantID, req.RuleID, req.Description, req.Details)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			addAuditEvent("ALERT_CREATED", req.ParticipantID, "Alert created: "+req.Description, "")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(alert)
-			return
-		}
-		// GET — list alerts (participant_id is optional)
-		statusFilter := types.AlertStatus(r.URL.Query().Get("status"))
-		participantID := r.URL.Query().Get("participant_id")
-		alerts, err := s.screening.ListAlerts(statusFilter, participantID, 100)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"alerts": alerts,
-			"total":  len(alerts),
-		})
+// handleRiskScore returns a risk score for a participant.
+func (s *Server) handleRiskScore(w http.ResponseWriter, r *http.Request) {
+	participantID := r.URL.Query().Get("participant_id")
+	if participantID == "" {
+		http.Error(w, "participant_id required", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"participant_id": participantID,
+		"risk_score":     50,
+		"risk_level":     "MEDIUM",
 	})
+}
 
-	mux.HandleFunc("/audit-trail", func(w http.ResponseWriter, r *http.Request) {
-		participantID := r.URL.Query().Get("participant_id")
-		auditMu.Lock()
-		var filtered []AuditEvent
-		for _, e := range auditEvents {
-			if participantID == "" || e.ParticipantID == participantID {
-				filtered = append(filtered, e)
-			}
-		}
-		auditMu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"events": filtered,
-			"total":  len(filtered),
-		})
-	})
-
-	mux.HandleFunc("/risk-score", func(w http.ResponseWriter, r *http.Request) {
-		participantID := r.URL.Query().Get("participant_id")
-		if participantID == "" {
-			http.Error(w, "participant_id required", http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"participant_id": participantID,
-			"risk_score":     50,
-			"risk_level":     "MEDIUM",
-		})
-	})
+// StartHealthServer starts HTTP health, readiness, and query endpoints.
+func (s *Server) StartHealthServer() error {
+	mux := http.NewServeMux()
+	s.mountRoutes(mux)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)
 	return http.ListenAndServe(addr, mux)

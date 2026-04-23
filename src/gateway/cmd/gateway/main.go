@@ -114,19 +114,21 @@ func main() {
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{
 		PublicPaths: map[string]bool{
-			"/healthz":                         true,
-			"/readyz":                          true,
-			"/metrics":                         true,
-			"POST /api/v1/auth/login":          true,
-			"POST /api/v1/auth/register":       true,
-			"POST /api/v1/auth/password/reset":  true,
-			"POST /api/v1/auth/refresh":         true,
+			"/healthz":                        true,
+			"/readyz":                         true,
+			"/metrics":                        true,
+			"POST /api/v1/auth/login":         true,
+			"POST /api/v1/auth/register":      true,
+			"POST /api/v1/auth/password/reset": true,
+			"POST /api/v1/auth/refresh":        true,
 		},
 		PublicPrefixes: []string{
 			"/api/v1/instruments/",
 			"/api/v1/market-data/",
 			"/api/v1/ws/",
 		},
+		// Wire the router as a RouteChecker so unknown paths get 404 before auth runs.
+		RouteChecker: rt,
 	}
 
 	// Rate limit configuration
