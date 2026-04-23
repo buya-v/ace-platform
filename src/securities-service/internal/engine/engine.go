@@ -8,34 +8,39 @@ import (
 	"time"
 
 	"github.com/garudax-platform/securities-service/internal/kafka"
+	"github.com/garudax-platform/securities-service/internal/settlement"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
 
 // MatchingEngine matches incoming orders against resting orders using price-time priority.
 type MatchingEngine struct {
-	instrumentStore store.InstrumentStore
-	orderStore      store.OrderStore
-	tradeStore      store.TradeStore
-	positionStore   store.PositionStore
-	producer        kafka.Producer
+	instrumentStore  store.InstrumentStore
+	orderStore       store.OrderStore
+	tradeStore       store.TradeStore
+	positionStore    store.PositionStore
+	producer         kafka.Producer
+	settlementEngine *settlement.SettlementEngine
 }
 
 // NewMatchingEngine creates a new MatchingEngine with the given stores.
 // producer may be nil; if so, trade events are not published.
+// settlementEngine may be nil; if so, settlement obligations are not created.
 func NewMatchingEngine(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
 	tradeStore store.TradeStore,
 	positionStore store.PositionStore,
 	producer kafka.Producer,
+	settlementEngine *settlement.SettlementEngine,
 ) *MatchingEngine {
 	return &MatchingEngine{
-		instrumentStore: instrumentStore,
-		orderStore:      orderStore,
-		tradeStore:      tradeStore,
-		positionStore:   positionStore,
-		producer:        producer,
+		instrumentStore:  instrumentStore,
+		orderStore:       orderStore,
+		tradeStore:       tradeStore,
+		positionStore:    positionStore,
+		producer:         producer,
+		settlementEngine: settlementEngine,
 	}
 }
 
@@ -214,7 +219,15 @@ func (e *MatchingEngine) MatchOrder(order *types.SecurityOrder) ([]types.Securit
 		}
 	}
 
-	// 9-10. If incoming has remaining quantity, it stays as PENDING (already stored).
+	// 9. Create settlement obligations for all trades produced.
+	if e.settlementEngine != nil && len(trades) > 0 {
+		if err := e.settlementEngine.CreateObligationsFromTrades(trades); err != nil {
+			// Non-fatal: log but don't fail matching.
+			_ = err
+		}
+	}
+
+	// 10. If incoming has remaining quantity, it stays as PENDING (already stored).
 	return trades, nil
 }
 

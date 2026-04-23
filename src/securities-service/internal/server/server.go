@@ -10,6 +10,7 @@ import (
 
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
+	"github.com/garudax-platform/securities-service/internal/settlement"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -35,29 +36,36 @@ func DefaultConfig() Config {
 
 // Server is the HTTP server for the securities-service.
 type Server struct {
-	cfg             Config
-	instrumentStore store.InstrumentStore
-	orderStore      store.OrderStore
-	engine          *engine.MatchingEngine
-	producer        kafka.Producer
-	ready           atomic.Int32
+	cfg              Config
+	instrumentStore  store.InstrumentStore
+	orderStore       store.OrderStore
+	settlementStore  store.SettlementStore
+	engine           *engine.MatchingEngine
+	settlementEngine *settlement.SettlementEngine
+	producer         kafka.Producer
+	ready            atomic.Int32
 }
 
 // New creates a new Server with the given stores, matching engine, and configuration.
 // producer may be nil; if so, order events are not published.
+// settlementEngine and settlementStore may be nil; if so, settlement endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
+	settlementStore store.SettlementStore,
 	matchingEngine *engine.MatchingEngine,
+	settlementEngine *settlement.SettlementEngine,
 	producer kafka.Producer,
 	cfg Config,
 ) *Server {
 	return &Server{
-		cfg:             cfg,
-		instrumentStore: instrumentStore,
-		orderStore:      orderStore,
-		engine:          matchingEngine,
-		producer:        producer,
+		cfg:              cfg,
+		instrumentStore:  instrumentStore,
+		orderStore:       orderStore,
+		settlementStore:  settlementStore,
+		engine:           matchingEngine,
+		settlementEngine: settlementEngine,
+		producer:         producer,
 	}
 }
 
@@ -102,6 +110,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Orders
 	mux.HandleFunc("/api/v1/securities/orders", s.handleOrders)
 	mux.HandleFunc("/api/v1/securities/orders/", s.handleOrder)
+
+	// Settlements
+	mux.HandleFunc("/api/v1/securities/settlements", s.handleSettlements)
+	mux.HandleFunc("/api/v1/securities/settlements/cycle", s.handleSettlementCycle)
 }
 
 // --- Health endpoints ---

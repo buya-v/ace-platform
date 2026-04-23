@@ -12,6 +12,7 @@ import (
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/server"
+	"github.com/garudax-platform/securities-service/internal/settlement"
 	"github.com/garudax-platform/securities-service/internal/store"
 )
 
@@ -65,6 +66,7 @@ func main() {
 
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
+	settlementStore := store.NewInMemorySettlementStore()
 
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
@@ -73,9 +75,12 @@ func main() {
 	producer.RegisterTopic(kafka.TopicOrderCreated, 256)
 	producer.RegisterTopic(kafka.TopicOrderCancelled, 256)
 
-	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer)
+	// Settlement engine processes T+2 obligations from trades.
+	settlementEngine := settlement.NewSettlementEngine(orderStore, settlementStore)
 
-	srv := server.New(instrumentStore, orderStore, matchingEngine, producer, cfg)
+	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine)
+
+	srv := server.New(instrumentStore, orderStore, settlementStore, matchingEngine, settlementEngine, producer, cfg)
 
 	// Start health server on port 9089.
 	go func() {

@@ -68,6 +68,15 @@ type PositionStore interface {
 	List(participantID string) ([]types.Position, error)
 }
 
+// SettlementStore defines the repository contract for settlement obligations.
+type SettlementStore interface {
+	Create(obligation *types.SettlementObligation) error
+	Get(id string) (*types.SettlementObligation, error)
+	ListByDate(date string) ([]types.SettlementObligation, error)
+	ListByStatus(status types.SettlementStatus) ([]types.SettlementObligation, error)
+	UpdateStatus(id string, status types.SettlementStatus) error
+}
+
 // --- InMemoryInstrumentStore ---
 
 // InMemoryInstrumentStore is a thread-safe, in-memory implementation of InstrumentStore.
@@ -390,4 +399,86 @@ func (s *InMemoryPositionStore) List(participantID string) ([]types.Position, er
 		}
 	}
 	return result, nil
+}
+
+// --- InMemorySettlementStore ---
+
+// InMemorySettlementStore is a thread-safe, in-memory implementation of SettlementStore.
+type InMemorySettlementStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.SettlementObligation
+}
+
+// NewInMemorySettlementStore returns an empty InMemorySettlementStore.
+func NewInMemorySettlementStore() *InMemorySettlementStore {
+	return &InMemorySettlementStore{
+		data: make(map[string]*types.SettlementObligation),
+	}
+}
+
+// Create stores a new settlement obligation.
+func (s *InMemorySettlementStore) Create(obligation *types.SettlementObligation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[obligation.ID]; exists {
+		return errors.New("settlement obligation already exists: " + obligation.ID)
+	}
+	copy := *obligation
+	s.data[obligation.ID] = &copy
+	return nil
+}
+
+// Get retrieves a settlement obligation by its ID.
+func (s *InMemorySettlementStore) Get(id string) (*types.SettlementObligation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ob, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copy := *ob
+	return &copy, nil
+}
+
+// ListByDate returns all settlement obligations for a given settlement date.
+func (s *InMemorySettlementStore) ListByDate(date string) ([]types.SettlementObligation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.SettlementObligation, 0)
+	for _, ob := range s.data {
+		if ob.SettlementDate == date {
+			result = append(result, *ob)
+		}
+	}
+	return result, nil
+}
+
+// ListByStatus returns all settlement obligations with the given status.
+func (s *InMemorySettlementStore) ListByStatus(status types.SettlementStatus) ([]types.SettlementObligation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.SettlementObligation, 0)
+	for _, ob := range s.data {
+		if ob.Status == status {
+			result = append(result, *ob)
+		}
+	}
+	return result, nil
+}
+
+// UpdateStatus changes the settlement status of an obligation.
+func (s *InMemorySettlementStore) UpdateStatus(id string, status types.SettlementStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ob, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	ob.Status = status
+	return nil
 }

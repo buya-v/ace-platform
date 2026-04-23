@@ -146,6 +146,45 @@ type Position struct {
 	UpdatedAt     string  `json:"updated_at"`
 }
 
+// SettlementStatus represents the lifecycle state of a settlement obligation.
+type SettlementStatus string
+
+const (
+	SettlePending    SettlementStatus = "SETTLE_PENDING"
+	SettleAffirmed   SettlementStatus = "SETTLE_AFFIRMED"
+	SettleNetted     SettlementStatus = "SETTLE_NETTED"
+	SettleInstructed SettlementStatus = "SETTLE_INSTRUCTED"
+	SettleSettling   SettlementStatus = "SETTLE_SETTLING"
+	SettleSettled    SettlementStatus = "SETTLE_SETTLED"
+	SettleFailed     SettlementStatus = "SETTLE_FAILED"
+)
+
+// SettlementObligation represents a T+2 settlement obligation derived from a trade.
+type SettlementObligation struct {
+	ID                  string           `json:"id"`
+	TradeID             string           `json:"trade_id"`
+	InstrumentID        string           `json:"instrument_id"`
+	BuyerParticipantID  string           `json:"buyer_participant_id"`
+	SellerParticipantID string           `json:"seller_participant_id"`
+	Quantity            int              `json:"quantity"`
+	Price               float64          `json:"price"`
+	NetAmount           float64          `json:"net_amount"`
+	SettlementDate      string           `json:"settlement_date"`
+	Status              SettlementStatus `json:"status"`
+	CreatedAt           string           `json:"created_at"`
+	UpdatedAt           string           `json:"updated_at"`
+}
+
+// SettlementResult summarises the outcome of a settlement cycle run.
+type SettlementResult struct {
+	Date      string `json:"date"`
+	Processed int    `json:"processed"`
+	Affirmed  int    `json:"affirmed"`
+	Netted    int    `json:"netted"`
+	Settled   int    `json:"settled"`
+	Failed    int    `json:"failed"`
+}
+
 // ErrorDetail carries a machine-readable code and human-readable message.
 type ErrorDetail struct {
 	Code    string   `json:"code"`
