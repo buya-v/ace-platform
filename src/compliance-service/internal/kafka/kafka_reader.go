@@ -149,7 +149,7 @@ func (c *KafkaConsumer) sendToDLQ(topic string, rec Record, err error) {
 	if c.dlqProducer == nil {
 		return
 	}
-	dlqTopic := "ace.dlq." + topicWithoutPrefix(topic)
+	dlqTopic := "ace-commodities.dlq." + topicWithoutPrefix(topic)
 	dlqErr := c.dlqProducer.Publish(dlqTopic, rec.Key, &Event{
 		ID:        fmt.Sprintf("dlq-%s", rec.Key),
 		Type:      "dlq.failure",

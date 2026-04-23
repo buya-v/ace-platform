@@ -7,6 +7,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
+
+	"github.com/garudax-platform/shared/internal/tenant"
 )
 
 // contextKey is an unexported type for context keys in this package.
@@ -67,8 +69,10 @@ func RequestIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-// LoggerFromContext returns a logger enriched with trace_id and request_id
-// from the context. This is the primary way to get a context-aware logger.
+// LoggerFromContext returns a logger enriched with trace_id, request_id, and
+// tenant_id from the context. This is the primary way to get a context-aware
+// logger. Every log line will carry tenant_id when a tenant context is present,
+// satisfying the platform invariant that every log line carries tenant_id.
 func LoggerFromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
 	l := base
 	if traceID := TraceIDFromContext(ctx); traceID != "" {
@@ -77,5 +81,18 @@ func LoggerFromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
 	if reqID := RequestIDFromContext(ctx); reqID != "" {
 		l = l.With(slog.String("request_id", reqID))
 	}
+	if tid, ok := tenant.TenantFromContext(ctx); ok {
+		l = l.With(slog.String("tenant_id", tid.String()))
+	}
 	return l
+}
+
+// LoggerWithTenantID returns a logger pre-enriched with the given tenant_id string.
+// Use this for background workers, Kafka consumers, and other non-HTTP paths
+// where the tenant is known from configuration rather than a request header.
+func LoggerWithTenantID(base *slog.Logger, tenantID string) *slog.Logger {
+	if tenantID == "" {
+		return base
+	}
+	return base.With(slog.String("tenant_id", tenantID))
 }

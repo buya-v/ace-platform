@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"fmt"
 	"log"
 	"sync"
@@ -160,7 +161,7 @@ func (c *ChannelConsumer) sendToDLQ(topic string, rec Record, err error) {
 	if c.dlqProducer == nil {
 		return
 	}
-	dlqTopic := "ace.dlq." + topicWithoutPrefix(topic)
+	dlqTopic := "ace-commodities.dlq." + topicWithoutPrefix(topic)
 	dlqErr := c.dlqProducer.Publish(dlqTopic, rec.Key, &Event{
 		ID:        fmt.Sprintf("dlq-%s", rec.Key),
 		Type:      "dlq.failure",
@@ -201,10 +202,10 @@ func (c *ChannelConsumer) ProcessedCount() int {
 	return len(c.processedIDs)
 }
 
-// topicWithoutPrefix strips the "ace." prefix from a topic name for DLQ routing.
+// topicWithoutPrefix strips the tenant prefix from a topic name for DLQ routing.
 func topicWithoutPrefix(topic string) string {
-	if len(topic) > 4 && topic[:4] == "ace." {
-		return topic[4:]
+	if idx := strings.Index(topic, "."); idx >= 0 {
+		return topic[idx+1:]
 	}
 	return topic
 }

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/garudax-platform/shared/internal/tenant"
 )
 
 // Metrics provides Prometheus-compatible basic metrics.
@@ -37,10 +39,13 @@ func NewMetrics(serviceName string) *Metrics {
 }
 
 // MetricsMiddleware creates HTTP middleware that records:
-//   - http_requests_total: request count by method+status
+//   - http_requests_total: request count by method+status (+ tenant_id when present)
 //   - http_request_errors_total: count of 5xx responses
 //   - http_request_duration_seconds: latency histogram
 //   - http_response_size_bytes: response size histogram
+//
+// When a tenant context is present in the request context, the metric key
+// is prefixed with the tenant_id so metrics are tenant-scoped by default.
 func (m *Metrics) MetricsMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,13 +56,20 @@ func (m *Metrics) MetricsMiddleware() func(http.Handler) http.Handler {
 
 			duration := time.Since(start)
 
-			// Record request count by method+status
-			key := r.Method + "_" + strconv.Itoa(rec.status)
+			// Build metric key prefix: include tenant_id when available so metrics
+			// are tenant-scoped by default (platform invariant: every metric carries tenant_id).
+			prefix := ""
+			if tid, ok := tenant.TenantFromContext(r.Context()); ok {
+				prefix = tid.String() + "_"
+			}
+
+			// Record request count by tenant+method+status
+			key := prefix + r.Method + "_" + strconv.Itoa(rec.status)
 			m.requestCount.Add(key, 1)
 
 			// Record 5xx errors
 			if rec.status >= 500 {
-				errKey := r.Method + "_" + strconv.Itoa(rec.status)
+				errKey := prefix + r.Method + "_" + strconv.Itoa(rec.status)
 				m.errorCount.Add(errKey, 1)
 			}
 

@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/garudax-platform/shared/internal/tenant"
 )
 
 // statusRecorder wraps http.ResponseWriter to capture the status code
@@ -63,17 +65,28 @@ func TracingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			w.Header().Set("X-Request-ID", traceID)
 			w.Header().Set("X-Trace-ID", traceID)
 
+			// Extract tenant context if present and propagate in header
+			tenantID := ""
+			if tid, ok := tenant.TenantFromContext(r.Context()); ok {
+				tenantID = tid.String()
+				w.Header().Set("X-GarudaX-Tenant", tenantID)
+			}
+
 			// Wrap writer to capture status
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
-			// Log request start
+			// Log request start — include tenant_id when available
 			reqLogger := LoggerFromContext(ctx, logger)
-			reqLogger.Info("request_started",
+			startAttrs := []any{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.String("remote_addr", r.RemoteAddr),
 				slog.String("user_agent", r.UserAgent()),
-			)
+			}
+			if tenantID != "" {
+				startAttrs = append(startAttrs, slog.String("tenant_id", tenantID))
+			}
+			reqLogger.Info("request_started", startAttrs...)
 
 			// Serve the request
 			next.ServeHTTP(rec, r.WithContext(ctx))
@@ -87,7 +100,7 @@ func TracingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 				level = slog.LevelWarn
 			}
 
-			reqLogger.Log(r.Context(), level, "request_completed",
+			completedAttrs := []any{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rec.status),
@@ -95,7 +108,11 @@ func TracingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.String("duration", duration.String()),
 				slog.Int64("duration_ms", duration.Milliseconds()),
 				slog.String("remote_addr", r.RemoteAddr),
-			)
+			}
+			if tenantID != "" {
+				completedAttrs = append(completedAttrs, slog.String("tenant_id", tenantID))
+			}
+			reqLogger.Log(r.Context(), level, "request_completed", completedAttrs...)
 		})
 	}
 }

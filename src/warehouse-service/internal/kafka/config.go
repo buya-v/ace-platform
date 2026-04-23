@@ -9,15 +9,15 @@ import (
 
 // Topics used by the GarudaX platform.
 const (
-	TopicTradesExecuted        = "ace.trades.executed"
-	TopicClearingNovated       = "ace.clearing.novated"
-	TopicMarginCallIssued      = "ace.margin.call-issued"
-	TopicSettlementCompleted   = "ace.settlement.completed"
-	TopicComplianceChanged     = "ace.compliance.status-changed"
-	TopicMarketDataIngested    = "ace.market-data.trade-ingested"
-	TopicWarehouseReceiptPledged   = "ace.warehouse.receipt-pledged"
-	TopicWarehouseDeliveryCompleted = "ace.warehouse.delivery-completed"
-	TopicAuthUserRegistered    = "ace.auth.user-registered"
+	TopicTradesExecuted        = "ace-commodities.trades.executed"
+	TopicClearingNovated       = "ace-commodities.clearing.novated"
+	TopicMarginCallIssued      = "ace-commodities.margin.call-issued"
+	TopicSettlementCompleted   = "ace-commodities.settlement.completed"
+	TopicComplianceChanged     = "ace-commodities.compliance.status-changed"
+	TopicMarketDataIngested    = "ace-commodities.market-data.trade-ingested"
+	TopicWarehouseReceiptPledged   = "ace-commodities.warehouse.receipt-pledged"
+	TopicWarehouseDeliveryCompleted = "ace-commodities.warehouse.delivery-completed"
+	TopicAuthUserRegistered    = "ace-commodities.auth.user-registered"
 )
 
 // ConfigFromEnv loads Kafka configuration from environment variables.

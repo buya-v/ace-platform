@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/garudax-platform/shared/internal/tenant"
 )
 
 // traceContextKey is an unexported type for TraceContext context keys.
@@ -196,13 +198,25 @@ func TraceMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			// Inject outgoing traceparent into response so clients can correlate.
 			w.Header().Set("traceparent", FormatTraceparent(span))
 
+			// Propagate tenant_id as a trace attribute when present.
+			// This makes every trace tenant-scoped per the platform invariant.
+			tenantID := ""
+			if tid, ok := tenant.TenantFromContext(r.Context()); ok {
+				tenantID = tid.String()
+				w.Header().Set("X-GarudaX-Tenant", tenantID)
+			}
+
 			if logger != nil {
-				logger.Debug("trace",
+				traceAttrs := []any{
 					slog.String("trace_id", span.TraceID),
 					slog.String("span_id", span.SpanID),
 					slog.String("parent_span_id", span.ParentSpanID),
 					slog.Bool("sampled", span.Sampled),
-				)
+				}
+				if tenantID != "" {
+					traceAttrs = append(traceAttrs, slog.String("tenant_id", tenantID))
+				}
+				logger.Debug("trace", traceAttrs...)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))

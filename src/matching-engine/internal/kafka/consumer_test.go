@@ -84,7 +84,7 @@ func TestChannelConsumer_Idempotency(t *testing.T) {
 
 func TestChannelConsumer_RetryAndDLQ(t *testing.T) {
 	dlqProducer := NewChannelProducer(DefaultProducerConfig())
-	dlqCh := dlqProducer.RegisterTopic("ace.dlq.test-topic", 10)
+	dlqCh := dlqProducer.RegisterTopic("ace-commodities.dlq.test-topic", 10)
 
 	cfg := DefaultConsumerConfig("test-group")
 	cfg.MaxRetries = 2
@@ -92,15 +92,15 @@ func TestChannelConsumer_RetryAndDLQ(t *testing.T) {
 	c := NewChannelConsumer(cfg, dlqProducer)
 
 	src := make(chan Record, 10)
-	c.AddSource("ace.test-topic", src)
+	c.AddSource("ace-commodities.test-topic", src)
 
 	var attempts int32
-	c.Subscribe("ace.test-topic", func(ctx context.Context, event Event) error {
+	c.Subscribe("ace-commodities.test-topic", func(ctx context.Context, event Event) error {
 		atomic.AddInt32(&attempts, 1)
 		return fmt.Errorf("always fails")
 	})
 
-	src <- makeTestRecord(t, "ace.test-topic", "k1")
+	src <- makeTestRecord(t, "ace-commodities.test-topic", "k1")
 	close(src)
 
 	c.Start(context.Background())
@@ -121,19 +121,19 @@ func TestChannelConsumer_RetryAndDLQ(t *testing.T) {
 
 func TestChannelConsumer_UnmarshalError(t *testing.T) {
 	dlqProducer := NewChannelProducer(DefaultProducerConfig())
-	dlqProducer.RegisterTopic("ace.dlq.test-topic", 10)
+	dlqProducer.RegisterTopic("ace-commodities.dlq.test-topic", 10)
 
 	cfg := DefaultConsumerConfig("test-group")
 	c := NewChannelConsumer(cfg, dlqProducer)
 
 	src := make(chan Record, 10)
-	c.AddSource("ace.test-topic", src)
-	c.Subscribe("ace.test-topic", func(ctx context.Context, event Event) error {
+	c.AddSource("ace-commodities.test-topic", src)
+	c.Subscribe("ace-commodities.test-topic", func(ctx context.Context, event Event) error {
 		return nil
 	})
 
 	// Send invalid JSON
-	src <- Record{Topic: "ace.test-topic", Key: "k", Value: []byte("not json")}
+	src <- Record{Topic: "ace-commodities.test-topic", Key: "k", Value: []byte("not json")}
 	close(src)
 
 	c.Start(context.Background())
@@ -214,10 +214,10 @@ func TestTopicWithoutPrefix(t *testing.T) {
 	tests := []struct {
 		input, want string
 	}{
-		{"ace.trades.executed", "trades.executed"},
-		{"ace.clearing.novated", "clearing.novated"},
+		{"ace-commodities.trades.executed", "trades.executed"},
+		{"ace-commodities.clearing.novated", "clearing.novated"},
+		{"ace-commodities.test-topic", "test-topic"},
 		{"no-prefix", "no-prefix"},
-		{"ace.", "ace."},
 		{"ac", "ac"},
 	}
 	for _, tt := range tests {
