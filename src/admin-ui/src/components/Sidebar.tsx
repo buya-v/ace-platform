@@ -45,6 +45,9 @@ const operationsNav: NavItem[] = [
   { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
   { label: 'Reports', path: '/dashboard/reports', adminOnly: true, icon: FileTextIcon },
   { label: 'Tickets', path: '/dashboard/tickets', adminOnly: true, icon: TicketIcon },
+  { label: 'Securities', path: '/dashboard/securities', adminOnly: true, icon: ChartBarIcon },
+  { label: 'Sec. Orders', path: '/dashboard/securities-orders', adminOnly: true, icon: BookIcon },
+  { label: 'Sec. Positions', path: '/dashboard/securities-positions', adminOnly: true, icon: DollarIcon },
 ];
 
 const complianceNav: NavItem[] = [

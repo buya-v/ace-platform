@@ -21,6 +21,9 @@ import { SurveillancePage } from './pages/Surveillance';
 import { FeeManagementPage } from './pages/FeeManagement';
 import { ReportsPage } from './pages/Reports';
 import { TicketsPage } from './pages/Tickets';
+import { SecuritiesInstrumentsPage } from './pages/SecuritiesInstruments';
+import { SecuritiesOrdersPage } from './pages/SecuritiesOrders';
+import { SecuritiesPositionsPage } from './pages/SecuritiesPositions';
 
 const ADMIN_ROLES = ['admin', 'exchange_admin'];
 
@@ -47,6 +50,9 @@ export function App() {
               <Route path="fees" element={<FeeManagementPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="tickets" element={<TicketsPage />} />
+              <Route path="securities" element={<SecuritiesInstrumentsPage />} />
+              <Route path="securities-orders" element={<SecuritiesOrdersPage />} />
+              <Route path="securities-positions" element={<SecuritiesPositionsPage />} />
             </Route>
             {/* Admin + compliance routes */}
             <Route path="participants" element={<ParticipantsPage />} />

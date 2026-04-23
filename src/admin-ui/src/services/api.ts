@@ -394,3 +394,66 @@ export function fetchAuditTrail(params?: { actor?: string; action?: string; from
     signal,
   );
 }
+
+// Securities Instruments
+export function fetchSecuritiesInstruments(filters?: { asset_class?: string; trading_status?: string }, signal?: AbortSignal) {
+  const qs = new URLSearchParams();
+  if (filters?.asset_class) qs.set('asset_class', filters.asset_class);
+  if (filters?.trading_status) qs.set('trading_status', filters.trading_status);
+  const query = qs.toString();
+  return apiFetch<any>(
+    `/securities/instruments${query ? `?${query}` : ''}`,
+    {},
+    signal,
+  );
+}
+
+export function createSecuritiesInstrument(data: any) {
+  return apiFetch<any>('/securities/instruments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateInstrumentStatus(id: string, status: string, reason?: string) {
+  return apiFetch<void>(`/securities/instruments/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+  });
+}
+
+// Securities Orders
+export function fetchSecuritiesOrders(filters?: { instrument_id?: string; status?: string }, signal?: AbortSignal) {
+  const qs = new URLSearchParams();
+  if (filters?.instrument_id) qs.set('instrument_id', filters.instrument_id);
+  if (filters?.status) qs.set('status', filters.status);
+  const query = qs.toString();
+  return apiFetch<any>(
+    `/securities/orders${query ? `?${query}` : ''}`,
+    {},
+    signal,
+  );
+}
+
+export function submitSecuritiesOrder(data: any) {
+  return apiFetch<any>('/securities/orders', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function cancelSecuritiesOrder(id: string) {
+  return apiFetch<void>(`/securities/orders/${id}/cancel`, { method: 'POST' });
+}
+
+// Securities Positions
+export function fetchSecuritiesPositions(filters?: { participant_id?: string }, signal?: AbortSignal) {
+  const qs = new URLSearchParams();
+  if (filters?.participant_id) qs.set('participant_id', filters.participant_id);
+  const query = qs.toString();
+  return apiFetch<any>(
+    `/securities/positions${query ? `?${query}` : ''}`,
+    {},
+    signal,
+  );
+}
