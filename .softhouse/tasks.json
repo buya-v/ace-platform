@@ -1,56 +1,7 @@
 {
-  "run_id": "20260423-securities-ui",
-  "feature": "Securities Admin UI",
-  "requirement": "Add 3 securities pages to admin dashboard with sidebar navigation",
-  "status": "planning",
-  "tasks": [
-    {
-      "id": "T1",
-      "title": "API service functions + sidebar nav + routes",
-      "description": "Add securities API functions and wire navigation/routing.\n\nPart A — API functions in src/admin-ui/src/services/api.ts:\nAdd these functions following the existing pattern (use apiFetch helper):\n- fetchSecuritiesInstruments(filters?, signal?) — GET /api/v1/securities/instruments\n- fetchSecuritiesInstrument(id, signal?) — GET /api/v1/securities/instruments/{id}\n- createSecuritiesInstrument(data) — POST /api/v1/securities/instruments\n- updateInstrumentStatus(id, status, reason?) — PUT /api/v1/securities/instruments/{id}/status\n- fetchSecuritiesOrders(filters?, signal?) — GET /api/v1/securities/orders\n- submitSecuritiesOrder(data) — POST /api/v1/securities/orders\n- cancelSecuritiesOrder(id) — DELETE /api/v1/securities/orders/{id}\n- fetchSecuritiesPositions(filters?, signal?) — GET /api/v1/securities/positions\n\nPart B — Sidebar navigation in src/admin-ui/src/components/Sidebar.tsx:\nAdd 3 entries to the navItems array (after existing items, before compliance section):\n- { label: 'Securities', path: '/dashboard/securities', adminOnly: true, icon: ChartBarIcon }\n- { label: 'Securities Orders', path: '/dashboard/securities-orders', adminOnly: true, icon: BookIcon }\n- { label: 'Securities Positions', path: '/dashboard/securities-positions', adminOnly: true, icon: DollarIcon }\n\nPart C — Routes in src/admin-ui/src/App.tsx:\nAdd 3 Route entries inside the dashboard routes:\n- <Route path='securities' element={<SecuritiesInstrumentsPage />} />\n- <Route path='securities-orders' element={<SecuritiesOrdersPage />} />\n- <Route path='securities-positions' element={<SecuritiesPositionsPage />} />\nImport the 3 page components (create placeholder exports for now if needed, or use lazy imports).\n\nDo NOT create the actual page files — T2 and T3 will create them.\nCreate minimal placeholder files at:\n- src/admin-ui/src/pages/SecuritiesInstruments.tsx — export function SecuritiesInstrumentsPage() { return <div>Securities Instruments</div> }\n- src/admin-ui/src/pages/SecuritiesOrders.tsx — same placeholder\n- src/admin-ui/src/pages/SecuritiesPositions.tsx — same placeholder\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: N/A (placeholders)\n□ Empty state: N/A\n□ Error state: N/A\n□ Responsive: sidebar entries work on mobile (already handled by existing responsive CSS)\n□ Keyboard navigation: sidebar links are <NavLink> (natively accessible)\n□ Accessible: N/A\n□ Toast/feedback: N/A\n□ Form validation: N/A\n□ No raw technical errors visible to user\n□ Consistent styling: uses existing sidebar pattern\n\nWrite handoff to .softhouse/handoff/T1.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "frontend",
-      "files_hint": ["src/admin-ui/src/services/api.ts", "src/admin-ui/src/components/Sidebar.tsx", "src/admin-ui/src/App.tsx", "src/admin-ui/src/pages/SecuritiesInstruments.tsx", "src/admin-ui/src/pages/SecuritiesOrders.tsx", "src/admin-ui/src/pages/SecuritiesPositions.tsx"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T2",
-      "title": "Securities Instruments page",
-      "description": "Implement the full Securities Instruments page at src/admin-ui/src/pages/SecuritiesInstruments.tsx (replace the placeholder from T1).\n\nRead existing page patterns: src/admin-ui/src/pages/Participants.tsx for DataGrid + usePolling + useToast + action buttons pattern.\n\nThe page should have:\n1. Title: 'Securities Instruments'\n2. A toolbar with a 'Create Instrument' button that opens a create modal\n3. DataGrid showing instruments with columns: ticker, name, asset_class (with StatusBadge), lot_size, tick_size, trading_status (with StatusBadge), actions\n4. Actions column: 'Halt'/'Resume' button (based on current status) + status change via updateInstrumentStatus API\n5. Create instrument modal/dialog with fields: ticker, name, asset_class (select: EQUITY/BOND/ETF), lot_size (number), tick_size (number), currency (text, default MNT), exchange_code (text). Form validation: all fields required, lot_size > 0, tick_size > 0\n6. Use usePolling to fetch instruments every 15s\n7. Pass loading={isLoading} to DataGrid\n8. Use useToast for success/error feedback on create and status change\n9. Export business logic as pure functions for testability\n\nCreate CSS module: src/admin-ui/src/pages/SecuritiesInstruments.module.css\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: shows skeleton/spinner while data loads\n□ Empty state: meaningful message when no data exists (not blank screen)\n□ Error state: user-friendly error message with retry action (not raw error dump)\n□ Responsive: works on mobile (375px), tablet (768px), desktop (1280px+)\n□ Keyboard navigation: all interactive elements reachable via Tab, activatable via Enter/Space\n□ Accessible: proper ARIA labels, semantic HTML (nav, main, button not div), color contrast 4.5:1+\n□ Toast/feedback: user actions produce visible confirmation (save → 'Saved', delete → 'Deleted')\n□ Form validation: inline errors shown on blur, submit disabled until valid\n□ No raw technical errors visible to user (no stack traces, no 'undefined', no 'NaN')\n□ Consistent styling: uses project design tokens/theme, not arbitrary colors/sizes\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "frontend",
-      "files_hint": ["src/admin-ui/src/pages/SecuritiesInstruments.tsx", "src/admin-ui/src/pages/SecuritiesInstruments.module.css"],
-      "dependencies": ["T1"],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T3",
-      "title": "Securities Orders + Positions pages",
-      "description": "Implement the Securities Orders and Securities Positions pages (replace placeholders from T1).\n\nRead existing patterns: src/admin-ui/src/pages/OrderBook.tsx for order display, src/admin-ui/src/pages/Positions.tsx for positions display.\n\n**Securities Orders page** (src/admin-ui/src/pages/SecuritiesOrders.tsx):\n1. Title: 'Securities Order Book'\n2. Instrument selector dropdown (fetch instruments, select one to view its orders)\n3. DataGrid showing orders for selected instrument: side (BUY/SELL with color), order_type, quantity, price, filled_quantity, status (StatusBadge), created_at\n4. 'Submit Order' button → modal with fields: instrument_id (select), side (BUY/SELL), order_type (LIMIT/MARKET), quantity (number), price (number, disabled for MARKET), time_in_force (select: GTC/IOC/FOK/DAY)\n5. Form validation: quantity > 0, price > 0 for LIMIT orders\n6. Cancel button on PENDING/PARTIALLY_FILLED orders\n7. usePolling every 10s, loading to DataGrid, toast on submit/cancel\n8. Recent trades section below orders: DataGrid showing trades for the instrument (price, quantity, trade_date)\n\n**Securities Positions page** (src/admin-ui/src/pages/SecuritiesPositions.tsx):\n1. Title: 'Securities Positions'\n2. DataGrid showing positions: instrument (ticker via instrument lookup or just ID), quantity, avg_cost, market_value, unrealized_pnl (with green/red color)\n3. usePolling every 30s, loading to DataGrid\n4. Export to CSV button\n\nCreate CSS modules for both pages.\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: shows skeleton/spinner while data loads\n□ Empty state: meaningful message when no data exists (not blank screen)\n□ Error state: user-friendly error message with retry action\n□ Responsive: works on mobile (375px), tablet (768px), desktop (1280px+)\n□ Keyboard navigation: all interactive elements reachable via Tab\n□ Accessible: proper ARIA labels, semantic HTML\n□ Toast/feedback: user actions produce visible confirmation\n□ Form validation: inline errors shown on blur, submit disabled until valid\n□ No raw technical errors visible to user\n□ Consistent styling: uses project design tokens/theme\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T3.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "frontend",
-      "files_hint": ["src/admin-ui/src/pages/SecuritiesOrders.tsx", "src/admin-ui/src/pages/SecuritiesOrders.module.css", "src/admin-ui/src/pages/SecuritiesPositions.tsx", "src/admin-ui/src/pages/SecuritiesPositions.module.css"],
-      "dependencies": ["T1"],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T4",
-      "title": "CX review: securities pages",
-      "description": "Review all 3 securities pages against the CX checklist. Score each of 10 items. Fix gaps directly. Target >= 7/10.\n\nVerify:\n1. Loading: all DataGrids have loading={isLoading}\n2. Empty: InboxIcon + message when no instruments/orders/positions\n3. Error: try/catch with toast on all API calls\n4. Responsive: pages work at 375px (DataGrid scrollable)\n5. Keyboard: modals, buttons, selects all Tab-reachable\n6. A11y: modal has role=dialog aria-modal, form labels\n7. Toast: create/halt/resume/submit/cancel all show toast\n8. Validation: create instrument + submit order forms validate\n9. No raw errors: no undefined/NaN in empty states\n10. Styling: uses project CSS modules, StatusBadge for status\n\nRun: cd src/admin-ui && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T4.md with CX score and fixes made.",
-      "agent_role": "cx_reviewer",
-      "model": "sonnet",
-      "target": "frontend",
-      "files_hint": ["src/admin-ui/src/pages/SecuritiesInstruments.tsx", "src/admin-ui/src/pages/SecuritiesOrders.tsx", "src/admin-ui/src/pages/SecuritiesPositions.tsx"],
-      "dependencies": ["T2", "T3"],
-      "status": "pending",
-      "attempts": 0
-    }
-  ]
+  "run_id": null,
+  "feature": null,
+  "requirement": null,
+  "status": "idle",
+  "tasks": []
 }
