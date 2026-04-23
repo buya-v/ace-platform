@@ -1,118 +1,109 @@
 {
-  "run_id": "sprint-2026-04-21-garudax",
-  "feature": "GarudaX Sprint: Fix e2e failures + Admin-UI CX",
-  "requirement": "Fix the 6 e2e test failures (gateway middleware ordering, compliance KYC response format, cross-service response mismatches), merge T062 WebSocket hook, add loading/empty states to admin-ui, and verify all fixes with integration tests.",
-  "status": "complete",
+  "run_id": "20260423-cx-polish",
+  "feature": "Admin Dashboard CX Polish",
+  "requirement": "Fix top CX gaps across admin-ui: (1) Fix hardcoded localhost in config.ts WebSocket URL, (2) Add ErrorBoundary wrapper to DashboardLayout, (3) Wire loading={isLoading} to all DataGrid instances + add toast feedback to all mutation actions, (4) Improve DataGrid empty state with centered icon+message design, (5) Add basic responsive CSS for mobile 375px and tablet 768px to admin-ui layout and DataGrid",
+  "status": "planning",
   "tasks": [
     {
-      "id": "T101",
-      "title": "Fix gateway middleware ordering (auth before routing causes 401 on unknown paths)",
-      "description": "The gateway's middleware chain runs Auth before Router. Unknown paths get 401 instead of 404. Fix by moving auth middleware to run AFTER routing, or add a pre-routing path-existence check that returns 404 for unregistered routes before auth runs. Run existing gateway tests to verify no regressions.",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": [
-        "src/gateway/internal/middleware/",
-        "src/gateway/cmd/"
-      ],
-      "dependencies": [],
-      "status": "done",
-      "attempts": 1
-    },
-    {
-      "id": "T102",
-      "title": "Fix compliance KYC endpoint response format (array vs object)",
-      "description": "The compliance KYC submission endpoint returns a JSON array where e2e tests expect a JSON object. Investigate the handler: if it's a single-resource creation, return an object. If it's a list endpoint, update the e2e test expectations. Run compliance-service unit tests to verify.",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": [
-        "src/compliance-service/"
-      ],
-      "dependencies": [],
-      "status": "done",
-      "attempts": 1
-    },
-    {
-      "id": "T103",
-      "title": "Fix e2e test expectations for clearing/netting/margin/settlement endpoints",
-      "description": "4 e2e tests fail because they expect single objects but endpoints return arrays (which is correct for list endpoints). Update the e2e tests in tests/e2e/ to handle array responses from clearing positions, netting, margin calls, and settlement cycle endpoints. The services are correct \u2014 the tests need updating.",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": [
-        "tests/e2e/"
-      ],
-      "dependencies": [
-        "T101",
-        "T102"
-      ],
-      "status": "done",
-      "attempts": 1
-    },
-    {
-      "id": "T104",
-      "title": "Merge T062 WebSocket hook from worktree branch",
-      "description": "T062 (Admin UI WebSocket Real-Time Hook) was APPROVED by review (17 tests, zero required fixes) but never merged. Check for feature/T062-* worktree branch. Cherry-pick or merge the approved code into main. Verify the 17 tests pass after merge. This is the third instance of the merge-gate failure pattern.",
+      "id": "T1",
+      "title": "Fix hardcoded localhost in admin-ui WebSocket URL",
+      "description": "In src/admin-ui/src/config.ts line 16, replace the hardcoded 'ws://localhost:8080/api/v1/ws' with a dynamic URL that derives the WebSocket URL from the current window.location. Use the pattern: const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'; then `${protocol}//${window.location.host}/api/v1/ws`. The web-ui SPA already does this correctly in Trading.tsx — follow that pattern. Keep the runtime config override (__GARUDAX_CONFIG__) working.",
       "agent_role": "coder",
       "model": "haiku",
       "target": "frontend",
-      "files_hint": [
-        "src/admin-ui/"
-      ],
+      "files_hint": ["src/admin-ui/src/config.ts"],
       "dependencies": [],
-      "status": "done",
-      "attempts": 1
+      "status": "pending",
+      "attempts": 0
     },
     {
-      "id": "T105",
-      "title": "Add loading spinners and empty states to admin-ui pages",
-      "description": "Add consistent loading and empty state UI to admin-ui pages that currently show blank screens while data loads or when no data exists. Pages: monitoring, orderbook, positions, risk, margin, settlement, compliance, audit, tickets. Use existing component patterns from the project.\n\nCX ACCEPTANCE CRITERIA (all must pass):\n[] Loading state: shows skeleton/spinner while data loads\n[] Empty state: meaningful message when no data exists (not blank screen)\n[] Error state: user-friendly error message with retry action (not raw error dump)\n[] Responsive: works on mobile (375px), tablet (768px), desktop (1280px+)\n[] Keyboard navigation: all interactive elements reachable via Tab, activatable via Enter/Space\n[] Accessible: proper ARIA labels, semantic HTML (nav, main, button not div), color contrast 4.5:1+\n[] Toast/feedback: user actions produce visible confirmation\n[] No raw technical errors visible to user (no stack traces, no undefined, no NaN)\n[] Consistent styling: uses project design tokens/theme, not arbitrary colors/sizes",
+      "id": "T2",
+      "title": "Add ErrorBoundary to DashboardLayout",
+      "description": "Create a reusable ErrorBoundary component at src/admin-ui/src/components/ErrorBoundary.tsx (React class component with componentDidCatch). Show a centered card with an error icon, 'Something went wrong' title, and a 'Reload page' button. Use CSS Modules (ErrorBoundary.module.css) following existing project patterns. Log the error to console. The retry button should call window.location.reload(). Then wrap the <Outlet /> in DashboardLayout.tsx (line 35) with this ErrorBoundary.",
+      "agent_role": "coder",
+      "model": "haiku",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/ErrorBoundary.tsx", "src/admin-ui/src/components/ErrorBoundary.module.css", "src/admin-ui/src/pages/DashboardLayout.tsx"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Wire loading + toast feedback to all admin pages",
+      "description": "Two changes across all admin page files:\n\nA) Wire loading={isLoading} to DataGrid: Every page using usePolling already gets isLoading from the hook but none pass it to DataGrid. Destructure isLoading from every usePolling call and pass loading={isLoading} to every <DataGrid> component.\n\nPages: Participants, CircuitBreakers, Surveillance, ComplianceAlerts, AuditLog, Tickets, FeeManagement (already has isLoading), MarketPhase, OrderBook (3 polls), Positions (3 polls), MarginCalls (2 polls), RiskOverview (3 polls), SettlementStatus, WarehouseOverview (3 polls), SystemMonitoring. For DashboardHome (4 polls using cards not DataGrid), show Skeleton component while loading.\n\nB) Add toast feedback to mutations: Import useToast from '../contexts/ToastContext' in every page with mutation actions. Wrap actions in try/catch: try { await action(); showToast('Success message', 'success'); refresh(); } catch (err) { showToast(err instanceof Error ? err.message : 'Action failed', 'error'); }\n\nPages with mutations: Participants (approve/reject), CircuitBreakers (halt/resume/edit), Surveillance (resolve), ComplianceAlerts (actions), FeeManagement (save/delete), Tickets (status update), MarketPhase (phase change), MarginCalls (issue/resolve), Reports (export).",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
       "files_hint": [
-        "src/admin-ui/src/components/",
-        "src/admin-ui/src/pages/"
+        "src/admin-ui/src/pages/Participants.tsx",
+        "src/admin-ui/src/pages/CircuitBreakers.tsx",
+        "src/admin-ui/src/pages/Surveillance.tsx",
+        "src/admin-ui/src/pages/ComplianceAlerts.tsx",
+        "src/admin-ui/src/pages/AuditLog.tsx",
+        "src/admin-ui/src/pages/Tickets.tsx",
+        "src/admin-ui/src/pages/FeeManagement.tsx",
+        "src/admin-ui/src/pages/MarketPhase.tsx",
+        "src/admin-ui/src/pages/OrderBook.tsx",
+        "src/admin-ui/src/pages/Positions.tsx",
+        "src/admin-ui/src/pages/MarginCalls.tsx",
+        "src/admin-ui/src/pages/RiskOverview.tsx",
+        "src/admin-ui/src/pages/SettlementStatus.tsx",
+        "src/admin-ui/src/pages/WarehouseOverview.tsx",
+        "src/admin-ui/src/pages/DashboardHome.tsx",
+        "src/admin-ui/src/pages/SystemMonitoring.tsx",
+        "src/admin-ui/src/pages/Reports.tsx"
       ],
-      "dependencies": [
-        "T104"
-      ],
-      "status": "done",
-      "attempts": 1
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
     },
     {
-      "id": "T105-cx",
-      "title": "CX review: admin-ui loading/empty/error states",
-      "description": "Review T105 implementation against the CX checklist. Score each of the 10 items as pass/fail. Fix any gaps directly in the code. Target: CX score >= 7/10. Write handoff with CX score and fixes made.",
+      "id": "T4",
+      "title": "Improve DataGrid empty state design",
+      "description": "Improve the DataGrid empty state from plain text to a visually appealing centered design with an icon.\n\nIn src/admin-ui/src/components/DataGrid.tsx:\n- Replace the current empty state (lines 200-205, plain td with text) with a centered container\n- Add an InboxIcon SVG to src/admin-ui/src/components/icons.tsx (simple empty inbox/folder icon)\n- The empty state should show: icon (32px, muted color) + emptyMessage text below in muted color\n- Center everything horizontally and vertically with 48px top/bottom padding\n- Keep the existing emptyMessage prop working\n\nIn src/admin-ui/src/components/DataGrid.module.css:\n- Add .emptyContainer with flexbox centering, column direction\n- Add .emptyIcon for icon sizing and color\n- Add .emptyText for muted text styling\n- Use existing color patterns from other .module.css files (check StatusBadge.module.css or Toast.module.css for color conventions)",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/DataGrid.tsx", "src/admin-ui/src/components/DataGrid.module.css", "src/admin-ui/src/components/icons.tsx"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T5",
+      "title": "Add responsive CSS to admin-ui layout",
+      "description": "Add responsive CSS using @media queries to make the admin-ui usable on mobile (375px) and tablet (768px).\n\nFiles to modify:\n\n1. src/admin-ui/src/pages/DashboardLayout.module.css: On mobile (<768px) collapse sidebar to narrow icon-only mode. Main content takes full width. Reduce content padding.\n\n2. src/admin-ui/src/components/DataGrid.module.css: On mobile (<768px) make table horizontally scrollable (overflow-x: auto on .wrapper). Reduce cell padding. Font-size reduction for .td and .th.\n\n3. src/admin-ui/src/components/Sidebar.module.css + Sidebar.tsx: On mobile (<768px) hide text labels, show only icons. Width collapses from ~220px to ~56px. Consider adding a mobile toggle button.\n\n4. src/admin-ui/src/components/TopBar.module.css: On mobile: reduce padding, hide less-important elements.\n\nBreakpoints: 768px (tablet), 480px (small mobile). Don't break existing desktop layout. Ensure no horizontal overflow on 375px viewport.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": [
+        "src/admin-ui/src/pages/DashboardLayout.module.css",
+        "src/admin-ui/src/components/DataGrid.module.css",
+        "src/admin-ui/src/components/Sidebar.module.css",
+        "src/admin-ui/src/components/Sidebar.tsx",
+        "src/admin-ui/src/components/TopBar.module.css"
+      ],
+      "dependencies": ["T2", "T4"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T6",
+      "title": "CX review: admin-ui CX polish",
+      "description": "Review all CX changes from T1-T5 against the CX checklist. Score each of the 10 items as pass/fail. Fix any gaps directly. Target: CX score >= 7/10.\n\nVerify:\n1. Config.ts no longer has hardcoded localhost\n2. ErrorBoundary renders user-friendly fallback\n3. All DataGrid instances show skeleton while loading\n4. All mutation actions show toast feedback\n5. Empty state has visual icon+message design\n6. Layout works at 375px, 768px, 1280px\n7. No 'undefined', 'NaN', or raw JSON visible\n8. All new components use project CSS conventions\n9. ErrorBoundary retry button is keyboard-accessible\n10. Toast messages are clear and actionable",
       "agent_role": "cx_reviewer",
       "model": "sonnet",
       "target": "frontend",
       "files_hint": [
-        "src/admin-ui/src/components/",
+        "src/admin-ui/src/config.ts",
+        "src/admin-ui/src/components/ErrorBoundary.tsx",
+        "src/admin-ui/src/components/DataGrid.tsx",
         "src/admin-ui/src/pages/"
       ],
-      "dependencies": [
-        "T105"
-      ],
-      "status": "done",
-      "attempts": 1
-    },
-    {
-      "id": "T106",
-      "title": "Integration test: verify all 6 previously failing e2e tests pass",
-      "description": "Run the full e2e test suite after T101-T103 fixes. Verify that all 6 previously failing tests now pass: (1) gateway unknown path 404, (2) compliance KYC format, (3-6) clearing/netting/margin/settlement response handling. Report pass/fail/skip counts. Run Go unit tests too to verify no regressions.",
-      "agent_role": "test_writer",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": [
-        "tests/e2e/"
-      ],
-      "dependencies": [
-        "T103"
-      ],
-      "status": "done",
-      "attempts": 1
+      "dependencies": ["T1", "T2", "T3", "T4", "T5"],
+      "status": "pending",
+      "attempts": 0
     }
   ]
 }
