@@ -1,44 +1,7 @@
 {
-  "run_id": "20260423-gateway-wiring",
-  "feature": "Securities Gateway Wiring",
-  "requirement": "Fix port collision, add gateway routes, add DB stores, wire e2e tests",
-  "status": "planning",
-  "tasks": [
-    {
-      "id": "T1",
-      "title": "Fix port collision 8085→8089 + add gateway backend entry",
-      "description": "Fix the securities-service port collision and wire it into the gateway.\n\nPart A — Port fix:\n- src/securities-service/cmd/securities-service/main.go: change default API_PORT from 8085 to 8089, HEALTH_PORT from 9085 to 9089\n- src/securities-service/Dockerfile: change EXPOSE from 8085 9085 to 8089 9089\n- docker-compose.yml: change securities-service ports from 8085:8085 to 8089:8089, health port from 9085 to 9089, healthcheck URL to port 9089\n\nPart B — Gateway backend entry:\n- src/gateway/cmd/gateway/main.go: add securities-service to the backendClient map (around line 48): \"securities-service\": fmt.Sprintf(\"http://%s\", strings.Replace(cfg.SecuritiesServiceAddr, \":50059\", \":8089\", 1))\n- src/gateway/internal/config/config.go: add SecuritiesServiceAddr field with env var SECURITIES_SERVICE_ADDR, default \"securities-service:50059\"\n- docker-compose.yml gateway service: add SECURITIES_SERVICE_ADDR env var\n\nPart C — Gateway proxy routes:\n- Read src/gateway/internal/handler/handler.go to understand how routes are registered\n- Read src/gateway/internal/proxy/ to understand how the BackendClient proxies requests\n- Add securities routes to the gateway that proxy to securities-service:\n  - /api/v1/securities/instruments/* → securities-service\n  - /api/v1/securities/orders/* → securities-service\n  - /api/v1/securities/positions/* → securities-service\n  - /api/v1/securities/settlements/* → securities-service\n  - /api/v1/securities/corporate-actions/* → securities-service\n- Follow the pattern of existing route registrations (matching-engine, clearing-engine routes)\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/gateway && go build ./... && go test ./... && cd ../securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/cmd/securities-service/main.go", "src/securities-service/Dockerfile", "docker-compose.yml", "src/gateway/cmd/gateway/main.go", "src/gateway/internal/config/", "src/gateway/internal/handler/"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T2",
-      "title": "DB store for instruments and orders",
-      "description": "Add PostgreSQL-backed store implementations for the securities-service, following the database/sql + pgx/v5/stdlib pattern used by existing services.\n\nRead .softhouse/patterns.md — the pattern says: 'database/sql + pgx/v5/stdlib — every service uses the same driver approach'\nRead src/shared/internal/db/ for the shared DB pool setup pattern.\nRead an existing service's store implementation (e.g., src/matching-engine/internal/store/ or src/gateway/internal/tickets/) for the SQL query pattern.\n\nCreate src/securities-service/internal/store/pg_store.go:\n\n1. PgInstrumentStore struct with *sql.DB field\n2. Implement InstrumentStore interface:\n   - Create: INSERT INTO securities.instruments with all fields, RETURNING *\n   - Get: SELECT * FROM securities.instruments WHERE id = $1\n   - List: SELECT with optional WHERE clauses for asset_class, trading_status, exchange_code, search (ILIKE on ticker/name), LIMIT/OFFSET\n   - Update: UPDATE SET for non-zero fields, WHERE id = $1\n   - UpdateStatus: UPDATE SET trading_status = $1, updated_at = NOW() WHERE id = $2\n3. PgOrderStore struct with *sql.DB field\n4. Implement OrderStore interface:\n   - Submit: INSERT INTO securities.orders with all fields, RETURNING *\n   - Get: SELECT * FROM securities.orders WHERE id = $1\n   - List: SELECT with optional WHERE for instrument_id, status, participant_id, LIMIT/OFFSET\n   - Cancel: UPDATE SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1 AND status IN ('PENDING', 'PARTIALLY_FILLED')\n\nTable names from infrastructure/db/migrations/V26-V27: securities.instruments, securities.orders\nColumn names from docs/securities-architecture.md section 9.\n\nUse database/sql only (no pgx import in this file). The connection is passed in as *sql.DB.\n\nUpdate cmd/securities-service/main.go to:\n- Check DATABASE_URL env var\n- If set: open database/sql connection, create PgInstrumentStore/PgOrderStore\n- If not set: fall back to InMemoryInstrumentStore/InMemoryOrderStore (existing behavior)\n- Add pgx/v5/stdlib import for the driver side-effect (import _ \"github.com/jackc/pgx/v5/stdlib\")\n- Add pgx/v5 to go.mod: go get github.com/jackc/pgx/v5\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/store/pg_store.go", "src/securities-service/cmd/securities-service/main.go", "src/securities-service/go.mod"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T3",
-      "title": "Verify all tests pass after wiring",
-      "description": "Run the full test suite to verify T1 and T2 changes don't break anything.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Set PATH first.\n\n1. cd src/securities-service && go test ./... -race -cover — verify all 68+ tests still pass\n2. cd src/gateway && go test ./... — verify gateway tests pass with new config/routes\n3. cd tests/e2e && go build ./... — verify e2e tests compile\n4. cd src/admin-ui && npm test -- --run — verify frontend still passes\n5. Verify docker-compose.yml is valid YAML\n6. Report pass/fail counts\n\nWrite handoff to .softhouse/handoff/T3.md",
-      "agent_role": "test_writer",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/", "src/gateway/", "tests/e2e/"],
-      "dependencies": ["T1", "T2"],
-      "status": "pending",
-      "attempts": 0
-    }
-  ]
+  "run_id": null,
+  "feature": null,
+  "requirement": null,
+  "status": "idle",
+  "tasks": []
 }
