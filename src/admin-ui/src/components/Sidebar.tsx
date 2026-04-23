@@ -79,12 +79,12 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
           className={styles.statusDot}
           style={{ background: statusColorMap[systemStatus] }}
         />
-        GarudaX Admin
+        <span className={styles.logoText}>GarudaX Admin</span>
       </div>
 
       <NavLink to="/dashboard" end className={({ isActive }) => isActive ? styles.activeLink : styles.link}>
         <DashboardIcon size={16} className={styles.navIcon} />
-        Overview
+        <span className={styles.navLabel}>Overview</span>
       </NavLink>
 
       {isAdmin && (
@@ -95,7 +95,7 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
             aria-expanded={opsOpen}
           >
             {opsOpen ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
-            <span>Operations</span>
+            <span className={styles.sectionLabel}>Operations</span>
           </button>
           {opsOpen && operationsNav.map(item => (
             <NavLink
@@ -104,7 +104,7 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
               className={({ isActive }) => isActive ? styles.activeLink : styles.link}
             >
               <item.icon size={16} className={styles.navIcon} />
-              {item.label}
+              <span className={styles.navLabel}>{item.label}</span>
             </NavLink>
           ))}
         </div>
@@ -117,7 +117,7 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
           aria-expanded={compOpen}
         >
           {compOpen ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
-          <span>Compliance</span>
+          <span className={styles.sectionLabel}>Compliance</span>
         </button>
         {compOpen && complianceNav.map(item => (
           <NavLink
@@ -126,14 +126,16 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
             className={({ isActive }) => isActive ? styles.activeLink : styles.link}
           >
             <item.icon size={16} className={styles.navIcon} />
-            {item.label}
+            <span className={styles.navLabel}>{item.label}</span>
           </NavLink>
         ))}
       </div>
 
       <div className={styles.userSection}>
         <div className={styles.userName}>{state.user?.name ?? 'User'}</div>
-        <button onClick={logout} className={styles.logoutBtn}>Logout</button>
+        <button onClick={logout} className={styles.logoutBtn}>
+          <span className={styles.logoutLabel}>Logout</span>
+        </button>
       </div>
     </nav>
   );

@@ -16,3 +16,25 @@
   flex: 1;
   padding: var(--space-5) var(--space-6);
 }
+
+/* ── Responsive: tablet (≤768px) ── */
+@media (max-width: 768px) {
+  .main {
+    margin-left: 56px;
+  }
+
+  .content {
+    padding: var(--space-3) var(--space-3);
+  }
+}
+
+/* ── Responsive: small mobile (≤480px) ── */
+@media (max-width: 480px) {
+  .main {
+    margin-left: 56px;
+  }
+
+  .content {
+    padding: var(--space-2) var(--space-2);
+  }
+}

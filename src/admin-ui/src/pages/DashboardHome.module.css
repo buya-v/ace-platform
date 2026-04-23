@@ -126,3 +126,81 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Responsive: tablet (≤768px) ── */
+@media (max-width: 768px) {
+  .title {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  /* Stack summary cards in a 2-column grid on tablet */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .bigNumber {
+    font-size: 26px;
+  }
+
+  .sectionTitle {
+    margin: 24px 0 12px;
+    font-size: 16px;
+  }
+
+  .activityRow {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  /* Hide activity time on tablet to avoid cramping */
+  .activityTime {
+    display: none;
+  }
+}
+
+/* ── Responsive: small mobile (≤480px) ── */
+@media (max-width: 480px) {
+  .title {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+
+  /* Single column on small mobile */
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .bigNumber {
+    font-size: 22px;
+  }
+
+  .actionsRow {
+    flex-direction: column;
+  }
+
+  .actionBtn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .activityRow {
+    flex-wrap: wrap;
+  }
+
+  .activityDesc {
+    width: 100%;
+    white-space: normal;
+    flex: 1 1 100%;
+  }
+}

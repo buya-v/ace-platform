@@ -208,3 +208,53 @@
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius-sm);
 }
+
+/* ── Responsive: tablet (≤768px) ── */
+@media (max-width: 768px) {
+  .wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .th {
+    padding: var(--space-1) var(--space-2);
+    font-size: 11px;
+  }
+
+  .td {
+    padding: var(--space-1) var(--space-2);
+    font-size: 12px;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .emptyContainer {
+    padding: 32px var(--space-3);
+  }
+
+  .emptyText {
+    font-size: 13px;
+  }
+}
+
+/* ── Responsive: small mobile (≤480px) ── */
+@media (max-width: 480px) {
+  .th {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  .td {
+    font-size: 11px;
+  }
+
+  .table {
+    font-size: 11px;
+  }
+
+  .emptyContainer {
+    padding: 24px var(--space-2);
+  }
+}
