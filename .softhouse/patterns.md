@@ -90,4 +90,38 @@
 - **UAT pass rate**: 7/7 tasks completed on first try
 - **UAT failure categories**: N/A (framework creation, not execution)
 
+### Run 20260423-cx-polish — Admin Dashboard CX Polish (2026-04-23)
+
+- **What worked**:
+  - 6/6 tasks completed on first attempt, zero rejections
+  - CX score 9/10 — only minor styling inconsistency deducted
+  - Level 0 parallelism (4 agents) with zero file conflicts due to careful task scoping
+  - T3 (loading + toast) combined into single task to avoid page file conflicts — correct decision
+  - T3 agent proactively added form validation to CircuitBreakers, going beyond the task spec
+  - DataGrid already had `loading` prop with skeleton — task was just wiring, not building infrastructure
+  - Toast system already existed (ToastProvider, useToast) — task was adoption, not creation
+
+- **What failed**:
+  - T1 and T2 (haiku model) worktrees were auto-cleaned before merge. Changes were committed directly to main branch by the agents, bypassing the worktree merge step. This worked but was uncontrolled.
+  - T1 config fix broke 9 tests (window.location undefined in test env) — required a try/catch fallback fix after merge
+  - T4 worktree had uncommitted changes that had to be manually copied
+
+- **New knowledge**:
+  - `usePolling` hook returns `{ data, isLoading, error, lastUpdated, refresh }` — pages only destructured `data` and `refresh`
+  - Toast system: `useToast()` → `showToast(message, 'success'|'error'|'info')` — already provided by ToastContext wrapping DashboardLayout
+  - DataGrid empty state: use `role="status" aria-live="polite"` for screen reader announcement
+  - Responsive breakpoints: 768px (tablet/sidebar collapse), 480px (small mobile)
+  - Sidebar collapse: hide text with `display: none` on `.navLabel`, keep icons centered at 56px width
+  - `window.location` is undefined in Vitest jsdom environment — any code accessing it needs try/catch or conditional checks
+
+- **Planning advice**:
+  - CX polish tasks are highly parallelizable — config, ErrorBoundary, page wiring, component styling, and layout CSS all touch different files
+  - Combining "loading" and "toast" into one task per-page avoids merge conflicts (same files)
+  - haiku model agents may commit directly to main instead of worktree branches — use sonnet for tasks that need merge control
+  - Always test config changes that access browser globals — they break in test environments
+
+- **CX scores**: T6 CX review: 9/10
+- **CX gaps found**: Missing aria-hidden on some decorative icons, missing form validation on CircuitBreakers, some hardcoded hex colors
+- **CX improvements made**: Form validation with per-field errors, aria-invalid attributes, aria-hidden on icons, role/aria-live on empty state
+
 <!-- LEARNED PATTERNS END -->
