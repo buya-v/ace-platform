@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -127,115 +128,35 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInstruments(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.listInstruments(w, r)
+		s.handleListInstruments(w, r)
 	case http.MethodPost:
-		s.createInstrument(w, r)
+		s.handleCreateInstrument(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
 }
 
 // handleInstrument dispatches GET/PATCH /api/v1/securities/instruments/{id}
-// and POST /api/v1/securities/instruments/{id}/status.
+// and PUT /api/v1/securities/instruments/{id}/status.
 func (s *Server) handleInstrument(w http.ResponseWriter, r *http.Request) {
+	// Detect the /status sub-resource.
+	if strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/status") {
+		if r.Method == http.MethodPut {
+			s.handleUpdateInstrumentStatus(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		s.getInstrument(w, r)
+		s.handleGetInstrument(w, r)
 	case http.MethodPatch:
-		s.updateInstrument(w, r)
+		s.handleUpdateInstrument(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
-}
-
-// listInstruments handles GET /api/v1/securities/instruments
-func (s *Server) listInstruments(w http.ResponseWriter, r *http.Request) {
-	filters := store.InstrumentFilters{
-		AssetClass:    types.AssetClass(r.URL.Query().Get("asset_class")),
-		TradingStatus: types.TradingStatus(r.URL.Query().Get("trading_status")),
-		ExchangeCode:  r.URL.Query().Get("exchange_code"),
-	}
-
-	instruments, err := s.instrumentStore.List(filters)
-	if err != nil {
-		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
-		return
-	}
-
-	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":  instruments,
-		"total": len(instruments),
-	})
-}
-
-// createInstrument handles POST /api/v1/securities/instruments
-func (s *Server) createInstrument(w http.ResponseWriter, r *http.Request) {
-	var inst types.Instrument
-	if err := json.NewDecoder(r.Body).Decode(&inst); err != nil {
-		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
-		return
-	}
-	if inst.ID == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "id is required", nil)
-		return
-	}
-	if inst.ISIN == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "isin is required", nil)
-		return
-	}
-
-	if err := s.instrumentStore.Create(&inst); err != nil {
-		s.writeError(w, http.StatusConflict, "ALREADY_EXISTS", err.Error(), nil)
-		return
-	}
-	s.writeJSON(w, http.StatusCreated, inst)
-}
-
-// getInstrument handles GET /api/v1/securities/instruments/{id}
-func (s *Server) getInstrument(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/securities/instruments/"):]
-	if id == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "instrument id is required", nil)
-		return
-	}
-
-	inst, err := s.instrumentStore.Get(id)
-	if err != nil {
-		if err == store.ErrNotFound {
-			s.writeError(w, http.StatusNotFound, "NOT_FOUND", "instrument not found", nil)
-			return
-		}
-		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
-		return
-	}
-	s.writeJSON(w, http.StatusOK, inst)
-}
-
-// updateInstrument handles PATCH /api/v1/securities/instruments/{id}
-func (s *Server) updateInstrument(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/securities/instruments/"):]
-	if id == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "instrument id is required", nil)
-		return
-	}
-
-	var partial store.InstrumentUpdate
-	if err := json.NewDecoder(r.Body).Decode(&partial); err != nil {
-		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
-		return
-	}
-
-	if err := s.instrumentStore.Update(id, partial); err != nil {
-		if err == store.ErrNotFound {
-			s.writeError(w, http.StatusNotFound, "NOT_FOUND", "instrument not found", nil)
-			return
-		}
-		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
-		return
-	}
-
-	inst, _ := s.instrumentStore.Get(id)
-	s.writeJSON(w, http.StatusOK, inst)
 }
 
 // --- Order route handlers ---
