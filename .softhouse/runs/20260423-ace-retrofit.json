@@ -1,0 +1,74 @@
+{
+  "run_id": "20260423-ace-retrofit",
+  "feature": "ace-commodities Retrofit",
+  "requirement": "Phase 0.6: tenant context middleware, schema name updates, Kafka topic renames, observability tenant labels",
+  "status": "complete",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Tenant context middleware + tests",
+      "description": "Implement the tenant context middleware in the shared library and write tests.\n\nRead docs/platform-architecture.md section 4 (Tenant Context Propagation) for the design.\n\nCreate src/shared/internal/tenant/context.go:\n- TenantID type (string alias)\n- contextKey for storing tenant in context.Context\n- WithTenant(ctx, tenantID) context.Context \u2014 stores tenant in context\n- TenantFromContext(ctx) (TenantID, bool) \u2014 extracts tenant from context\n- MustTenant(ctx) TenantID \u2014 panics if no tenant (for internal code that must have it)\n\nCreate src/shared/internal/tenant/middleware.go:\n- TenantMiddleware(validTenants []string) func(http.Handler) http.Handler\n- Extracts X-GarudaX-Tenant header from request\n- If header missing: 401 {\"error\":{\"code\":\"TENANT_REQUIRED\",\"message\":\"X-GarudaX-Tenant header is required\"}}\n- If tenant not in validTenants list: 403 {\"error\":{\"code\":\"UNKNOWN_TENANT\",\"message\":\"tenant 'xxx' is not registered\"}}\n- If valid: store in context via WithTenant, call next handler\n- For MVP: validTenants is a static list passed at startup (no DB lookup yet). Default: [\"ace-commodities\", \"mse-equities\"]\n- Skip tenant check for health endpoints (/healthz, /readyz, /metrics)\n\nCreate src/shared/internal/tenant/middleware_test.go:\n- TestTenantMiddleware_ValidTenant \u2014 header present with valid tenant \u2192 200, tenant in context\n- TestTenantMiddleware_MissingHeader \u2014 no header \u2192 401\n- TestTenantMiddleware_UnknownTenant \u2014 invalid tenant \u2192 403\n- TestTenantMiddleware_HealthBypass \u2014 /healthz without header \u2192 200 (bypassed)\n- TestTenantFromContext_Set \u2014 verify context round-trip\n- TestTenantFromContext_NotSet \u2014 verify returns false\n- TestMustTenant_Panics \u2014 verify panics when not set\n\nCreate src/shared/internal/tenant/observability.go:\n- TenantLogger(ctx) *slog.Logger \u2014 returns logger with tenant_id attribute from context\n- TenantMetricLabels(ctx) map[string]string \u2014 returns {\"tenant_id\": tenantID} for metrics\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/shared && go test ./internal/tenant/... -v -race\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/shared/internal/tenant/"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T2",
+      "title": "Wire tenant middleware into gateway + update schema refs",
+      "description": "Wire the tenant middleware into the gateway and update SQL schema references across all services.\n\nPart A \u2014 Wire into gateway (src/gateway/cmd/gateway/main.go):\n- Import shared tenant package\n- Add TenantMiddleware to the middleware chain BEFORE auth middleware\n- Pass validTenants list: []string{\"ace-commodities\", \"mse-equities\"}\n- The middleware will reject any request without X-GarudaX-Tenant header (except health endpoints)\n\nPart B \u2014 Update SQL schema references:\nFind and replace old schema names with ace_* names in all Go source files. The V30 migration renames the DB schemas, so the code must match.\n\nSpecific files to update (grep for the old names):\n- src/market-data-service/ \u2014 has references to market_data.* tables\n- src/securities-service/ \u2014 has references to securities.* tables \u2192 change to ace_securities.*\n- Any other service with SQL queries referencing old schema names\n\nUse grep to find all references: grep -rn '\"reference\\.|\"exchange\\.|\"clearing\\.|\"compliance\\.|\"warehouse\\.|\"market_data\\.|\"participants\\.|\"securities\\.' src/ --include='*.go'\n\nFor each match, rename the schema prefix:\n- reference. \u2192 ace_reference.\n- participants. \u2192 ace_participants.\n- exchange. \u2192 ace_exchange.\n- clearing. \u2192 ace_clearing.\n- compliance. \u2192 ace_compliance.\n- warehouse. \u2192 ace_warehouse.\n- market_data. \u2192 ace_market_data.\n- securities. \u2192 ace_securities.\n\nIMPORTANT: Do NOT rename 'auth.' \u2014 auth stays platform-level per directive \u00a73.4.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && for svc in gateway market-data-service securities-service; do cd src/$svc && go build ./... && go test ./... && cd ../..; done\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/gateway/cmd/gateway/main.go",
+        "src/market-data-service/",
+        "src/securities-service/"
+      ],
+      "dependencies": [
+        "T1"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T3",
+      "title": "Update Kafka topics + observability tenant labels",
+      "description": "Rename Kafka topics to {tenant_id}.{domain}.{event} convention and add tenant_id to observability.\n\nPart A \u2014 Kafka topic renames:\nUpdate topic constants in all services with kafka packages.\n\nIn src/market-data-service/internal/kafka/config.go, change:\n- \"ace.trades.executed\" \u2192 \"ace-commodities.trades.executed\"\n- \"ace.clearing.novated\" \u2192 \"ace-commodities.clearing.novated\"\n- \"ace.margin.call-issued\" \u2192 \"ace-commodities.margin.call-issued\"\n- \"ace.settlement.completed\" \u2192 \"ace-commodities.settlement.completed\"\n- \"ace.compliance.status-changed\" \u2192 \"ace-commodities.compliance.status-changed\"\n- \"ace.market-data.trade-ingested\" \u2192 \"ace-commodities.market-data.trade-ingested\"\n- \"ace.warehouse.receipt-pledged\" \u2192 \"ace-commodities.warehouse.receipt-pledged\"\n- \"ace.warehouse.delivery-completed\" \u2192 \"ace-commodities.warehouse.delivery-completed\"\n- \"ace.auth.user-registered\" \u2192 \"ace-commodities.auth.user-registered\"\n- DLQ: \"ace.dlq.\" \u2192 \"ace-commodities.dlq.\"\n\nIn src/securities-service/internal/kafka/topics.go, change:\n- \"securities.trade.executed\" \u2192 \"ace-commodities.securities.trade.executed\"\n- \"securities.order.created\" \u2192 \"ace-commodities.securities.order.created\"\n- \"securities.order.cancelled\" \u2192 \"ace-commodities.securities.order.cancelled\"\n\nAlso check all other services under src/*/internal/kafka/ for topic constants and rename similarly.\n\nPart B \u2014 Observability tenant labels:\nUpdate src/shared/internal/observability/middleware.go:\n- If tenant context is present in the request context (via TenantFromContext), add tenant_id label to metrics\n- Update the MetricsMiddleware to include tenant_id in request counter and histogram keys\n\nUpdate src/shared/internal/observability/tracing.go:\n- If tenant context is present, add tenant_id to trace span attributes\n\nUpdate src/shared/internal/observability/logger.go:\n- Add a helper to create a logger with tenant_id attribute from context\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/shared && go test ./... && cd ../market-data-service && go test ./... && cd ../securities-service && go test ./...\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/market-data-service/internal/kafka/config.go",
+        "src/securities-service/internal/kafka/topics.go",
+        "src/shared/internal/observability/"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T4",
+      "title": "Verify all tests pass after retrofit",
+      "description": "Run the full test suite to verify Phase 0.6 retrofit changes don't break anything.\n\nIMPORTANT: Go at /usr/local/go/bin/go \u2014 set PATH first.\n\n1. cd src/shared && go test ./... -race -cover \u2014 verify tenant middleware + observability tests\n2. cd src/gateway && go test ./... \u2014 verify gateway compiles and tests pass with tenant middleware\n3. cd src/securities-service && go test ./... -race -cover \u2014 verify schema renames + kafka topics\n4. cd src/market-data-service && go test ./... \u2014 verify kafka topic renames\n5. For each remaining service: cd src/$svc && go build ./... (verify compilation)\n6. cd src/admin-ui && npm test -- --run \u2014 verify frontend still passes\n7. Verify: grep for old schema names in Go files \u2014 should find 0 matches (except auth.)\n8. Verify: grep for old topic names \u2014 should find 0 matches\n\nReport pass/fail per service.\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/"
+      ],
+      "dependencies": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
