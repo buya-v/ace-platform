@@ -161,9 +161,28 @@
 
 /* Empty state */
 .empty {
-  padding: var(--space-7) var(--space-4);
+  padding: 0;
   text-align: center;
+}
+
+.emptyContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px var(--space-4);
+}
+
+.emptyIcon {
   color: var(--text-muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyText {
+  color: var(--text-secondary);
   font-size: 14px;
 }
 

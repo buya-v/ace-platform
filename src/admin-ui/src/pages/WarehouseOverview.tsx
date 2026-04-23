@@ -114,6 +114,7 @@ export function WarehouseOverviewPage() {
           keyField="id"
           emptyMessage="No receipts found"
           exportFilename="warehouse-receipts"
+          loading={receipts.isLoading}
         />
       </div>
 
@@ -126,6 +127,7 @@ export function WarehouseOverviewPage() {
           keyField="id"
           emptyMessage="No pending deliveries"
           exportFilename="warehouse-deliveries"
+          loading={deliveries.isLoading}
         />
       </div>
     </div>

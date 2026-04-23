@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchTickets, fetchTicket, updateTicket, addTicketComment } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
 import styles from './Tickets.module.css';
 
 // --- Types ---
@@ -145,8 +146,9 @@ export function TicketsPage() {
   const [ticketDetail, setTicketDetail] = useState<{ ticket: Ticket; comments: TicketComment[] } | null>(null);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { showToast } = useToast();
 
-  const { data, refresh } = usePolling(
+  const { data, refresh, isLoading } = usePolling(
     (signal) => fetchTickets({
       category: categoryFilter || undefined,
       priority: priorityFilter || undefined,
@@ -181,7 +183,10 @@ export function TicketsPage() {
     setSubmitting(true);
     try {
       await updateTicket(expandedId, { status: 'in_progress' });
+      showToast('Ticket assigned and set to in progress', 'success');
       refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update ticket', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -192,7 +197,10 @@ export function TicketsPage() {
     setSubmitting(true);
     try {
       await updateTicket(expandedId, { status: newStatus });
+      showToast(`Ticket updated to ${statusLabel(newStatus)}`, 'success');
       refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update ticket', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -203,7 +211,10 @@ export function TicketsPage() {
     setSubmitting(true);
     try {
       await updateTicket(expandedId, { priority: newPriority });
+      showToast(`Ticket priority set to ${priorityLabel(newPriority)}`, 'success');
       refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update ticket', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -216,6 +227,9 @@ export function TicketsPage() {
       const comment = await addTicketComment(expandedId, commentText.trim());
       setTicketDetail(prev => prev ? { ...prev, comments: [...prev.comments, comment] } : prev);
       setCommentText('');
+      showToast('Comment added', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to add comment', 'error');
     } finally {
       setSubmitting(false);
     }

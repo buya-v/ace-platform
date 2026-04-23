@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
 import { Sparkline } from '../components/Sparkline';
 import { MarginCall } from '../types';
+import { useToast } from '../contexts/ToastContext';
 import styles from './MarginCalls.module.css';
 
 const MAX_UTIL_HISTORY = 20;
@@ -35,6 +36,7 @@ export function MarginCallsPage() {
   const [triggerParticipant, setTriggerParticipant] = useState('');
   const [triggerInstrument, setTriggerInstrument] = useState('');
   const utilizationHistory = useRef<Map<string, number[]>>(new Map());
+  const { showToast } = useToast();
 
   const calls = usePolling(
     (signal) => fetchMarginCalls(signal),
@@ -114,6 +116,7 @@ export function MarginCallsPage() {
         data={marginCalls}
         keyField="id"
         emptyMessage="No active margin calls"
+        loading={calls.isLoading}
       />
 
       {/* Utilization bars */}
@@ -155,11 +158,16 @@ export function MarginCallsPage() {
           message="Enter participant and instrument IDs to trigger a manual margin calculation."
           confirmLabel="Calculate"
           onConfirm={async () => {
-            await triggerMarginCalculation(triggerParticipant, triggerInstrument);
-            setShowTrigger(false);
-            setTriggerParticipant('');
-            setTriggerInstrument('');
-            calls.refresh();
+            try {
+              await triggerMarginCalculation(triggerParticipant, triggerInstrument);
+              showToast('Margin calculation triggered', 'success');
+              setShowTrigger(false);
+              setTriggerParticipant('');
+              setTriggerInstrument('');
+              calls.refresh();
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : 'Failed to trigger calculation', 'error');
+            }
           }}
           onCancel={() => setShowTrigger(false)}
         />

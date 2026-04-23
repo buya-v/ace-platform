@@ -5,6 +5,7 @@ import { ComplianceAlert } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AlertIcon, InfoIcon, CheckIcon } from '../components/icons';
+import { useToast } from '../contexts/ToastContext';
 import styles from './ComplianceAlerts.module.css';
 
 const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -35,8 +36,9 @@ export function ComplianceAlertsPage() {
   const [resolveTarget, setResolveTarget] = useState<ComplianceAlert | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const { showToast } = useToast();
 
-  const { data, refresh } = usePolling(
+  const { data, refresh, isLoading } = usePolling(
     (signal) => fetchComplianceAlerts({ status: statusFilter || undefined }, signal),
     30000,
   );
@@ -50,9 +52,14 @@ export function ComplianceAlertsPage() {
 
   const handleResolve = async () => {
     if (!resolveTarget) return;
-    await resolveAlert(resolveTarget.id);
-    setResolveTarget(null);
-    refresh();
+    try {
+      await resolveAlert(resolveTarget.id);
+      showToast('Compliance alert resolved', 'success');
+      setResolveTarget(null);
+      refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to resolve alert', 'error');
+    }
   };
 
   const severityClass = (severity: string) => {

@@ -249,6 +249,7 @@ export function RiskOverviewPage() {
           emptyMessage="No active margin calls"
           stickyHeader
           exportFilename="margin-calls"
+          loading={calls.isLoading}
         />
       </div>
     </div>

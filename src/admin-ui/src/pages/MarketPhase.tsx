@@ -4,6 +4,7 @@ import { fetchInstrumentList, haltInstrument, resumeInstrument } from '../servic
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
+import { useToast } from '../contexts/ToastContext';
 import styles from './MarketPhase.module.css';
 
 export interface MarketInstrument {
@@ -32,10 +33,11 @@ export function getPhaseAction(phase: string): 'halt' | 'resume' | null {
 }
 
 export function MarketPhasePage() {
-  const { data, refresh } = usePolling(
+  const { data, refresh, isLoading } = usePolling(
     (signal) => fetchInstrumentList(signal),
     10000,
   );
+  const { showToast } = useToast();
 
   const instruments = normalizeInstruments(data);
 
@@ -46,13 +48,19 @@ export function MarketPhasePage() {
   const handleAction = async () => {
     if (!actionTarget) return;
     const action = getPhaseAction(actionTarget.phase);
-    if (action === 'halt') {
-      await haltInstrument(actionTarget.instrument_id);
-    } else if (action === 'resume') {
-      await resumeInstrument(actionTarget.instrument_id);
+    try {
+      if (action === 'halt') {
+        await haltInstrument(actionTarget.instrument_id);
+        showToast(`Market phase changed to HALTED for ${actionTarget.name ?? actionTarget.instrument_id}`, 'success');
+      } else if (action === 'resume') {
+        await resumeInstrument(actionTarget.instrument_id);
+        showToast(`Market phase changed to TRADING for ${actionTarget.name ?? actionTarget.instrument_id}`, 'success');
+      }
+      setActionTarget(null);
+      refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Action failed', 'error');
     }
-    setActionTarget(null);
-    refresh();
   };
 
   const handleHaltAll = async () => {
@@ -66,9 +74,14 @@ export function MarketPhasePage() {
     setShowHaltAll(false);
     setHaltAllProgress({ done: 0, total });
 
-    for (let i = 0; i < tradingInstruments.length; i++) {
-      await haltInstrument(tradingInstruments[i].instrument_id);
-      setHaltAllProgress({ done: i + 1, total });
+    try {
+      for (let i = 0; i < tradingInstruments.length; i++) {
+        await haltInstrument(tradingInstruments[i].instrument_id);
+        setHaltAllProgress({ done: i + 1, total });
+      }
+      showToast(`All ${total} markets halted`, 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to halt all markets', 'error');
     }
 
     setHaltAllProgress(null);
@@ -145,6 +158,7 @@ export function MarketPhasePage() {
         data={instruments}
         keyField="instrument_id"
         emptyMessage="No instruments found"
+        loading={isLoading}
       />
 
       {actionTarget && (

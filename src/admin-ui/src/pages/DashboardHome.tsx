@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { hasAdminAccess, AuditEvent } from '../types';
 import { usePolling } from '../hooks/usePolling';
+import { Skeleton } from '../components/Skeleton';
 import {
   fetchHealth,
   fetchMarginCallStats,
@@ -62,6 +63,7 @@ export function DashboardHome() {
     15000,
     isAdmin,
   );
+
 
   // Sparkline histories
   const serviceCountHistory = useMetricHistory(health.data?.services?.length);
@@ -127,7 +129,9 @@ export function DashboardHome() {
         {isAdmin && (
           <div className={styles.card}>
             <h3>System Status</h3>
-            {health.data ? (
+            {health.isLoading && !health.data ? (
+              <Skeleton variant="text" height="24px" count={2} />
+            ) : health.data ? (
               <>
                 <StatusBadge status={health.data.overall_status} variant="health" />
                 <Sparkline
@@ -136,22 +140,26 @@ export function DashboardHome() {
                   fillColor="var(--accent-green)"
                 />
               </>
-            ) : (
-              <span>Loading...</span>
-            )}
+            ) : null}
           </div>
         )}
 
         <div className={styles.card}>
           <h3>Pending KYC</h3>
-          <div className={styles.bigNumber}>
-            {participants.data?.pagination?.total ?? '\u2014'}
-          </div>
-          <Sparkline
-            data={pendingKycHistory}
-            color="var(--accent-yellow)"
-            fillColor="var(--accent-yellow)"
-          />
+          {participants.isLoading && !participants.data ? (
+            <Skeleton variant="text" height="32px" />
+          ) : (
+            <>
+              <div className={styles.bigNumber}>
+                {participants.data?.pagination?.total ?? '\u2014'}
+              </div>
+              <Sparkline
+                data={pendingKycHistory}
+                color="var(--accent-yellow)"
+                fillColor="var(--accent-yellow)"
+              />
+            </>
+          )}
         </div>
 
         {isAdmin && (

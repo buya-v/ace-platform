@@ -17,7 +17,7 @@ export function formatCurrency(value: string | number): string {
 export function SettlementStatusPage() {
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
 
-  const { data } = usePolling(
+  const { data, isLoading } = usePolling(
     (signal) => fetchSettlementCycles({}, signal),
     15000,
   );

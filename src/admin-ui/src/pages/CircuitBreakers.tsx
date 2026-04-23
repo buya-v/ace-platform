@@ -5,13 +5,15 @@ import { InstrumentControl } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
+import { useToast } from '../contexts/ToastContext';
 import styles from './CircuitBreakers.module.css';
 
 export function CircuitBreakersPage() {
-  const { data, refresh } = usePolling(
+  const { data, refresh, isLoading } = usePolling(
     (signal) => fetchInstruments(signal),
     10000,
   );
+  const { showToast } = useToast();
 
   const [haltTarget, setHaltTarget] = useState<InstrumentControl | null>(null);
   const [editTarget, setEditTarget] = useState<InstrumentControl | null>(null);
@@ -21,25 +23,36 @@ export function CircuitBreakersPage() {
 
   const handleHalt = async () => {
     if (!haltTarget) return;
-    if (haltTarget.status === 'HALTED') {
-      await resumeTrading(haltTarget.instrument_id);
-    } else {
-      await haltTrading(haltTarget.instrument_id);
+    try {
+      if (haltTarget.status === 'HALTED') {
+        await resumeTrading(haltTarget.instrument_id);
+        showToast(`Trading resumed for ${haltTarget.ticker}`, 'success');
+      } else {
+        await haltTrading(haltTarget.instrument_id);
+        showToast(`Trading halted for ${haltTarget.ticker}`, 'success');
+      }
+      setHaltTarget(null);
+      refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Action failed', 'error');
     }
-    setHaltTarget(null);
-    refresh();
   };
 
   const handleEditSave = async () => {
     if (!editTarget) return;
-    await setCircuitBreaker(editTarget.instrument_id, {
-      upper_limit_pct: parseFloat(editForm.upper),
-      lower_limit_pct: parseFloat(editForm.lower),
-      cooldown_minutes: parseInt(editForm.cooldown, 10),
-      reference_price: editForm.refPrice,
-    });
-    setEditTarget(null);
-    refresh();
+    try {
+      await setCircuitBreaker(editTarget.instrument_id, {
+        upper_limit_pct: parseFloat(editForm.upper),
+        lower_limit_pct: parseFloat(editForm.lower),
+        cooldown_minutes: parseInt(editForm.cooldown, 10),
+        reference_price: editForm.refPrice,
+      });
+      setEditTarget(null);
+      refresh();
+      showToast('Circuit breaker limits updated', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update limits', 'error');
+    }
   };
 
   const columns: Column<InstrumentControl>[] = [
@@ -83,6 +96,7 @@ export function CircuitBreakersPage() {
         data={instruments}
         keyField="instrument_id"
         emptyMessage="No instruments found"
+        loading={isLoading}
       />
 
       {haltTarget && (

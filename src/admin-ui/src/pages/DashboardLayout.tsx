@@ -11,6 +11,7 @@ import { ToastContainer } from '../components/Toast';
 import { BotButton } from '../components/BotButton';
 import { BotChatPanel } from '../components/BotChatPanel';
 import { ShortcutHelp } from '../components/ShortcutHelp';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import styles from './DashboardLayout.module.css';
 
@@ -32,7 +33,9 @@ function DashboardInner() {
       <main className={styles.main}>
         <TopBar />
         <div className={styles.content}>
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
       <ToastContainer />

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { SortAscIcon, SortDescIcon, DownloadIcon } from './icons';
+import { SortAscIcon, SortDescIcon, DownloadIcon, InboxIcon } from './icons';
 import styles from './DataGrid.module.css';
 
 export interface Column<T> {
@@ -200,7 +200,12 @@ export function DataGrid<T>({
           ) : processedData.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className={styles.empty}>
-                {emptyMessage}
+                <div className={styles.emptyContainer}>
+                  <span className={styles.emptyIcon}>
+                    <InboxIcon size={32} />
+                  </span>
+                  <span className={styles.emptyText}>{emptyMessage}</span>
+                </div>
               </td>
             </tr>
           ) : (

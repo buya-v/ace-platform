@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { fetchMarketSummaryReport, fetchLargeTraderReport } from '../services/api';
 import { buildCSVString, exportToCSV, CsvColumn } from '../utils/export';
+import { useToast } from '../contexts/ToastContext';
 import styles from './Reports.module.css';
 
 export interface MarketSummaryRow {
@@ -85,6 +86,7 @@ export function ReportsPage() {
   const [traderData, setTraderData] = useState<LargeTraderRow[] | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const handleMarketSummary = async () => {
     setLoading('market');
@@ -92,8 +94,11 @@ export function ReportsPage() {
     try {
       const result = await fetchMarketSummaryReport(reportDate);
       setMarketData(result.data ?? []);
+      showToast('Market summary report loaded', 'info');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load market summary');
+      const msg = e instanceof Error ? e.message : 'Failed to load market summary';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(null);
     }
@@ -105,11 +110,26 @@ export function ReportsPage() {
     try {
       const result = await fetchLargeTraderReport(reportDate);
       setTraderData(result.data ?? []);
+      showToast('Large trader report loaded', 'info');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load large trader report');
+      const msg = e instanceof Error ? e.message : 'Failed to load large trader report';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(null);
     }
+  };
+
+  const handleExportMarketSummary = () => {
+    if (!marketData) return;
+    exportToCSV(MARKET_SUMMARY_COLUMNS, marketData as unknown as Record<string, unknown>[], `market-summary-${reportDate}.csv`);
+    showToast('Report exported', 'info');
+  };
+
+  const handleExportLargeTrader = () => {
+    if (!traderData) return;
+    exportToCSV(LARGE_TRADER_COLUMNS, traderData as unknown as Record<string, unknown>[], `large-traders-${reportDate}.csv`);
+    showToast('Report exported', 'info');
   };
 
   return (
@@ -149,7 +169,7 @@ export function ReportsPage() {
             <h2 className={styles.sectionTitle}>Market Summary - {reportDate}</h2>
             <button
               className={`${styles.btn} ${styles.btnDownload}`}
-              onClick={() => exportToCSV(MARKET_SUMMARY_COLUMNS, marketData as unknown as Record<string, unknown>[], `market-summary-${reportDate}.csv`)}
+              onClick={handleExportMarketSummary}
             >
               Download CSV
             </button>
@@ -193,7 +213,7 @@ export function ReportsPage() {
             <h2 className={styles.sectionTitle}>Large Trader Report - {reportDate}</h2>
             <button
               className={`${styles.btn} ${styles.btnDownload}`}
-              onClick={() => exportToCSV(LARGE_TRADER_COLUMNS, traderData as unknown as Record<string, unknown>[], `large-traders-${reportDate}.csv`)}
+              onClick={handleExportLargeTrader}
             >
               Download CSV
             </button>

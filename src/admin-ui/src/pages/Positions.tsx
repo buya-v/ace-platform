@@ -170,6 +170,7 @@ export function PositionsPage() {
           emptyMessage="No open positions"
           exportFilename="positions"
           stickyHeader
+          loading={positions.isLoading}
         />
       </div>
 
@@ -182,6 +183,7 @@ export function PositionsPage() {
           keyField="_key"
           emptyMessage="No netting data available"
           exportFilename="netting"
+          loading={netting.isLoading}
         />
       </div>
     </div>

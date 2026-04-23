@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
 import { Participant } from '../types';
+import { useToast } from '../contexts/ToastContext';
 import styles from './Participants.module.css';
 
 export function ParticipantsPage() {
@@ -12,8 +13,9 @@ export function ParticipantsPage() {
   const [search, setSearch] = useState('');
   const [actionTarget, setActionTarget] = useState<{ participant: Participant; action: 'approve' | 'reject' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const { showToast } = useToast();
 
-  const { data, refresh } = usePolling(
+  const { data, refresh, isLoading } = usePolling(
     (signal) => fetchParticipants({ status: statusFilter || undefined }, signal),
     30000,
   );
@@ -25,14 +27,20 @@ export function ParticipantsPage() {
 
   const handleAction = async () => {
     if (!actionTarget) return;
-    if (actionTarget.action === 'approve') {
-      await approveParticipant(actionTarget.participant.id);
-    } else {
-      await rejectParticipant(actionTarget.participant.id, rejectReason);
+    try {
+      if (actionTarget.action === 'approve') {
+        await approveParticipant(actionTarget.participant.id);
+        showToast('Participant approved', 'success');
+      } else {
+        await rejectParticipant(actionTarget.participant.id, rejectReason);
+        showToast('Participant rejected', 'success');
+      }
+      setActionTarget(null);
+      setRejectReason('');
+      refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Action failed', 'error');
     }
-    setActionTarget(null);
-    setRejectReason('');
-    refresh();
   };
 
   const columns: Column<Participant>[] = [
@@ -85,6 +93,7 @@ export function ParticipantsPage() {
         keyField="id"
         emptyMessage="No participants found"
         exportFilename="participants"
+        loading={isLoading}
       />
 
       {actionTarget && (

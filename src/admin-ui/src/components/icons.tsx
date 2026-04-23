@@ -238,3 +238,12 @@ export function InfoIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function InboxIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="1" y="4" width="14" height="10" rx="1.5" />
+      <path d="M1 9h3.5l1.5 2h4l1.5-2H15" />
+    </svg>
+  );
+}

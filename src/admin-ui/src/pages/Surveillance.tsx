@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchSurveillanceAlerts, resolveSurveillanceAlert } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
 import styles from './Surveillance.module.css';
 
 export interface SurveillanceAlert {
@@ -87,6 +88,7 @@ export function SurveillancePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedAlert, setSelectedAlert] = useState<SurveillanceAlert | null>(null);
   const [resolveTarget, setResolveTarget] = useState<SurveillanceAlert | null>(null);
+  const { showToast } = useToast();
 
   const { data, refresh } = usePolling(
     (signal) => fetchSurveillanceAlerts({ severity: severityFilter || undefined, status: statusFilter || undefined }, signal),
@@ -100,10 +102,15 @@ export function SurveillancePage() {
 
   const handleResolve = async () => {
     if (!resolveTarget) return;
-    await resolveSurveillanceAlert(resolveTarget.id);
-    setResolveTarget(null);
-    setSelectedAlert(null);
-    refresh();
+    try {
+      await resolveSurveillanceAlert(resolveTarget.id);
+      showToast('Alert resolved', 'success');
+      setResolveTarget(null);
+      setSelectedAlert(null);
+      refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to resolve alert', 'error');
+    }
   };
 
   return (

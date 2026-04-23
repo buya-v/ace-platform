@@ -3,6 +3,7 @@ import { usePolling } from '../hooks/usePolling';
 import { fetchHealth } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Sparkline } from '../components/Sparkline';
+import { Skeleton } from '../components/Skeleton';
 import styles from './SystemMonitoring.module.css';
 
 const MAX_HISTORY = 20;
@@ -10,7 +11,7 @@ const MAX_HISTORY = 20;
 export function SystemMonitoring() {
   const latencyHistory = useRef<Map<string, number[]>>(new Map());
 
-  const { data, lastUpdated } = usePolling(
+  const { data, lastUpdated, isLoading } = usePolling(
     (signal) => fetchHealth(signal),
     30000,
   );
@@ -38,6 +39,9 @@ export function SystemMonitoring() {
   return (
     <div>
       <h1>System Health</h1>
+      {isLoading && !data && (
+        <Skeleton variant="card" height="60px" />
+      )}
       {data && (
         <div className={styles.overallBanner} data-status={data.overall_status}>
           <div className={styles.bannerText}>

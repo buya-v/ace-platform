@@ -337,6 +337,7 @@ export function OrderBookPage() {
             emptyMessage="No recent trades"
             compact
             stickyHeader
+            loading={trades.isLoading}
           />
         </div>
       </div>

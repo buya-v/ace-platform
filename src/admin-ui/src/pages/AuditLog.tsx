@@ -28,7 +28,7 @@ export function AuditLogPage() {
     [filters, page],
   );
 
-  const { data, refresh } = usePolling(fetchFn, 0); // No auto-polling
+  const { data, refresh, isLoading } = usePolling(fetchFn, 0); // No auto-polling
 
   const events = data?.data ?? [];
   const pagination = data?.pagination;
@@ -84,6 +84,7 @@ export function AuditLogPage() {
         keyField="id"
         emptyMessage="No audit events found"
         exportFilename="audit-log"
+        loading={isLoading}
       />
 
       {pagination && pagination.total_pages > 1 && (
