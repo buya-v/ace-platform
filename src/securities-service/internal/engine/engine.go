@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -17,20 +18,24 @@ type MatchingEngine struct {
 	orderStore      store.OrderStore
 	tradeStore      store.TradeStore
 	positionStore   store.PositionStore
+	producer        kafka.Producer
 }
 
 // NewMatchingEngine creates a new MatchingEngine with the given stores.
+// producer may be nil; if so, trade events are not published.
 func NewMatchingEngine(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
 	tradeStore store.TradeStore,
 	positionStore store.PositionStore,
+	producer kafka.Producer,
 ) *MatchingEngine {
 	return &MatchingEngine{
 		instrumentStore: instrumentStore,
 		orderStore:      orderStore,
 		tradeStore:      tradeStore,
 		positionStore:   positionStore,
+		producer:        producer,
 	}
 }
 
@@ -169,6 +174,12 @@ func (e *MatchingEngine) MatchOrder(order *types.SecurityOrder) ([]types.Securit
 			return trades, fmt.Errorf("failed to store trade: %w", err)
 		}
 		trades = append(trades, trade)
+
+		// Publish trade executed event (nil-safe: no-op if producer not configured).
+		if err := kafka.PublishTradeExecuted(e.producer, &trade); err != nil {
+			// Non-fatal: log the error but continue matching.
+			_ = err
+		}
 
 		// 7. Update matched orders.
 		remainingQty -= fillQty

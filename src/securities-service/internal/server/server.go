@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/garudax-platform/securities-service/internal/engine"
+	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -38,14 +39,17 @@ type Server struct {
 	instrumentStore store.InstrumentStore
 	orderStore      store.OrderStore
 	engine          *engine.MatchingEngine
+	producer        kafka.Producer
 	ready           atomic.Int32
 }
 
 // New creates a new Server with the given stores, matching engine, and configuration.
+// producer may be nil; if so, order events are not published.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
 	matchingEngine *engine.MatchingEngine,
+	producer kafka.Producer,
 	cfg Config,
 ) *Server {
 	return &Server{
@@ -53,6 +57,7 @@ func New(
 		instrumentStore: instrumentStore,
 		orderStore:      orderStore,
 		engine:          matchingEngine,
+		producer:        producer,
 	}
 }
 

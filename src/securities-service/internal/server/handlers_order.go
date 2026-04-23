@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -159,6 +160,12 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	if err := s.orderStore.Submit(&order); err != nil {
 		s.writeError(w, http.StatusConflict, "CONFLICT", err.Error(), nil)
 		return
+	}
+
+	// Publish order created event (nil-safe: no-op if producer not configured).
+	if err := kafka.PublishOrderCreated(s.producer, &order); err != nil {
+		// Non-fatal: continue even if publishing fails.
+		_ = err
 	}
 
 	// Run matching engine if available.
@@ -327,6 +334,12 @@ func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	// Update the UpdatedAt timestamp on the returned object.
 	cancelled.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Publish order cancelled event (nil-safe: no-op if producer not configured).
+	if err := kafka.PublishOrderCancelled(s.producer, cancelled); err != nil {
+		// Non-fatal: continue even if publishing fails.
+		_ = err
+	}
 
 	s.writeJSON(w, http.StatusOK, cancelled)
 }

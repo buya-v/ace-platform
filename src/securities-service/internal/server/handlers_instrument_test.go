@@ -34,8 +34,8 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 	cfg := DefaultConfig()
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
-	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore)
-	srv := New(instrStore, orderStore, me, cfg)
+	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil)
+	srv := New(instrStore, orderStore, me, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()
@@ -552,7 +552,7 @@ func TestMethodNotAllowed_Instrument(t *testing.T) {
 
 func TestHealthzEndpoint(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()
@@ -574,7 +574,7 @@ func TestHealthzEndpoint(t *testing.T) {
 
 func TestReadyzEndpoint_NotReady(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, cfg)
 	// NOT calling SetReady()
 
 	w := httptest.NewRecorder()
@@ -588,7 +588,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 
 func TestReadyzEndpoint_Ready(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()

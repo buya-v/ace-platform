@@ -10,6 +10,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/garudax-platform/securities-service/internal/engine"
+	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/server"
 	"github.com/garudax-platform/securities-service/internal/store"
 )
@@ -65,9 +66,16 @@ func main() {
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
 
-	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore)
+	// Create a channel-based producer for local/dev. In production, swap for
+	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
+	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
+	producer.RegisterTopic(kafka.TopicTradeExecuted, 256)
+	producer.RegisterTopic(kafka.TopicOrderCreated, 256)
+	producer.RegisterTopic(kafka.TopicOrderCancelled, 256)
 
-	srv := server.New(instrumentStore, orderStore, matchingEngine, cfg)
+	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer)
+
+	srv := server.New(instrumentStore, orderStore, matchingEngine, producer, cfg)
 
 	// Start health server on port 9089.
 	go func() {
