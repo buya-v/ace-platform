@@ -285,4 +285,57 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     },
   );
+
+  // ── 8. List settlement obligations ──────────────────────────────────────
+  server.tool(
+    "list_settlement_obligations",
+    "List settlement obligations with optional date and status filters",
+    {
+      date: z.string().optional().describe("Settlement date (YYYY-MM-DD)"),
+      status: z.string().optional().describe("Status filter (PENDING/AFFIRMED/NETTED/SETTLED/FAILED)"),
+    },
+    async ({ date, status }) => {
+      const params = new URLSearchParams();
+      if (date) params.set("date", date);
+      if (status) params.set("status", status);
+      const qs = params.toString();
+      const result = await client.request("GET", `/api/v1/securities/settlements${qs ? "?" + qs : ""}`);
+      const items = Array.isArray(result) ? result : (result as any).data ?? [];
+      if (items.length === 0) return { content: [{ type: "text" as const, text: "No settlement obligations found." }] };
+      const header = "Trade ID".padEnd(38) + "Instrument".padEnd(14) + "Qty".padStart(8) + "  " + "Amount".padStart(14) + "  " + "Status".padEnd(10) + "Date";
+      const divider = "─".repeat(header.length);
+      const rows = items.map((o: any) =>
+        (o.trade_id ?? "—").toString().padEnd(38) +
+        (o.instrument_id ?? "—").toString().padEnd(14) +
+        (o.quantity ?? 0).toString().padStart(8) + "  " +
+        (o.net_amount ?? 0).toFixed(2).padStart(14) + "  " +
+        (o.status ?? "—").padEnd(10) +
+        (o.settlement_date ?? "—")
+      );
+      return { content: [{ type: "text" as const, text: [header, divider, ...rows].join("\n") }] };
+    },
+  );
+
+  // ── 9. Trigger settlement cycle ─────────────────────────────────────────
+  server.tool(
+    "trigger_settlement_cycle",
+    "Trigger a settlement cycle for a specific date — processes all pending obligations",
+    {
+      date: z.string().describe("Settlement date to process (YYYY-MM-DD)"),
+    },
+    async ({ date }) => {
+      const result = await client.request("POST", "/api/v1/securities/settlements/cycle", { date });
+      const r = result as any;
+      const lines = [
+        `Settlement Cycle — ${date}`,
+        `─────────────────────────────`,
+        `Processed : ${r.processed ?? 0}`,
+        `Affirmed  : ${r.affirmed ?? 0}`,
+        `Netted    : ${r.netted ?? 0}`,
+        `Settled   : ${r.settled ?? 0}`,
+        `Failed    : ${r.failed ?? 0}`,
+      ];
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    },
+  );
 }
