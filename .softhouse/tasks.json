@@ -1,7 +1,44 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-securities-specs",
+  "feature": "Securities Module Specs",
+  "requirement": "Write architecture spec, DB migrations, and OpenAPI contract for the securities module. Specs only — no service implementation.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Securities architecture spec",
+      "description": "Write comprehensive architecture spec at docs/securities-architecture.md covering: asset classes (equities/bonds/ETFs), instrument model (ISIN/CUSIP/lot_size/tick_size), order types with validation, T+2 settlement state machine (PENDING->AFFIRMED->NETTED->INSTRUCTED->SETTLING->SETTLED/FAILED), CSD integration, DB schema for V26-V28, gateway API routes (/api/v1/securities/*), Kafka topics. Reference docs/T033_gateway_spec.md for format. Be specific about data types, field names, enums — implementation agents will code from this.",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "docs",
+      "files_hint": ["docs/securities-architecture.md"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Securities DB migrations V26-V28",
+      "description": "Write SQL migrations based on T1 spec. Read .softhouse/handoff/T1.md + docs/securities-architecture.md. Create: V26__securities_instruments.sql (instruments, bonds, position_limits), V27__securities_trading.sql (orders, trades, positions), V28__securities_settlement.sql (settlement_instructions, netting_batches, corporate_actions, custody_accounts). Follow conventions from infrastructure/db/migrations/V24 or V25.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["infrastructure/db/migrations/V26__securities_instruments.sql", "infrastructure/db/migrations/V27__securities_trading.sql", "infrastructure/db/migrations/V28__securities_settlement.sql"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Securities OpenAPI contract spec",
+      "description": "Write OpenAPI 3.0 YAML at docs/securities-openapi.yaml based on T1 spec. Read .softhouse/handoff/T1.md + docs/securities-architecture.md. Reference docs/T033_openapi.yaml for format. Cover: instruments CRUD, orders (submit/list/cancel/amend with lot/tick validation), positions (list/summary), settlements (list/cycle/netting), corporate-actions (list/announce). Include request/response schemas with all fields, types, enums, examples.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "docs",
+      "files_hint": ["docs/securities-openapi.yaml"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
