@@ -176,4 +176,20 @@
   - Migrations and OpenAPI can run in parallel since they consume the same spec but produce different files
   - Specs-only approach avoids the Phase 7-9 failure (25-task plan that timed out ACP)
 
+### Run 20260423-securities-service — Securities Service Core (2026-04-23)
+
+- **What worked**:
+  - 5/5 tasks, zero rejections, 68 tests (store 95.3%, server 73.5%)
+  - Specs-only run (previous sprint) paid off — agents referenced docs directly
+  - All agents committed directly to main — no worktree merge issues
+- **What failed**:
+  - Port 8085 already used by auth-service — needs relocation to 8089
+- **New knowledge**:
+  - Securities-service at src/securities-service/, zero external deps
+  - Order validation: instrument exists → ACTIVE → side → type → qty → lot_size → tick_size → stop_price
+  - Handler tests need `package server` (internal) since handlers are unexported
+- **Planning advice**:
+  - Consider combining instrument + order handlers into one task (same package)
+  - Sequential chain (4 levels) is clean but slow — 2 levels would suffice
+
 <!-- LEARNED PATTERNS END -->
