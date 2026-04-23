@@ -1,49 +1,30 @@
-# GarudaX — Universal Exchange Platform
+# GarudaX — Multi-Tenant AI-Native Trading Platform
 
 ## Product Vision
 
-GarudaX is a **complete exchange platform for securities and commodities** with an **AI-powered administration layer** that eliminates IT operations by enabling business users to manage the platform through natural language.
+GarudaX is a **multi-tenant, AI-native operating platform** that hosts regulated trading venues. Each tenant is an independent exchange with its own trading rules, participants, and regulatory requirements.
 
-### Three Pillars
+### Tenants
+- **ace-commodities** (ACTIVE) — Mongolian commodity exchange: wheat, barley, cattle, cashmere, wool — physical delivery via eWR
+- **mse-equities** (ONBOARDING, flagship) — Mongolian Stock Exchange: equities, bonds, ETFs — T+2 settlement, CSD integration
 
-**1. Universal Exchange Core** — Multi-asset trading engine
-- Commodities (current): wheat, barley, cattle, cashmere, wool — physical delivery via eWR
-- Securities (planned): equities, bonds, ETFs — T+2 settlement, CSD integration
-- Derivatives (planned): futures, options — SPAN margin already built
-- Unified order book across asset classes
-- FIX 4.4/5.0 protocol gateway for broker connectivity
+### Platform Invariant
+> GarudaX is the platform. Tenants are the venues. MSE is the flagship. Tenant ID is never optional.
 
-**2. AI Administration Bot** — Zero IT operations
-- Business users manage the entire platform via natural language (Telegram, web chat)
-- Bot handles: user provisioning, risk parameters, fee schedules, circuit breakers, market phases, compliance rules, settlement triggers, reporting
-- MCP tools give the bot direct access to all platform operations
-- Approval workflow: bot proposes → user approves via Telegram → bot executes
-- Scheduled tasks: EOD settlement, daily reconciliation, margin calls, regulatory reports
-
-**3. Business Self-Service** — No-code configuration
-- Natural language queries: "top 10 traders by volume this week"
-- Rule builder: "set wheat margin to 15%", "add circuit breaker at 5% move"
-- Alert system: "notify when cashmere crosses 500k MNT"
-- Dashboard builder: drag-and-drop KPIs for exchange operators
-- Member portal: broker onboarding, fee management, self-service
-
-### Target Market
-- Mongolian commodity exchanges (MNT currency, Ulaanbaatar timezone)
-- Regional securities exchanges seeking modern infrastructure
-- Exchange operators who want AI-driven operations instead of IT teams
-
-### Current State (Phase 6 complete)
-- 10 Go services running (matching, clearing, margin, settlement, auth, compliance, market-data, warehouse, gateway, admin-bot)
+### Current State
+- 11 Go services (matching, clearing, margin, settlement, auth, compliance, market-data, warehouse, gateway, admin-bot, securities-service)
 - 3 React SPAs (trading terminal, admin dashboard, demo runner)
-- 1,199+ tests, 16 Docker containers, 23 DB migrations, 67 softhouse tasks completed
-- Production-ready for commodities; securities module not started
+- Securities module complete (Phase 7): instrument CRUD, order matching, T+2 settlement, 9 MCP tools
+- Multi-tenant platform pivot in progress (Phase 0.5 specs complete)
+- 500+ admin-ui tests, 100+ securities-service tests
 
 ### Roadmap
-- **Phase 7**: Securities module (equities + bonds + T+2 settlement)
-- **Phase 8**: FIX protocol gateway (broker connectivity)
-- **Phase 9**: AI bot expansion (full admin coverage, natural language queries)
-- **Phase 10**: Business self-service (rule builder, alerts, dashboards)
-- **Phase 11**: Regulatory reporting (central bank integration, MNT-specific)
+- **Phase 0.5** (complete): Multi-tenant platform specs — architecture, migrations V29-V30, tenant context design
+- **Phase 0.6**: ace-commodities retrofit — schema renames, tenant context middleware, code updates, Kafka topic migration
+- **Phase 0.7**: Platform control plane — tenant registry service, lifecycle workflows, platform-admin API
+- **Phase 0.8**: mse-equities flagship build — equities domain, corporate actions, FRC reporting, MCSD integration
+- **Phase 9**: FIX protocol gateway (tenant-aware broker connectivity)
+- **Phase 10**: AI bot expansion (tenant-scoped operations)
 
 ---
 
@@ -637,6 +618,11 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Finding:** This is the third instance of the "rejected-with-approved-review" pattern (T059 initial, T062, and implicitly T005 from Phase 1). The Orchestrator's merge step is a silent failure point: when it fails, no diagnostic artifact is produced, the task is marked `rejected` indistinguishably from a reviewer rejection, and the approved code is stranded on the worktree branch. The 17 WebSocket hook tests from T062 would bring admin-ui to 161 tests if merged.
 - **Action:** Before the next pipeline run: (1) check if `feature/T062-*` branch exists with the approved code, (2) if so, merge it manually rather than re-running the task. The Orchestrator must log merge failures separately from review rejections. A new status `merge_failed` should be added to `tasks.json` to distinguish the two failure modes. This is now a P1 pipeline infrastructure bug — it has caused wasted compute across 3 tasks.
 
+### Pattern: Multi-tenancy directive (2026-04-23)
+- **Context:** GarudaX_Strategy_Directive.md established multi-tenant pivot. Product is GarudaX (platform), tenants are venues (ace-commodities, mse-equities).
+- **Finding:** Every task from directive-2026-04 forward assumes multi-tenancy. Tenant ID is a first-class argument to every domain operation. No service accepts traffic with an unresolved tenant.
+- **Action:** Reviewer Agent rejects any task without tenant context in its API surface. ace-commodities retrofit must complete before mse-equities build. Auth is platform-level; all other schemas are per-tenant.
+
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
 ---
@@ -655,6 +641,9 @@ project-root/
     run.sh               ← main entry point (./pipeline/run.sh "requirement")
     lib/                 ← shell libraries (state, context, worktree, log)
     prompts/             ← agent role prompt templates
+  venues/
+    ace-commodities/   ← commodity exchange tenant config, trading calendar, listing rules
+    mse-equities/      ← MSE flagship tenant config, FRC reporting templates
   src/                   ← application code
   tests/                 ← test suite
 ```
