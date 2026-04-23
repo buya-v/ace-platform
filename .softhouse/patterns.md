@@ -124,4 +124,31 @@
 - **CX gaps found**: Missing aria-hidden on some decorative icons, missing form validation on CircuitBreakers, some hardcoded hex colors
 - **CX improvements made**: Form validation with per-field errors, aria-invalid attributes, aria-hidden on icons, role/aria-live on empty state
 
+### Run 20260423-prod-hardening — Production Hardening (2026-04-23)
+
+- **What worked**:
+  - 5/5 tasks completed on first attempt, zero rejections
+  - Level 0 parallelism (4 agents) with clean merging — only one handoff file conflict (trivially resolved)
+  - T2 (tracing) committed directly to main, avoiding worktree merge complexity
+  - T4 confirmed health checks and Docker healthchecks already existed across all services — no code changes needed (just stub cleanup)
+  - 79 Go packages + 404 admin-ui tests all passing after merge
+
+- **What failed**:
+  - T3 worktree had 0 branch commits (changes uncommitted) — had to copy files manually
+  - T1 merge had a handoff file conflict (both T1 and T2 committed to main created parallel handoff files)
+  - Go binary not in default PATH (/usr/local/go/bin/go) — agents need explicit PATH setup
+
+- **New knowledge**:
+  - src/shared/internal/observability/ now has: metrics.go (counters + histograms + MetricsServer), middleware.go (MetricsMiddleware), tracing.go (W3C traceparent), logger.go
+  - All 9 Go services already had /healthz and /readyz with atomic readyFlag pattern
+  - Docker Compose already had healthcheck directives using shared YAML anchor x-healthcheck-http
+  - E2e tests had 3 bug classes: gateway auth ordering, compliance json tags, array vs object expectations
+  - W3C traceparent format: 00-{trace_id 32hex}-{span_id 16hex}-{flags 2hex}
+
+- **Planning advice**:
+  - Backend observability tasks parallelize well — metrics, tracing, health checks touch different files
+  - "Verify and enhance" tasks (T3, T4) are faster than "create from scratch" — existing code was better than expected
+  - Always set PATH=$PATH:/usr/local/go/bin in Go task prompts for this environment
+  - When T4 found everything already done, it still provided value by confirming the state — verification tasks are worth including
+
 <!-- LEARNED PATTERNS END -->
