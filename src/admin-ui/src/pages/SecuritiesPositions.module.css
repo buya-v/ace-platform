@@ -1,0 +1,29 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Sections */
+.section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+/* P&L colors */
+.pnlPositive {
+  color: var(--accent-green);
+}
+
+.pnlNegative {
+  color: var(--accent-red);
+}

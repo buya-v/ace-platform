@@ -1,0 +1,259 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.submitBtn {
+  padding: 8px 16px;
+  background: var(--accent-blue);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.submitBtn:hover {
+  opacity: 0.85;
+}
+
+/* Instrument Selector */
+.selectorBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selectorLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.selector {
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+/* Sections */
+.section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.sectionTitle {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Side colors */
+.sideBuy {
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.sideSell {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+/* Date cell */
+.dateCell {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Cancel button */
+.cancelBtn {
+  padding: 3px 10px;
+  background: var(--accent-red);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.cancelBtn:hover {
+  opacity: 0.85;
+}
+
+/* Placeholder text */
+.placeholder {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Trades table */
+.tradesTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tradesTable th {
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.tradesTable td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-primary);
+  color: var(--text-primary);
+}
+
+.right {
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Modal */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  width: 440px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-primary);
+}
+
+.modalTitle {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.formLabel {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.formInput {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.formInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inputError {
+  border-color: var(--accent-red);
+}
+
+.fieldError {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent-red);
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.cancelActionBtn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cancelActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.submitActionBtn {
+  padding: 8px 16px;
+  background: var(--accent-blue);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.submitActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
