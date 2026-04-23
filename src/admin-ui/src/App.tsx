@@ -24,6 +24,7 @@ import { TicketsPage } from './pages/Tickets';
 import { SecuritiesInstrumentsPage } from './pages/SecuritiesInstruments';
 import { SecuritiesOrdersPage } from './pages/SecuritiesOrders';
 import { SecuritiesPositionsPage } from './pages/SecuritiesPositions';
+import { PlatformAdminPage } from './pages/PlatformAdmin';
 
 const ADMIN_ROLES = ['admin', 'exchange_admin'];
 
@@ -50,6 +51,7 @@ export function App() {
               <Route path="fees" element={<FeeManagementPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="tickets" element={<TicketsPage />} />
+              <Route path="platform" element={<PlatformAdminPage />} />
               <Route path="securities" element={<SecuritiesInstrumentsPage />} />
               <Route path="securities-orders" element={<SecuritiesOrdersPage />} />
               <Route path="securities-positions" element={<SecuritiesPositionsPage />} />

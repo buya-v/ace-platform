@@ -32,6 +32,7 @@ interface NavItem {
 }
 
 const operationsNav: NavItem[] = [
+  { label: 'Platform', path: '/dashboard/platform', adminOnly: true, icon: ShieldIcon },
   { label: 'System Health', path: '/dashboard/monitoring', adminOnly: true, icon: HeartbeatIcon },
   { label: 'Order Book', path: '/dashboard/orderbook', adminOnly: true, icon: BookIcon },
   { label: 'Positions', path: '/dashboard/positions', adminOnly: true, icon: ChartBarIcon },

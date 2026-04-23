@@ -457,3 +457,22 @@ export function fetchSecuritiesPositions(filters?: { participant_id?: string }, 
     signal,
   );
 }
+
+// Platform — Tenants
+export function fetchTenants(signal?: AbortSignal) {
+  return apiFetch<any>('/platform/v1/tenants', {}, signal);
+}
+
+export function createTenant(data: { id: string; name: string; governance_tier?: string }) {
+  return apiFetch<any>('/platform/v1/tenants', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateTenantStatus(id: string, status: string) {
+  return apiFetch<void>(`/platform/v1/tenants/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
+}
