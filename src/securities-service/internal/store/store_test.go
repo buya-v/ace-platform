@@ -488,3 +488,263 @@ func TestConcurrentAccess_OrderStore(t *testing.T) {
 		t.Errorf("expected %d orders, got %d", goroutines, len(all))
 	}
 }
+
+// ============================================================
+// TradeStore tests
+// ============================================================
+
+func newTrade(id, instrumentID string) *types.SecurityTrade {
+	return &types.SecurityTrade{
+		ID:             id,
+		BuyOrderID:     "buy-" + id,
+		SellOrderID:    "sell-" + id,
+		InstrumentID:   instrumentID,
+		Price:          50.00,
+		Quantity:       100,
+		TradeDate:      "2026-01-01",
+		SettlementDate: "2026-01-03",
+		Status:         types.TradeStatusPending,
+		CreatedAt:      "2026-01-01T00:00:00Z",
+	}
+}
+
+func TestTradeStore_Create(t *testing.T) {
+	s := store.NewInMemoryTradeStore()
+	trade := newTrade("trade-1", "inst-A")
+
+	if err := s.Create(trade); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.Get("trade-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "trade-1" {
+		t.Errorf("ID: want trade-1, got %s", got.ID)
+	}
+	if got.Price != 50.00 {
+		t.Errorf("Price: want 50.00, got %v", got.Price)
+	}
+	if got.Quantity != 100 {
+		t.Errorf("Quantity: want 100, got %d", got.Quantity)
+	}
+}
+
+func TestTradeStore_Create_Duplicate(t *testing.T) {
+	s := store.NewInMemoryTradeStore()
+	trade := newTrade("trade-dup", "inst-A")
+	if err := s.Create(trade); err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	if err := s.Create(trade); err == nil {
+		t.Fatal("expected error on duplicate Create, got nil")
+	}
+}
+
+func TestTradeStore_Get(t *testing.T) {
+	s := store.NewInMemoryTradeStore()
+	s.Create(newTrade("trade-get", "inst-A"))
+
+	t.Run("existing", func(t *testing.T) {
+		got, err := s.Get("trade-get")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.ID != "trade-get" {
+			t.Errorf("ID: want trade-get, got %s", got.ID)
+		}
+	})
+
+	t.Run("non-existent", func(t *testing.T) {
+		_, err := s.Get("no-such-trade")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestTradeStore_ListByInstrument(t *testing.T) {
+	s := store.NewInMemoryTradeStore()
+	s.Create(newTrade("t1", "inst-A"))
+	s.Create(newTrade("t2", "inst-A"))
+	s.Create(newTrade("t3", "inst-B"))
+
+	t.Run("inst-A returns 2", func(t *testing.T) {
+		trades, err := s.ListByInstrument("inst-A")
+		if err != nil {
+			t.Fatalf("ListByInstrument: %v", err)
+		}
+		if len(trades) != 2 {
+			t.Errorf("expected 2, got %d", len(trades))
+		}
+	})
+
+	t.Run("inst-B returns 1", func(t *testing.T) {
+		trades, err := s.ListByInstrument("inst-B")
+		if err != nil {
+			t.Fatalf("ListByInstrument: %v", err)
+		}
+		if len(trades) != 1 {
+			t.Errorf("expected 1, got %d", len(trades))
+		}
+		if trades[0].ID != "t3" {
+			t.Errorf("expected trade t3, got %s", trades[0].ID)
+		}
+	})
+
+	t.Run("unknown instrument returns empty", func(t *testing.T) {
+		trades, err := s.ListByInstrument("inst-MISSING")
+		if err != nil {
+			t.Fatalf("ListByInstrument: %v", err)
+		}
+		if len(trades) != 0 {
+			t.Errorf("expected 0, got %d", len(trades))
+		}
+	})
+}
+
+// ============================================================
+// PositionStore tests
+// ============================================================
+
+func TestPositionStore_GetOrCreate(t *testing.T) {
+	s := store.NewInMemoryPositionStore()
+
+	t.Run("first call creates zero position", func(t *testing.T) {
+		pos, err := s.GetOrCreate("P1", "inst-A")
+		if err != nil {
+			t.Fatalf("GetOrCreate: %v", err)
+		}
+		if pos.ParticipantID != "P1" {
+			t.Errorf("ParticipantID: want P1, got %s", pos.ParticipantID)
+		}
+		if pos.InstrumentID != "inst-A" {
+			t.Errorf("InstrumentID: want inst-A, got %s", pos.InstrumentID)
+		}
+		if pos.Quantity != 0 {
+			t.Errorf("initial Quantity: want 0, got %d", pos.Quantity)
+		}
+		if pos.AvgCost != 0 {
+			t.Errorf("initial AvgCost: want 0, got %v", pos.AvgCost)
+		}
+	})
+
+	t.Run("second call returns same position (not a new one)", func(t *testing.T) {
+		// Update the position created above.
+		pos, _ := s.GetOrCreate("P1", "inst-A")
+		pos.Quantity = 100
+		pos.AvgCost = 50.00
+		s.Update(pos)
+
+		pos2, err := s.GetOrCreate("P1", "inst-A")
+		if err != nil {
+			t.Fatalf("second GetOrCreate: %v", err)
+		}
+		if pos2.Quantity != 100 {
+			t.Errorf("want 100 (from update), got %d", pos2.Quantity)
+		}
+		if pos2.AvgCost != 50.00 {
+			t.Errorf("want AvgCost 50.00, got %v", pos2.AvgCost)
+		}
+	})
+}
+
+func TestPositionStore_Update(t *testing.T) {
+	s := store.NewInMemoryPositionStore()
+
+	pos, err := s.GetOrCreate("P2", "inst-B")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	pos.Quantity = 200
+	pos.AvgCost = 75.50
+	if err := s.Update(pos); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	updated, err := s.GetOrCreate("P2", "inst-B")
+	if err != nil {
+		t.Fatalf("GetOrCreate after Update: %v", err)
+	}
+	if updated.Quantity != 200 {
+		t.Errorf("Quantity: want 200, got %d", updated.Quantity)
+	}
+	if updated.AvgCost != 75.50 {
+		t.Errorf("AvgCost: want 75.50, got %v", updated.AvgCost)
+	}
+}
+
+func TestPositionStore_List(t *testing.T) {
+	s := store.NewInMemoryPositionStore()
+
+	// Create positions for two participants across two instruments.
+	s.GetOrCreate("P3", "inst-A")
+	s.GetOrCreate("P3", "inst-B")
+	s.GetOrCreate("P4", "inst-A")
+
+	t.Run("P3 has 2 positions", func(t *testing.T) {
+		positions, err := s.List("P3")
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(positions) != 2 {
+			t.Errorf("expected 2 positions for P3, got %d", len(positions))
+		}
+	})
+
+	t.Run("P4 has 1 position", func(t *testing.T) {
+		positions, err := s.List("P4")
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(positions) != 1 {
+			t.Errorf("expected 1 position for P4, got %d", len(positions))
+		}
+		if positions[0].InstrumentID != "inst-A" {
+			t.Errorf("InstrumentID: want inst-A, got %s", positions[0].InstrumentID)
+		}
+	})
+
+	t.Run("unknown participant returns empty", func(t *testing.T) {
+		positions, err := s.List("P-UNKNOWN")
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(positions) != 0 {
+			t.Errorf("expected 0, got %d", len(positions))
+		}
+	})
+}
+
+// TestOrderStore_Update verifies that Update replaces an existing order record.
+func TestOrderStore_Update(t *testing.T) {
+	s := store.NewInMemoryOrderStore()
+	order := newOrder("ord-upd", "inst-1", types.OrderSideBuy, types.OrderStatusPending)
+	s.Submit(order)
+
+	order.Status = types.OrderStatusPartiallyFilled
+	order.FilledQuantity = 40
+	if err := s.Update(order); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := s.Get("ord-upd")
+	if err != nil {
+		t.Fatalf("Get after Update: %v", err)
+	}
+	if got.Status != types.OrderStatusPartiallyFilled {
+		t.Errorf("Status: want PARTIALLY_FILLED, got %s", got.Status)
+	}
+	if got.FilledQuantity != 40 {
+		t.Errorf("FilledQuantity: want 40, got %d", got.FilledQuantity)
+	}
+}
+
+// TestOrderStore_Update_NotFound verifies that Update returns ErrNotFound for unknown IDs.
+func TestOrderStore_Update_NotFound(t *testing.T) {
+	s := store.NewInMemoryOrderStore()
+	order := newOrder("ord-missing", "inst-1", types.OrderSideBuy, types.OrderStatusPending)
+	if err := s.Update(order); err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
