@@ -1,7 +1,10 @@
 package observability
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -11,13 +14,15 @@ import (
 )
 
 // Metrics provides Prometheus-compatible basic metrics.
-// It tracks request counts and latency histograms per method+status.
-// Uses sync/atomic and sync.Mutex instead of expvar to allow multiple
-// instances in tests without global registry conflicts.
+// It tracks request counts, error counts, latency histograms, and response
+// size histograms per service. Uses sync/atomic and sync.Mutex instead of
+// expvar to allow multiple instances in tests without global registry conflicts.
 type Metrics struct {
 	serviceName    string
 	requestCount   *counterMap
+	errorCount     *counterMap
 	latencyBuckets *latencyHistogram
+	sizeBuckets    *sizeHistogram
 }
 
 // NewMetrics creates a new Metrics instance for a service.
@@ -25,12 +30,17 @@ func NewMetrics(serviceName string) *Metrics {
 	return &Metrics{
 		serviceName:    serviceName,
 		requestCount:   newCounterMap(),
+		errorCount:     newCounterMap(),
 		latencyBuckets: newLatencyHistogram(),
+		sizeBuckets:    newSizeHistogram(),
 	}
 }
 
-// MetricsMiddleware creates HTTP middleware that records request count
-// and latency for each request.
+// MetricsMiddleware creates HTTP middleware that records:
+//   - http_requests_total: request count by method+status
+//   - http_request_errors_total: count of 5xx responses
+//   - http_request_duration_seconds: latency histogram
+//   - http_response_size_bytes: response size histogram
 func (m *Metrics) MetricsMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,44 +55,70 @@ func (m *Metrics) MetricsMiddleware() func(http.Handler) http.Handler {
 			key := r.Method + "_" + strconv.Itoa(rec.status)
 			m.requestCount.Add(key, 1)
 
+			// Record 5xx errors
+			if rec.status >= 500 {
+				errKey := r.Method + "_" + strconv.Itoa(rec.status)
+				m.errorCount.Add(errKey, 1)
+			}
+
 			// Record latency
 			m.latencyBuckets.observe(duration)
+
+			// Record response size
+			m.sizeBuckets.observe(rec.size)
 		})
 	}
 }
 
-// MetricsHandler returns an HTTP handler that serves metrics in a
-// Prometheus-compatible text format at /metrics.
+// MetricsHandler returns an HTTP handler that serves metrics in proper
+// Prometheus text exposition format (# HELP, # TYPE, metric lines).
 func (m *Metrics) MetricsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
-		// Write request counts
+		svc := m.serviceName
+
+		// --- http_requests_total ---
+		fmt.Fprintf(w, "# HELP http_requests_total Total number of HTTP requests.\n")
+		fmt.Fprintf(w, "# TYPE http_requests_total counter\n")
 		m.requestCount.Do(func(key string, value int64) {
-			_, _ = w.Write([]byte(
-				"http_requests_total{service=\"" + m.serviceName +
-					"\",method_status=\"" + key +
-					"\"} " + strconv.FormatInt(value, 10) + "\n",
-			))
+			fmt.Fprintf(w, "http_requests_total{service=%q,method_status=%q} %d\n",
+				svc, key, value)
 		})
 
-		// Write latency histogram
-		buckets := m.latencyBuckets.snapshot()
-		for _, b := range buckets {
-			_, _ = w.Write([]byte(
-				"http_request_duration_seconds_bucket{service=\"" + m.serviceName +
-					"\",le=\"" + b.le +
-					"\"} " + strconv.FormatInt(b.count, 10) + "\n",
-			))
+		// --- http_request_errors_total ---
+		fmt.Fprintf(w, "# HELP http_request_errors_total Total number of HTTP 5xx error responses.\n")
+		fmt.Fprintf(w, "# TYPE http_request_errors_total counter\n")
+		m.errorCount.Do(func(key string, value int64) {
+			fmt.Fprintf(w, "http_request_errors_total{service=%q,method_status=%q} %d\n",
+				svc, key, value)
+		})
+
+		// --- http_request_duration_seconds ---
+		fmt.Fprintf(w, "# HELP http_request_duration_seconds HTTP request latency in seconds.\n")
+		fmt.Fprintf(w, "# TYPE http_request_duration_seconds histogram\n")
+		latBuckets := m.latencyBuckets.snapshot()
+		for _, b := range latBuckets {
+			fmt.Fprintf(w, "http_request_duration_seconds_bucket{service=%q,le=%q} %d\n",
+				svc, b.le, b.count)
 		}
-		_, _ = w.Write([]byte(
-			"http_request_duration_seconds_count{service=\"" + m.serviceName +
-				"\"} " + strconv.FormatInt(m.latencyBuckets.totalCount(), 10) + "\n",
-		))
-		_, _ = w.Write([]byte(
-			"http_request_duration_seconds_sum{service=\"" + m.serviceName +
-				"\"} " + strconv.FormatFloat(m.latencyBuckets.totalSum(), 'f', 6, 64) + "\n",
-		))
+		fmt.Fprintf(w, "http_request_duration_seconds_count{service=%q} %d\n",
+			svc, m.latencyBuckets.totalCount())
+		fmt.Fprintf(w, "http_request_duration_seconds_sum{service=%q} %s\n",
+			svc, strconv.FormatFloat(m.latencyBuckets.totalSum(), 'f', 6, 64))
+
+		// --- http_response_size_bytes ---
+		fmt.Fprintf(w, "# HELP http_response_size_bytes HTTP response size in bytes.\n")
+		fmt.Fprintf(w, "# TYPE http_response_size_bytes histogram\n")
+		szBuckets := m.sizeBuckets.snapshot()
+		for _, b := range szBuckets {
+			fmt.Fprintf(w, "http_response_size_bytes_bucket{service=%q,le=%q} %d\n",
+				svc, b.le, b.count)
+		}
+		fmt.Fprintf(w, "http_response_size_bytes_count{service=%q} %d\n",
+			svc, m.sizeBuckets.totalCount())
+		fmt.Fprintf(w, "http_response_size_bytes_sum{service=%q} %d\n",
+			svc, m.sizeBuckets.totalSum())
 	})
 }
 
@@ -97,15 +133,83 @@ func (m *Metrics) MetricsJSON() http.Handler {
 			counts[key] = value
 		})
 
+		errors := make(map[string]int64)
+		m.errorCount.Do(func(key string, value int64) {
+			errors[key] = value
+		})
+
 		result := map[string]interface{}{
-			"service":        m.serviceName,
-			"request_counts": counts,
-			"latency":        m.latencyBuckets.summaryMap(),
+			"service":         m.serviceName,
+			"request_counts":  counts,
+			"error_counts":    errors,
+			"latency":         m.latencyBuckets.summaryMap(),
+			"response_size":   m.sizeBuckets.summaryMap(),
 		}
 
 		json.NewEncoder(w).Encode(result)
 	})
 }
+
+// MetricsServer wraps a Metrics instance and manages a dedicated HTTP server
+// for Prometheus scraping. It exposes /metrics on a configurable port so the
+// main application server is not polluted with metrics traffic.
+type MetricsServer struct {
+	metrics *Metrics
+	addr    string
+	srv     *http.Server
+	logger  *slog.Logger
+}
+
+// NewMetricsServer creates a MetricsServer that will listen on addr (e.g. ":9090").
+// Pass a nil logger to disable startup/shutdown logging.
+func NewMetricsServer(m *Metrics, addr string, logger *slog.Logger) *MetricsServer {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", m.MetricsHandler())
+	mux.Handle("/metrics.json", m.MetricsJSON())
+
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	return &MetricsServer{
+		metrics: m,
+		addr:    addr,
+		srv:     srv,
+		logger:  logger,
+	}
+}
+
+// Start begins serving metrics in a background goroutine. It returns
+// immediately. The server runs until Shutdown is called or the process exits.
+func (ms *MetricsServer) Start() {
+	go func() {
+		if ms.logger != nil {
+			ms.logger.Info("metrics server listening", slog.String("addr", ms.addr))
+		}
+		if err := ms.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if ms.logger != nil {
+				ms.logger.Error("metrics server error", slog.String("error", err.Error()))
+			}
+		}
+	}()
+}
+
+// Shutdown gracefully stops the metrics server using the provided context.
+func (ms *MetricsServer) Shutdown(ctx context.Context) error {
+	return ms.srv.Shutdown(ctx)
+}
+
+// Handler returns the underlying http.Handler, useful for registering
+// /metrics on an existing mux rather than starting a dedicated server.
+func (ms *MetricsServer) Handler() http.Handler {
+	return ms.srv.Handler
+}
+
+// --- internal types ---
 
 // counterMap is a thread-safe map of string -> int64 counters.
 type counterMap struct {
@@ -158,15 +262,22 @@ func (cm *counterMap) Do(fn func(key string, value int64)) {
 	}
 }
 
-// metricsRecorder captures the HTTP status code for metrics.
+// metricsRecorder captures the HTTP status code and response size for metrics.
 type metricsRecorder struct {
 	http.ResponseWriter
 	status int
+	size   int
 }
 
 func (mr *metricsRecorder) WriteHeader(status int) {
 	mr.status = status
 	mr.ResponseWriter.WriteHeader(status)
+}
+
+func (mr *metricsRecorder) Write(b []byte) (int, error) {
+	n, err := mr.ResponseWriter.Write(b)
+	mr.size += n
+	return n, err
 }
 
 // latencyHistogram tracks request latency in Prometheus-style buckets.
@@ -273,5 +384,106 @@ func (h *latencyHistogram) summaryMap() map[string]interface{} {
 		"count":   h.count,
 		"sum_sec": h.sum,
 		"buckets": bucketMap,
+	}
+}
+
+// sizeHistogram tracks response sizes in Prometheus-style buckets (bytes).
+type sizeHistogram struct {
+	mu      sync.Mutex
+	buckets []sizeBucket
+	sum     int64
+	count   int64
+}
+
+type sizeBucket struct {
+	le        string
+	upperBytes int64
+	count      int64
+}
+
+type sizeBucketSnapshot struct {
+	le    string
+	count int64
+}
+
+func newSizeHistogram() *sizeHistogram {
+	// Response size bucket boundaries in bytes
+	boundaries := []struct {
+		le        string
+		upperBytes int64
+	}{
+		{"256", 256},
+		{"1024", 1024},
+		{"4096", 4096},
+		{"16384", 16384},
+		{"65536", 65536},
+		{"262144", 262144},
+		{"1048576", 1048576},
+		{"+Inf", 1<<62 - 1},
+	}
+
+	buckets := make([]sizeBucket, len(boundaries))
+	for i, b := range boundaries {
+		buckets[i] = sizeBucket{le: b.le, upperBytes: b.upperBytes}
+	}
+	return &sizeHistogram{buckets: buckets}
+}
+
+func (h *sizeHistogram) observe(size int) {
+	sz := int64(size)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.sum += sz
+	h.count++
+
+	for i := range h.buckets {
+		if sz <= h.buckets[i].upperBytes {
+			h.buckets[i].count++
+		}
+	}
+}
+
+func (h *sizeHistogram) snapshot() []sizeBucketSnapshot {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	result := make([]sizeBucketSnapshot, len(h.buckets))
+	var cumulative int64
+	for i, b := range h.buckets {
+		cumulative += b.count
+		result[i] = sizeBucketSnapshot{le: b.le, count: cumulative}
+	}
+	return result
+}
+
+func (h *sizeHistogram) totalCount() int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.count
+}
+
+func (h *sizeHistogram) totalSum() int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.sum
+}
+
+func (h *sizeHistogram) summaryMap() map[string]interface{} {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	bucketMap := make(map[string]int64)
+	var cumulative int64
+	for _, b := range h.buckets {
+		cumulative += b.count
+		bucketMap[b.le] = cumulative
+	}
+
+	return map[string]interface{}{
+		"count":      h.count,
+		"sum_bytes":  h.sum,
+		"buckets":    bucketMap,
 	}
 }
