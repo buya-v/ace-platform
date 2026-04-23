@@ -22,7 +22,7 @@ func NewPostgresObligationStore(db *sql.DB) *PostgresObligationStore {
 // Append inserts a new clearing obligation.
 func (s *PostgresObligationStore) Append(obl types.ClearingObligation) error {
 	_, err := s.db.Exec(
-		`INSERT INTO clearing.obligations
+		`INSERT INTO ace_clearing.obligations
 			(obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		obl.ObligationID,
@@ -47,7 +47,7 @@ func (s *PostgresObligationStore) Append(obl types.ClearingObligation) error {
 func (s *PostgresObligationStore) ByTrade(tradeID string) []types.ClearingObligation {
 	rows, err := s.db.Query(
 		`SELECT obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at
-		FROM clearing.obligations WHERE trade_id = $1`, tradeID)
+		FROM ace_clearing.obligations WHERE trade_id = $1`, tradeID)
 	if err != nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (s *PostgresObligationStore) ByTrade(tradeID string) []types.ClearingObliga
 func (s *PostgresObligationStore) ByParticipant(participantID string) []types.ClearingObligation {
 	rows, err := s.db.Query(
 		`SELECT obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at
-		FROM clearing.obligations WHERE participant_id = $1`, participantID)
+		FROM ace_clearing.obligations WHERE participant_id = $1`, participantID)
 	if err != nil {
 		return nil
 	}
@@ -71,7 +71,7 @@ func (s *PostgresObligationStore) ByParticipant(participantID string) []types.Cl
 func (s *PostgresObligationStore) ByInstrument(instrumentID string) []types.ClearingObligation {
 	rows, err := s.db.Query(
 		`SELECT obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at
-		FROM clearing.obligations WHERE instrument_id = $1`, instrumentID)
+		FROM ace_clearing.obligations WHERE instrument_id = $1`, instrumentID)
 	if err != nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func (s *PostgresObligationStore) ByInstrument(instrumentID string) []types.Clea
 func (s *PostgresObligationStore) ByStatus(status types.ClearingStatus) []types.ClearingObligation {
 	rows, err := s.db.Query(
 		`SELECT obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at
-		FROM clearing.obligations WHERE status = $1`, int(status))
+		FROM ace_clearing.obligations WHERE status = $1`, int(status))
 	if err != nil {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (s *PostgresObligationStore) ByStatus(status types.ClearingStatus) []types.
 func (s *PostgresObligationStore) All() []types.ClearingObligation {
 	rows, err := s.db.Query(
 		`SELECT obligation_id, trade_id, instrument_id, participant_id, side, price, quantity, value, status, created_at, novated_at
-		FROM clearing.obligations ORDER BY created_at`)
+		FROM ace_clearing.obligations ORDER BY created_at`)
 	if err != nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func NewPostgresPositionStore(db *sql.DB) *PostgresPositionStore {
 // SavePosition upserts a position using INSERT ON CONFLICT UPDATE.
 func (s *PostgresPositionStore) SavePosition(pos types.Position) error {
 	_, err := s.db.Exec(
-		`INSERT INTO clearing.positions
+		`INSERT INTO ace_clearing.positions
 			(participant_id, instrument_id, net_qty, avg_price, total_buy_qty, total_sell_qty, realized_pnl, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (participant_id, instrument_id) DO UPDATE SET
@@ -191,7 +191,7 @@ func (s *PostgresPositionStore) GetPosition(participantID, instrumentID string) 
 	)
 	err := s.db.QueryRow(
 		`SELECT participant_id, instrument_id, net_qty, avg_price, total_buy_qty, total_sell_qty, realized_pnl, updated_at
-		FROM clearing.positions WHERE participant_id = $1 AND instrument_id = $2`,
+		FROM ace_clearing.positions WHERE participant_id = $1 AND instrument_id = $2`,
 		participantID, instrumentID,
 	).Scan(
 		&pos.ParticipantID,
@@ -218,7 +218,7 @@ func (s *PostgresPositionStore) GetPosition(participantID, instrumentID string) 
 func (s *PostgresPositionStore) GetPositionsByParticipant(participantID string) ([]types.Position, error) {
 	rows, err := s.db.Query(
 		`SELECT participant_id, instrument_id, net_qty, avg_price, total_buy_qty, total_sell_qty, realized_pnl, updated_at
-		FROM clearing.positions WHERE participant_id = $1`, participantID)
+		FROM ace_clearing.positions WHERE participant_id = $1`, participantID)
 	if err != nil {
 		return nil, fmt.Errorf("postgres positions by participant: %w", err)
 	}
@@ -230,7 +230,7 @@ func (s *PostgresPositionStore) GetPositionsByParticipant(participantID string) 
 func (s *PostgresPositionStore) GetPositionsByInstrument(instrumentID string) ([]types.Position, error) {
 	rows, err := s.db.Query(
 		`SELECT participant_id, instrument_id, net_qty, avg_price, total_buy_qty, total_sell_qty, realized_pnl, updated_at
-		FROM clearing.positions WHERE instrument_id = $1`, instrumentID)
+		FROM ace_clearing.positions WHERE instrument_id = $1`, instrumentID)
 	if err != nil {
 		return nil, fmt.Errorf("postgres positions by instrument: %w", err)
 	}
@@ -271,7 +271,7 @@ func scanPositions(rows *sql.Rows) ([]types.Position, error) {
 func (s *PostgresPositionStore) SaveNettingResult(runID string, result types.NettingResult) error {
 	id := fmt.Sprintf("net-%s-%s-%s", runID, result.ParticipantID, result.InstrumentID)
 	_, err := s.db.Exec(
-		`INSERT INTO clearing.netting_results
+		`INSERT INTO ace_clearing.netting_results
 			(id, run_id, participant_id, instrument_id, net_qty, net_value, gross_long_qty, gross_short_qty, obligations_count, netted_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		id,

@@ -23,7 +23,7 @@ func NewPostgresOnboardingStore(db *sql.DB) *PostgresOnboardingStore {
 // SaveApplication inserts or updates a KYC application.
 func (s *PostgresOnboardingStore) SaveApplication(app *types.KYCApplication) error {
 	query := `
-		INSERT INTO compliance.kyc_applications_v2 (
+		INSERT INTO ace_compliance.kyc_applications_v2 (
 			id, participant_id, participant_type, status, legal_name, trading_name,
 			nationality, registration_number, tax_id, email, phone, contact_person_name,
 			address_line1, address_line2, city, province, postal_code, country,
@@ -83,7 +83,7 @@ func (s *PostgresOnboardingStore) GetApplication(applicationID string) (*types.K
 			address_line1, address_line2, city, province, postal_code, country,
 			source_of_funds, risk_tier, assigned_officer_id, rejection_reason,
 			created_at, updated_at, approved_at, expires_at
-		FROM compliance.kyc_applications_v2
+		FROM ace_compliance.kyc_applications_v2
 		WHERE id = $1`
 
 	app := &types.KYCApplication{}
@@ -142,7 +142,7 @@ func (s *PostgresOnboardingStore) ListApplications(statusFilter types.KYCStatus,
 		limit = 50
 	}
 
-	query := `SELECT id FROM compliance.kyc_applications_v2 WHERE 1=1`
+	query := `SELECT id FROM ace_compliance.kyc_applications_v2 WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -182,7 +182,7 @@ func (s *PostgresOnboardingStore) ListApplications(statusFilter types.KYCStatus,
 
 // GetApplicationByParticipant retrieves the most recent application for a participant.
 func (s *PostgresOnboardingStore) GetApplicationByParticipant(participantID string) (*types.KYCApplication, error) {
-	query := `SELECT id FROM compliance.kyc_applications_v2 WHERE participant_id = $1 ORDER BY created_at DESC LIMIT 1`
+	query := `SELECT id FROM ace_compliance.kyc_applications_v2 WHERE participant_id = $1 ORDER BY created_at DESC LIMIT 1`
 	var id string
 	err := s.db.QueryRow(query, participantID).Scan(&id)
 	if err == sql.ErrNoRows {
@@ -197,7 +197,7 @@ func (s *PostgresOnboardingStore) GetApplicationByParticipant(participantID stri
 // SaveDocument inserts or updates a document.
 func (s *PostgresOnboardingStore) SaveDocument(doc *types.Document) error {
 	query := `
-		INSERT INTO compliance.documents_v2 (
+		INSERT INTO ace_compliance.documents_v2 (
 			id, application_id, doc_type, status, filename, content_type,
 			storage_key, file_size_bytes, verification_notes,
 			uploaded_at, verified_at, expires_at
@@ -223,7 +223,7 @@ func (s *PostgresOnboardingStore) GetDocument(documentID string) (*types.Documen
 		SELECT id, application_id, doc_type, status, filename, content_type,
 			storage_key, file_size_bytes, verification_notes,
 			uploaded_at, verified_at, expires_at
-		FROM compliance.documents_v2
+		FROM ace_compliance.documents_v2
 		WHERE id = $1`
 
 	doc := &types.Document{}
@@ -258,7 +258,7 @@ func (s *PostgresOnboardingStore) ListDocuments(applicationID string) ([]*types.
 		SELECT id, application_id, doc_type, status, filename, content_type,
 			storage_key, file_size_bytes, verification_notes,
 			uploaded_at, verified_at, expires_at
-		FROM compliance.documents_v2
+		FROM ace_compliance.documents_v2
 		WHERE application_id = $1
 		ORDER BY uploaded_at`
 
@@ -307,7 +307,7 @@ func NewPostgresScreeningStore(db *sql.DB) *PostgresScreeningStore {
 // SaveScreeningResult inserts or updates a screening result.
 func (s *PostgresScreeningStore) SaveScreeningResult(result *types.ScreeningResult) error {
 	query := `
-		INSERT INTO compliance.screening_results_v2 (
+		INSERT INTO ace_compliance.screening_results_v2 (
 			id, application_id, participant_id, outcome, provider, list_versions, screened_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (id) DO UPDATE SET
@@ -326,7 +326,7 @@ func (s *PostgresScreeningStore) SaveScreeningResult(result *types.ScreeningResu
 func (s *PostgresScreeningStore) GetScreeningResult(screeningID string) (*types.ScreeningResult, error) {
 	query := `
 		SELECT id, application_id, participant_id, outcome, provider, list_versions, screened_at
-		FROM compliance.screening_results_v2
+		FROM ace_compliance.screening_results_v2
 		WHERE id = $1`
 
 	r := &types.ScreeningResult{}
@@ -358,7 +358,7 @@ func (s *PostgresScreeningStore) GetScreeningResult(screeningID string) (*types.
 
 // GetLatestScreening retrieves the most recent screening for a participant.
 func (s *PostgresScreeningStore) GetLatestScreening(participantID string) (*types.ScreeningResult, error) {
-	query := `SELECT id FROM compliance.screening_results_v2 WHERE participant_id = $1 ORDER BY screened_at DESC LIMIT 1`
+	query := `SELECT id FROM ace_compliance.screening_results_v2 WHERE participant_id = $1 ORDER BY screened_at DESC LIMIT 1`
 	var id string
 	err := s.db.QueryRow(query, participantID).Scan(&id)
 	if err == sql.ErrNoRows {
@@ -373,7 +373,7 @@ func (s *PostgresScreeningStore) GetLatestScreening(participantID string) (*type
 // SaveMatch inserts or updates a screening match.
 func (s *PostgresScreeningStore) SaveMatch(match *types.ScreeningMatch) error {
 	query := `
-		INSERT INTO compliance.screening_matches_v2 (
+		INSERT INTO ace_compliance.screening_matches_v2 (
 			id, screening_id, matched_name, matched_entity_id, list_source,
 			match_type, match_score, resolved, is_true_match,
 			resolved_by, resolution_notes, resolved_at
@@ -401,7 +401,7 @@ func (s *PostgresScreeningStore) GetMatch(matchID string) (*types.ScreeningMatch
 		SELECT id, screening_id, matched_name, matched_entity_id, list_source,
 			match_type, match_score, resolved, is_true_match,
 			resolved_by, resolution_notes, resolved_at
-		FROM compliance.screening_matches_v2
+		FROM ace_compliance.screening_matches_v2
 		WHERE id = $1`
 
 	m := &types.ScreeningMatch{}
@@ -432,7 +432,7 @@ func (s *PostgresScreeningStore) GetMatch(matchID string) (*types.ScreeningMatch
 // SaveRiskScore inserts a risk score.
 func (s *PostgresScreeningStore) SaveRiskScore(score *types.RiskScore) error {
 	query := `
-		INSERT INTO compliance.risk_scores_v2 (
+		INSERT INTO ace_compliance.risk_scores_v2 (
 			id, participant_id, overall_score, risk_tier, model_version,
 			participant_type_score, country_risk_score, screening_result_score,
 			transaction_profile_score, source_of_funds_score, document_quality_score,
@@ -457,7 +457,7 @@ func (s *PostgresScreeningStore) GetLatestRiskScore(participantID string) (*type
 			participant_type_score, country_risk_score, screening_result_score,
 			transaction_profile_score, source_of_funds_score, document_quality_score,
 			computed_at, next_review_at
-		FROM compliance.risk_scores_v2
+		FROM ace_compliance.risk_scores_v2
 		WHERE participant_id = $1
 		ORDER BY computed_at DESC
 		LIMIT 1`
@@ -483,7 +483,7 @@ func (s *PostgresScreeningStore) GetLatestRiskScore(participantID string) (*type
 // SaveAlert inserts or updates a monitoring alert.
 func (s *PostgresScreeningStore) SaveAlert(alert *types.MonitoringAlert) error {
 	query := `
-		INSERT INTO compliance.alerts_v2 (
+		INSERT INTO ace_compliance.alerts_v2 (
 			id, participant_id, rule_id, status, description, details,
 			resolved_by, resolution_notes, created_at, resolved_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -507,7 +507,7 @@ func (s *PostgresScreeningStore) GetAlert(alertID string) (*types.MonitoringAler
 	query := `
 		SELECT id, participant_id, rule_id, status, description, details,
 			resolved_by, resolution_notes, created_at, resolved_at
-		FROM compliance.alerts_v2
+		FROM ace_compliance.alerts_v2
 		WHERE id = $1`
 
 	a := &types.MonitoringAlert{}
@@ -543,7 +543,7 @@ func (s *PostgresScreeningStore) ListAlerts(statusFilter types.AlertStatus, part
 		limit = 50
 	}
 
-	query := `SELECT id FROM compliance.alerts_v2 WHERE 1=1`
+	query := `SELECT id FROM ace_compliance.alerts_v2 WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -584,7 +584,7 @@ func (s *PostgresScreeningStore) ListAlerts(statusFilter types.AlertStatus, part
 // SaveSARFiling inserts a SAR filing.
 func (s *PostgresScreeningStore) SaveSARFiling(sar *types.SARFiling) error {
 	query := `
-		INSERT INTO compliance.sar_filings_v2 (
+		INSERT INTO ace_compliance.sar_filings_v2 (
 			id, participant_id, alert_id, officer_id, narrative,
 			supporting_evidence, reference_number, filed_at, acknowledged_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -605,7 +605,7 @@ func (s *PostgresScreeningStore) loadMatches(screeningID string) ([]types.Screen
 		SELECT id, screening_id, matched_name, matched_entity_id, list_source,
 			match_type, match_score, resolved, is_true_match,
 			resolved_by, resolution_notes, resolved_at
-		FROM compliance.screening_matches_v2
+		FROM ace_compliance.screening_matches_v2
 		WHERE screening_id = $1`
 
 	rows, err := s.db.Query(query, screeningID)

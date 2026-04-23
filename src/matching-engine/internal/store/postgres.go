@@ -186,7 +186,7 @@ func (s *PostgresTradeStore) batchInsertTrades(trades []types.Trade) error {
 
 	// Build batch INSERT with VALUES clauses
 	var b strings.Builder
-	b.WriteString(`INSERT INTO exchange.trades (id, instrument_id, buy_order_id, sell_order_id, price, quantity, buyer_id, seller_id, aggressor_side, traded_at) VALUES `)
+	b.WriteString(`INSERT INTO ace_exchange.trades (id, instrument_id, buy_order_id, sell_order_id, price, quantity, buyer_id, seller_id, aggressor_side, traded_at) VALUES `)
 
 	args := make([]interface{}, 0, len(trades)*10)
 	for i, t := range trades {
@@ -233,7 +233,7 @@ func (s *PostgresTradeStore) batchInsertExecReports(reports []types.ExecutionRep
 	defer cancel()
 
 	var b strings.Builder
-	b.WriteString(`INSERT INTO exchange.matching_execution_reports (id, order_id, trade_id, exec_type, status, price, quantity, leaves_qty, cum_qty, created_at) VALUES `)
+	b.WriteString(`INSERT INTO ace_exchange.matching_execution_reports (id, order_id, trade_id, exec_type, status, price, quantity, leaves_qty, cum_qty, created_at) VALUES `)
 
 	args := make([]interface{}, 0, len(reports)*10)
 	for i, r := range reports {

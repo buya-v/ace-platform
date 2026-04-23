@@ -27,7 +27,7 @@ func (s *PGTradeStore) Append(trade types.Trade) {
 	defer cancel()
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO market_data.trades
+		`INSERT INTO ace_market_data.trades
 			(id, instrument_id, price, quantity, trade_value, aggressor_side, trade_type, sequence_number, traded_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (traded_at, id) DO NOTHING`,
@@ -56,7 +56,7 @@ func (s *PGTradeStore) LastN(instrumentID string, n int) []types.Trade {
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, instrument_id, price, quantity, trade_value, aggressor_side, trade_type, sequence_number, traded_at
-		FROM market_data.trades
+		FROM ace_market_data.trades
 		WHERE instrument_id = $1
 		ORDER BY traded_at DESC, sequence_number DESC
 		LIMIT $2`,
@@ -77,7 +77,7 @@ func (s *PGTradeStore) SinceSequence(instrumentID string, sinceSequence uint64) 
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, instrument_id, price, quantity, trade_value, aggressor_side, trade_type, sequence_number, traded_at
-		FROM market_data.trades
+		FROM ace_market_data.trades
 		WHERE instrument_id = $1 AND sequence_number > $2
 		ORDER BY sequence_number ASC`,
 		instrumentID, sinceSequence,
@@ -100,7 +100,7 @@ func (s *PGTradeStore) InTimeRange(instrumentID string, start, end time.Time, li
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, instrument_id, price, quantity, trade_value, aggressor_side, trade_type, sequence_number, traded_at
-		FROM market_data.trades
+		FROM ace_market_data.trades
 		WHERE instrument_id = $1 AND traded_at >= $2 AND traded_at < $3
 		ORDER BY traded_at ASC
 		LIMIT $4`,
@@ -121,7 +121,7 @@ func (s *PGTradeStore) LastTrade(instrumentID string) (types.Trade, bool) {
 
 	row := s.db.QueryRowContext(ctx,
 		`SELECT id, instrument_id, price, quantity, trade_value, aggressor_side, trade_type, sequence_number, traded_at
-		FROM market_data.trades
+		FROM ace_market_data.trades
 		WHERE instrument_id = $1
 		ORDER BY traded_at DESC, sequence_number DESC
 		LIMIT 1`,
@@ -153,7 +153,7 @@ func (s *PGTradeStore) AllInstruments() []string {
 	defer cancel()
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT DISTINCT instrument_id FROM market_data.trades ORDER BY instrument_id`)
+		`SELECT DISTINCT instrument_id FROM ace_market_data.trades ORDER BY instrument_id`)
 	if err != nil {
 		log.Printf("ERROR: PGTradeStore.AllInstruments: %v", err)
 		return nil
@@ -178,7 +178,7 @@ func (s *PGTradeStore) Len(instrumentID string) int {
 
 	var count int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM market_data.trades WHERE instrument_id = $1`,
+		`SELECT COUNT(*) FROM ace_market_data.trades WHERE instrument_id = $1`,
 		instrumentID,
 	).Scan(&count)
 	if err != nil {
@@ -206,7 +206,7 @@ func (s *PGCandleStore) Store(c types.Candle) {
 	defer cancel()
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO market_data.candles
+		`INSERT INTO ace_market_data.candles
 			(instrument_id, interval, bucket, open, high, low, close, volume, trade_count, vwap, turnover)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (instrument_id, interval, bucket) DO UPDATE SET
@@ -245,7 +245,7 @@ func (s *PGCandleStore) Query(instrumentID string, interval types.CandleInterval
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT instrument_id, interval, bucket, open, high, low, close, volume, trade_count, vwap, turnover
-		FROM market_data.candles
+		FROM ace_market_data.candles
 		WHERE instrument_id = $1 AND interval = $2 AND bucket >= $3 AND bucket < $4
 		ORDER BY bucket ASC
 		LIMIT $5`,
@@ -265,7 +265,7 @@ func (s *PGCandleStore) DeleteBefore(interval types.CandleInterval, before time.
 	defer cancel()
 
 	result, err := s.db.ExecContext(ctx,
-		`DELETE FROM market_data.candles WHERE interval = $1 AND bucket < $2`,
+		`DELETE FROM ace_market_data.candles WHERE interval = $1 AND bucket < $2`,
 		interval.String(), before,
 	)
 	if err != nil {
@@ -294,7 +294,7 @@ func (s *PGTickerStore) Upsert(t types.Ticker) {
 	defer cancel()
 
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO market_data.tickers
+		`INSERT INTO ace_market_data.tickers
 			(instrument_id, symbol, last_price, bid, ask, volume_24h, turnover_24h, high_24h, low_24h, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
 		ON CONFLICT (instrument_id) DO UPDATE SET
@@ -334,7 +334,7 @@ func (s *PGTickerStore) Get(instrumentID string) (types.Ticker, bool) {
 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT instrument_id, symbol, last_price, bid, ask, volume_24h, turnover_24h, high_24h, low_24h, updated_at
-		FROM market_data.tickers
+		FROM ace_market_data.tickers
 		WHERE instrument_id = $1`,
 		instrumentID,
 	).Scan(&t.InstrumentID, &symbol, &lastPrice, &bid, &ask,
@@ -369,7 +369,7 @@ func (s *PGTickerStore) GetAll(instrumentIDs []string) []types.Ticker {
 	if len(instrumentIDs) == 0 {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT instrument_id, symbol, last_price, bid, ask, volume_24h, turnover_24h, high_24h, low_24h, updated_at
-			FROM market_data.tickers
+			FROM ace_market_data.tickers
 			ORDER BY instrument_id`)
 	} else {
 		placeholders := make([]string, len(instrumentIDs))
@@ -381,7 +381,7 @@ func (s *PGTickerStore) GetAll(instrumentIDs []string) []types.Ticker {
 		rows, err = s.db.QueryContext(ctx,
 			fmt.Sprintf(
 				`SELECT instrument_id, symbol, last_price, bid, ask, volume_24h, turnover_24h, high_24h, low_24h, updated_at
-				FROM market_data.tickers
+				FROM ace_market_data.tickers
 				WHERE instrument_id IN (%s)
 				ORDER BY instrument_id`,
 				strings.Join(placeholders, ","),

@@ -69,7 +69,7 @@ func (p *PostgresStore) CreateFacility(f *types.Facility) error {
 
 	var id string
 	err := p.db.QueryRow(`
-		INSERT INTO warehouse.facilities
+		INSERT INTO ace_warehouse.facilities
 			(facility_code, name, operator_id, license_number, license_expiry,
 			 address, latitude, longitude, region, total_capacity, capacity_unit, status,
 			 created_at, updated_at)
@@ -88,7 +88,7 @@ func (p *PostgresStore) CreateFacility(f *types.Facility) error {
 	// Insert approved commodity associations
 	for _, cid := range f.ApprovedCommodityIDs {
 		_, err := p.db.Exec(`
-			INSERT INTO warehouse.facility_commodities (facility_id, commodity_id)
+			INSERT INTO ace_warehouse.facility_commodities (facility_id, commodity_id)
 			VALUES ($1, $2) ON CONFLICT DO NOTHING`, id, cid)
 		if err != nil {
 			return fmt.Errorf("insert facility commodity: %w", err)
@@ -105,7 +105,7 @@ func (p *PostgresStore) GetFacility(facilityID string) (*types.Facility, error) 
 		SELECT facility_id, facility_code, name, operator_id, license_number,
 		       license_expiry, address, latitude, longitude, region,
 		       total_capacity, capacity_unit, status, created_at, updated_at
-		FROM warehouse.facilities WHERE facility_id = $1`, facilityID,
+		FROM ace_warehouse.facilities WHERE facility_id = $1`, facilityID,
 	).Scan(
 		&f.FacilityID, &f.FacilityCode, &f.Name, &f.OperatorID, &f.LicenseNumber,
 		&expiry, &f.Address, &latStr, &lonStr, &f.Region,
@@ -125,7 +125,7 @@ func (p *PostgresStore) GetFacility(facilityID string) (*types.Facility, error) 
 
 	// Load approved commodities
 	rows, err := p.db.Query(
-		`SELECT commodity_id FROM warehouse.facility_commodities WHERE facility_id = $1`, facilityID)
+		`SELECT commodity_id FROM ace_warehouse.facility_commodities WHERE facility_id = $1`, facilityID)
 	if err != nil {
 		return nil, fmt.Errorf("get facility commodities: %w", err)
 	}
@@ -143,7 +143,7 @@ func (p *PostgresStore) GetFacility(facilityID string) (*types.Facility, error) 
 func (p *PostgresStore) UpdateFacility(f *types.Facility) error {
 	f.UpdatedAt = time.Now().UTC()
 	res, err := p.db.Exec(`
-		UPDATE warehouse.facilities SET
+		UPDATE ace_warehouse.facilities SET
 			name=$2, license_number=$3, license_expiry=$4, address=$5,
 			latitude=$6, longitude=$7, region=$8, total_capacity=$9,
 			capacity_unit=$10, status=$11, updated_at=$12
@@ -162,9 +162,9 @@ func (p *PostgresStore) UpdateFacility(f *types.Facility) error {
 	}
 
 	// Replace commodity associations
-	_, _ = p.db.Exec(`DELETE FROM warehouse.facility_commodities WHERE facility_id = $1`, f.FacilityID)
+	_, _ = p.db.Exec(`DELETE FROM ace_warehouse.facility_commodities WHERE facility_id = $1`, f.FacilityID)
 	for _, cid := range f.ApprovedCommodityIDs {
-		_, _ = p.db.Exec(`INSERT INTO warehouse.facility_commodities (facility_id, commodity_id)
+		_, _ = p.db.Exec(`INSERT INTO ace_warehouse.facility_commodities (facility_id, commodity_id)
 			VALUES ($1, $2) ON CONFLICT DO NOTHING`, f.FacilityID, cid)
 	}
 	return nil
@@ -174,7 +174,7 @@ func (p *PostgresStore) ListFacilities(region string, status types.FacilityStatu
 	query := `SELECT facility_id, facility_code, name, operator_id, license_number,
 		       license_expiry, address, latitude, longitude, region,
 		       total_capacity, capacity_unit, status, created_at, updated_at
-		FROM warehouse.facilities WHERE 1=1`
+		FROM ace_warehouse.facilities WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
 
@@ -224,7 +224,7 @@ func (p *PostgresStore) CreateInspection(insp *types.Inspection) error {
 	// Verify facility exists
 	var exists bool
 	err := p.db.QueryRow(
-		`SELECT EXISTS(SELECT 1 FROM warehouse.facilities WHERE facility_id=$1)`,
+		`SELECT EXISTS(SELECT 1 FROM ace_warehouse.facilities WHERE facility_id=$1)`,
 		insp.FacilityID).Scan(&exists)
 	if err != nil {
 		return err
@@ -239,7 +239,7 @@ func (p *PostgresStore) CreateInspection(insp *types.Inspection) error {
 
 	var id string
 	err = p.db.QueryRow(`
-		INSERT INTO warehouse.inspections
+		INSERT INTO ace_warehouse.inspections
 			(facility_id, commodity_id, lot_number, inspector_id, inspection_type,
 			 status, scheduled_date, completed_date,
 			 gross_weight, net_weight, moisture_pct, foreign_matter_pct,
@@ -296,7 +296,7 @@ func (p *PostgresStore) GetInspection(inspectionID string) (*types.Inspection, e
 		       gross_weight, net_weight, moisture_pct, foreign_matter_pct,
 		       protein_pct, test_weight, grade_assigned, defects, notes,
 		       certificate_number, created_at, updated_at
-		FROM warehouse.inspections WHERE inspection_id = $1`, inspectionID,
+		FROM ace_warehouse.inspections WHERE inspection_id = $1`, inspectionID,
 	).Scan(
 		&insp.InspectionID, &insp.FacilityID, &insp.CommodityID, &insp.LotNumber,
 		&insp.InspectorID, &inspType, &status, &insp.ScheduledDate,
@@ -330,7 +330,7 @@ func (p *PostgresStore) GetInspection(inspectionID string) (*types.Inspection, e
 func (p *PostgresStore) UpdateInspection(insp *types.Inspection) error {
 	insp.UpdatedAt = time.Now().UTC()
 	res, err := p.db.Exec(`
-		UPDATE warehouse.inspections SET
+		UPDATE ace_warehouse.inspections SET
 			status=$2, completed_date=$3,
 			gross_weight=$4, net_weight=$5, moisture_pct=$6, foreign_matter_pct=$7,
 			protein_pct=$8, test_weight=$9, grade_assigned=$10, defects=$11,
@@ -366,7 +366,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 	// Check lot uniqueness among active receipts
 	var existingID string
 	err = tx.QueryRow(`
-		SELECT receipt_id FROM warehouse.receipts
+		SELECT receipt_id FROM ace_warehouse.receipts
 		WHERE facility_id=$1 AND commodity_id=$2 AND lot_number=$3
 		  AND status IN ('ACTIVE','PLEDGED','DELIVERY_PENDING')
 		LIMIT 1`, r.FacilityID, r.CommodityID, r.LotNumber,
@@ -383,7 +383,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 	var facStatus string
 	var totalCapStr string
 	err = tx.QueryRow(`
-		SELECT status, total_capacity FROM warehouse.facilities WHERE facility_id=$1`,
+		SELECT status, total_capacity FROM ace_warehouse.facilities WHERE facility_id=$1`,
 		r.FacilityID).Scan(&facStatus, &totalCapStr)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("facility %s not found", r.FacilityID)
@@ -399,7 +399,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 	totalCap := scanDecimal(totalCapStr)
 	var usedCapStr sql.NullString
 	err = tx.QueryRow(`
-		SELECT COALESCE(SUM(quantity), '0') FROM warehouse.receipts
+		SELECT COALESCE(SUM(quantity), '0') FROM ace_warehouse.receipts
 		WHERE facility_id=$1 AND status IN ('ACTIVE','PLEDGED','DELIVERY_PENDING')`,
 		r.FacilityID).Scan(&usedCapStr)
 	if err != nil {
@@ -423,7 +423,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 
 	var id string
 	err = tx.QueryRow(`
-		INSERT INTO warehouse.receipts
+		INSERT INTO ace_warehouse.receipts
 			(facility_id, holder_id, commodity_id, grade, quantity, gross_quantity,
 			 unit, lot_number, storage_location, harvest_year, inspection_id,
 			 status, pledged_to, issued_at, expires_at, created_at, updated_at)
@@ -442,7 +442,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 
 	// Record ISSUED receipt event
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, to_holder_id, created_at)
 		VALUES ($1, 'ISSUED', $2, $3)`, id, r.HolderID, now)
 	if err != nil {
@@ -451,7 +451,7 @@ func (p *PostgresStore) CreateReceipt(r *types.Receipt) error {
 
 	// Record inventory deposit
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.inventory_events
+		INSERT INTO ace_warehouse.inventory_events
 			(facility_id, commodity_id, lot_number, event_type, quantity,
 			 reference_id, reference_type, created_by, created_at)
 		VALUES ($1,$2,$3,'DEPOSIT',$4,$5,'RECEIPT',$6,$7)`,
@@ -499,7 +499,7 @@ const receiptCols = `receipt_id, receipt_number, facility_id, holder_id, commodi
 
 func (p *PostgresStore) GetReceipt(receiptID string) (*types.Receipt, error) {
 	row := p.db.QueryRow(
-		`SELECT `+receiptCols+` FROM warehouse.receipts WHERE receipt_id = $1`, receiptID)
+		`SELECT `+receiptCols+` FROM ace_warehouse.receipts WHERE receipt_id = $1`, receiptID)
 	r, err := p.scanReceipt(row)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("receipt %s not found", receiptID)
@@ -511,7 +511,7 @@ func (p *PostgresStore) GetReceipt(receiptID string) (*types.Receipt, error) {
 }
 
 func (p *PostgresStore) ListReceipts(holderID, facilityID, commodityID string, status types.ReceiptStatus) []*types.Receipt {
-	query := `SELECT ` + receiptCols + ` FROM warehouse.receipts WHERE 1=1`
+	query := `SELECT ` + receiptCols + ` FROM ace_warehouse.receipts WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
 
@@ -564,7 +564,7 @@ func (p *PostgresStore) TransferReceipt(receiptID, newHolderID string) (*types.R
 	// Load current receipt
 	var oldHolder, status string
 	err = tx.QueryRow(
-		`SELECT holder_id, status FROM warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
+		`SELECT holder_id, status FROM ace_warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
 		receiptID).Scan(&oldHolder, &status)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("receipt %s not found", receiptID)
@@ -578,14 +578,14 @@ func (p *PostgresStore) TransferReceipt(receiptID, newHolderID string) (*types.R
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(`
-		UPDATE warehouse.receipts SET holder_id=$2, updated_at=$3 WHERE receipt_id=$1`,
+		UPDATE ace_warehouse.receipts SET holder_id=$2, updated_at=$3 WHERE receipt_id=$1`,
 		receiptID, newHolderID, now)
 	if err != nil {
 		return nil, err
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, from_holder_id, to_holder_id, created_at)
 		VALUES ($1, 'TRANSFERRED', $2, $3, $4)`,
 		receiptID, oldHolder, newHolderID, now)
@@ -610,7 +610,7 @@ func (p *PostgresStore) CancelReceipt(receiptID, reason string) (*types.Receipt,
 	var qtyStr string
 	err = tx.QueryRow(`
 		SELECT status, facility_id, commodity_id, lot_number, holder_id, quantity
-		FROM warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
+		FROM ace_warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
 		receiptID).Scan(&status, &facilityID, &commodityID, &lotNumber, &holderID, &qtyStr)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("receipt %s not found", receiptID)
@@ -624,7 +624,7 @@ func (p *PostgresStore) CancelReceipt(receiptID, reason string) (*types.Receipt,
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(`
-		UPDATE warehouse.receipts SET status='CANCELLED', cancelled_at=$2, updated_at=$2
+		UPDATE ace_warehouse.receipts SET status='CANCELLED', cancelled_at=$2, updated_at=$2
 		WHERE receipt_id=$1`, receiptID, now)
 	if err != nil {
 		return nil, err
@@ -637,7 +637,7 @@ func (p *PostgresStore) CancelReceipt(receiptID, reason string) (*types.Receipt,
 		metaJSON = sql.NullString{String: string(b), Valid: true}
 	}
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, metadata, created_at)
 		VALUES ($1, 'CANCELLED', $2, $3)`,
 		receiptID, metaJSON, now)
@@ -649,7 +649,7 @@ func (p *PostgresStore) CancelReceipt(receiptID, reason string) (*types.Receipt,
 	qty := scanDecimal(qtyStr)
 	negQty := types.DecimalFromRaw(-qty.Raw())
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.inventory_events
+		INSERT INTO ace_warehouse.inventory_events
 			(facility_id, commodity_id, lot_number, event_type, quantity,
 			 reference_id, reference_type, created_by, created_at)
 		VALUES ($1,$2,$3,'WITHDRAWAL',$4,$5,'RECEIPT_CANCEL',$6,$7)`,
@@ -673,7 +673,7 @@ func (p *PostgresStore) PledgeReceipt(receiptID, clearingMemberID string) (*type
 	defer tx.Rollback()
 
 	var status string
-	err = tx.QueryRow(`SELECT status FROM warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
+	err = tx.QueryRow(`SELECT status FROM ace_warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
 		receiptID).Scan(&status)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("receipt %s not found", receiptID)
@@ -687,14 +687,14 @@ func (p *PostgresStore) PledgeReceipt(receiptID, clearingMemberID string) (*type
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(`
-		UPDATE warehouse.receipts SET status='PLEDGED', pledged_to=$2, updated_at=$3
+		UPDATE ace_warehouse.receipts SET status='PLEDGED', pledged_to=$2, updated_at=$3
 		WHERE receipt_id=$1`, receiptID, clearingMemberID, now)
 	if err != nil {
 		return nil, err
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, pledged_to, created_at)
 		VALUES ($1, 'PLEDGED', $2, $3)`,
 		receiptID, clearingMemberID, now)
@@ -716,7 +716,7 @@ func (p *PostgresStore) ReleaseReceipt(receiptID, clearingMemberID string) (*typ
 	defer tx.Rollback()
 
 	var status, pledgedTo string
-	err = tx.QueryRow(`SELECT status, COALESCE(pledged_to::text,'') FROM warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
+	err = tx.QueryRow(`SELECT status, COALESCE(pledged_to::text,'') FROM ace_warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
 		receiptID).Scan(&status, &pledgedTo)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("receipt %s not found", receiptID)
@@ -733,14 +733,14 @@ func (p *PostgresStore) ReleaseReceipt(receiptID, clearingMemberID string) (*typ
 
 	now := time.Now().UTC()
 	_, err = tx.Exec(`
-		UPDATE warehouse.receipts SET status='ACTIVE', pledged_to=NULL, updated_at=$2
+		UPDATE ace_warehouse.receipts SET status='ACTIVE', pledged_to=NULL, updated_at=$2
 		WHERE receipt_id=$1`, receiptID, now)
 	if err != nil {
 		return nil, err
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, pledged_to, created_at)
 		VALUES ($1, 'RELEASED', $2, $3)`,
 		receiptID, clearingMemberID, now)
@@ -768,7 +768,7 @@ func (p *PostgresStore) CreateDelivery(d *types.DeliveryInstruction) error {
 	var rQtyStr string
 	err = tx.QueryRow(`
 		SELECT status, holder_id, facility_id, quantity
-		FROM warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
+		FROM ace_warehouse.receipts WHERE receipt_id=$1 FOR UPDATE`,
 		d.ReceiptID).Scan(&rStatus, &rHolderID, &rFacilityID, &rQtyStr)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("receipt %s not found", d.ReceiptID)
@@ -784,7 +784,7 @@ func (p *PostgresStore) CreateDelivery(d *types.DeliveryInstruction) error {
 
 	// Mark receipt as delivery pending
 	_, err = tx.Exec(`
-		UPDATE warehouse.receipts SET status='DELIVERY_PENDING', updated_at=$2
+		UPDATE ace_warehouse.receipts SET status='DELIVERY_PENDING', updated_at=$2
 		WHERE receipt_id=$1`, d.ReceiptID, now)
 	if err != nil {
 		return err
@@ -804,7 +804,7 @@ func (p *PostgresStore) CreateDelivery(d *types.DeliveryInstruction) error {
 
 	var id string
 	err = tx.QueryRow(`
-		INSERT INTO warehouse.deliveries
+		INSERT INTO ace_warehouse.deliveries
 			(receipt_id, obligation_id, seller_id, buyer_id, delivery_type,
 			 facility_id, destination_id, quantity, scheduled_date, status,
 			 created_at, updated_at)
@@ -822,7 +822,7 @@ func (p *PostgresStore) CreateDelivery(d *types.DeliveryInstruction) error {
 
 	// Receipt event
 	_, err = tx.Exec(`
-		INSERT INTO warehouse.receipt_events
+		INSERT INTO ace_warehouse.receipt_events
 			(receipt_id, event_type, created_at)
 		VALUES ($1, 'DELIVERY_INITIATED', $2)`, d.ReceiptID, now)
 	if err != nil {
@@ -864,7 +864,7 @@ const deliveryCols = `delivery_id, receipt_id, obligation_id, seller_id, buyer_i
 
 func (p *PostgresStore) GetDelivery(deliveryID string) (*types.DeliveryInstruction, error) {
 	row := p.db.QueryRow(
-		`SELECT `+deliveryCols+` FROM warehouse.deliveries WHERE delivery_id = $1`, deliveryID)
+		`SELECT `+deliveryCols+` FROM ace_warehouse.deliveries WHERE delivery_id = $1`, deliveryID)
 	d, err := p.scanDelivery(row)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("delivery %s not found", deliveryID)
@@ -876,7 +876,7 @@ func (p *PostgresStore) GetDelivery(deliveryID string) (*types.DeliveryInstructi
 }
 
 func (p *PostgresStore) ListDeliveries(sellerID, buyerID string, status types.DeliveryStatus) []*types.DeliveryInstruction {
-	query := `SELECT ` + deliveryCols + ` FROM warehouse.deliveries WHERE 1=1`
+	query := `SELECT ` + deliveryCols + ` FROM ace_warehouse.deliveries WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
 
@@ -923,7 +923,7 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 
 	var dStatus, receiptID string
 	err = tx.QueryRow(`
-		SELECT status, receipt_id FROM warehouse.deliveries WHERE delivery_id=$1 FOR UPDATE`,
+		SELECT status, receipt_id FROM ace_warehouse.deliveries WHERE delivery_id=$1 FOR UPDATE`,
 		deliveryID).Scan(&dStatus, &receiptID)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("delivery %s not found", deliveryID)
@@ -939,8 +939,8 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 	var rFacilityID, rCommodityID, rLotNumber, rQtyStr, buyerID string
 	err = tx.QueryRow(`
 		SELECT r.facility_id, r.commodity_id, r.lot_number, r.quantity, d.buyer_id
-		FROM warehouse.receipts r
-		JOIN warehouse.deliveries d ON d.receipt_id = r.receipt_id
+		FROM ace_warehouse.receipts r
+		JOIN ace_warehouse.deliveries d ON d.receipt_id = r.receipt_id
 		WHERE d.delivery_id=$1`, deliveryID,
 	).Scan(&rFacilityID, &rCommodityID, &rLotNumber, &rQtyStr, &buyerID)
 	if err != nil {
@@ -951,21 +951,21 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 
 	if success {
 		_, err = tx.Exec(`
-			UPDATE warehouse.deliveries SET status='COMPLETED', completed_at=$2, updated_at=$2
+			UPDATE ace_warehouse.deliveries SET status='COMPLETED', completed_at=$2, updated_at=$2
 			WHERE delivery_id=$1`, deliveryID, now)
 		if err != nil {
 			return nil, err
 		}
 
 		_, err = tx.Exec(`
-			UPDATE warehouse.receipts SET status='DELIVERED', delivered_at=$2, updated_at=$2
+			UPDATE ace_warehouse.receipts SET status='DELIVERED', delivered_at=$2, updated_at=$2
 			WHERE receipt_id=$1`, receiptID, now)
 		if err != nil {
 			return nil, err
 		}
 
 		_, err = tx.Exec(`
-			INSERT INTO warehouse.receipt_events
+			INSERT INTO ace_warehouse.receipt_events
 				(receipt_id, event_type, created_at)
 			VALUES ($1, 'DELIVERED', $2)`, receiptID, now)
 		if err != nil {
@@ -976,7 +976,7 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 		qty := scanDecimal(rQtyStr)
 		negQty := types.DecimalFromRaw(-qty.Raw())
 		_, err = tx.Exec(`
-			INSERT INTO warehouse.inventory_events
+			INSERT INTO ace_warehouse.inventory_events
 				(facility_id, commodity_id, lot_number, event_type, quantity,
 				 reference_id, reference_type, created_by, created_at)
 			VALUES ($1,$2,$3,'WITHDRAWAL',$4,$5,'DELIVERY',$6,$7)`,
@@ -987,7 +987,7 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 		}
 	} else {
 		_, err = tx.Exec(`
-			UPDATE warehouse.deliveries SET status='FAILED', failure_reason=$2, completed_at=$3, updated_at=$3
+			UPDATE ace_warehouse.deliveries SET status='FAILED', failure_reason=$2, completed_at=$3, updated_at=$3
 			WHERE delivery_id=$1`, deliveryID, failureReason, now)
 		if err != nil {
 			return nil, err
@@ -995,7 +995,7 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 
 		// Revert receipt to active
 		_, err = tx.Exec(`
-			UPDATE warehouse.receipts SET status='ACTIVE', updated_at=$2
+			UPDATE ace_warehouse.receipts SET status='ACTIVE', updated_at=$2
 			WHERE receipt_id=$1`, receiptID, now)
 		if err != nil {
 			return nil, err
@@ -1012,7 +1012,7 @@ func (p *PostgresStore) CompleteDelivery(deliveryID string, success bool, failur
 
 func (p *PostgresStore) GetInventory(facilityID, commodityID string) ([]types.InventoryItem, types.Decimal) {
 	query := `SELECT facility_id, commodity_id, lot_number, current_quantity
-		FROM warehouse.current_inventory WHERE 1=1`
+		FROM ace_warehouse.current_inventory WHERE 1=1`
 	args := []interface{}{}
 	idx := 1
 
@@ -1053,14 +1053,14 @@ func (p *PostgresStore) GetFacilityCapacity(facilityID string) (*types.FacilityC
 	var totalCapStr, usedCapStr, availCapStr, unit string
 	err := p.db.QueryRow(`
 		SELECT total_capacity, used_capacity, available_capacity, capacity_unit
-		FROM warehouse.facility_utilization WHERE facility_id = $1`,
+		FROM ace_warehouse.facility_utilization WHERE facility_id = $1`,
 		facilityID).Scan(&totalCapStr, &usedCapStr, &availCapStr, &unit)
 	if err == sql.ErrNoRows {
 		// Facility might exist but have no utilization row if view returns nothing
 		// Fall back to checking facility directly
 		var facCapStr, facUnit string
 		err2 := p.db.QueryRow(`
-			SELECT total_capacity, capacity_unit FROM warehouse.facilities WHERE facility_id=$1`,
+			SELECT total_capacity, capacity_unit FROM ace_warehouse.facilities WHERE facility_id=$1`,
 			facilityID).Scan(&facCapStr, &facUnit)
 		if err2 == sql.ErrNoRows {
 			return nil, fmt.Errorf("facility %s not found", facilityID)
@@ -1095,7 +1095,7 @@ func (p *PostgresStore) GetReceiptEvents(receiptID string) []types.ReceiptEvent 
 		       COALESCE(from_holder_id::text, ''), COALESCE(to_holder_id::text, ''),
 		       COALESCE(pledged_to::text, ''), COALESCE(metadata::text, ''),
 		       created_at
-		FROM warehouse.receipt_events
+		FROM ace_warehouse.receipt_events
 		WHERE receipt_id = $1
 		ORDER BY created_at`, receiptID)
 	if err != nil {

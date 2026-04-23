@@ -1,11 +1,11 @@
 // Package store — PostgreSQL-backed implementations of InstrumentStore and OrderStore.
 //
 // Column mapping notes:
-//   - securities.instruments PK is "instrument_id" (maps to Instrument.ID)
-//   - securities.instruments "shares_outstanding" maps to Instrument.OutstandingShares
-//   - securities.orders "tif" maps to SecurityOrder.TimeInForce
-//   - securities.orders "filled_qty" maps to SecurityOrder.FilledQuantity
-//   - securities.orders status "NEW" maps to app-level OrderStatus "PENDING"
+//   - ace_securities.instruments PK is "instrument_id" (maps to Instrument.ID)
+//   - ace_securities.instruments "shares_outstanding" maps to Instrument.OutstandingShares
+//   - ace_securities.orders "tif" maps to SecurityOrder.TimeInForce
+//   - ace_securities.orders "filled_qty" maps to SecurityOrder.FilledQuantity
+//   - ace_securities.orders status "NEW" maps to app-level OrderStatus "PENDING"
 //     (the DB CHECK constraint uses NEW; the service domain uses PENDING)
 package store
 
@@ -61,7 +61,7 @@ func NewPgInstrumentStore(db *sql.DB) *PgInstrumentStore {
 // Create inserts a new instrument into the database.
 func (s *PgInstrumentStore) Create(instrument *types.Instrument) error {
 	_, err := s.db.Exec(`
-		INSERT INTO securities.instruments (
+		INSERT INTO ace_securities.instruments (
 			instrument_id, isin, cusip, sedol, ticker, name,
 			asset_class, exchange_code, lot_size, tick_size,
 			currency, listing_date, trading_status, shares_outstanding,
@@ -101,7 +101,7 @@ func (s *PgInstrumentStore) Get(id string) (*types.Instrument, error) {
 		       COALESCE(shares_outstanding, 0),
 		       TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		       TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-		FROM securities.instruments
+		FROM ace_securities.instruments
 		WHERE instrument_id = $1
 	`, id)
 
@@ -147,7 +147,7 @@ func (s *PgInstrumentStore) List(filters InstrumentFilters) ([]types.Instrument,
 		       COALESCE(shares_outstanding, 0),
 		       TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		       TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-		FROM securities.instruments
+		FROM ace_securities.instruments
 		WHERE 1=1`
 
 	var args []interface{}
@@ -249,7 +249,7 @@ func (s *PgInstrumentStore) Update(id string, partial InstrumentUpdate) error {
 
 	setClauses = append(setClauses, "updated_at = NOW()")
 	query := fmt.Sprintf(
-		"UPDATE securities.instruments SET %s WHERE instrument_id = $%s",
+		"UPDATE ace_securities.instruments SET %s WHERE instrument_id = $%s",
 		joinClauses(setClauses),
 		pgItoa(argIdx),
 	)
@@ -272,7 +272,7 @@ func (s *PgInstrumentStore) Update(id string, partial InstrumentUpdate) error {
 // UpdateStatus changes the trading_status of an instrument.
 func (s *PgInstrumentStore) UpdateStatus(id string, status types.TradingStatus) error {
 	result, err := s.db.Exec(`
-		UPDATE securities.instruments
+		UPDATE ace_securities.instruments
 		SET trading_status = $1, updated_at = NOW()
 		WHERE instrument_id = $2
 	`, string(status), id)
@@ -309,7 +309,7 @@ func (s *PgOrderStore) Submit(order *types.SecurityOrder) error {
 	// settlement_date is required by the DB schema; default to T+2 from created_at.
 	// We derive it from order.CreatedAt if set, otherwise use the DB's current date + 2 days.
 	_, err := s.db.Exec(`
-		INSERT INTO securities.orders (
+		INSERT INTO ace_securities.orders (
 			id, instrument_id, participant_id, account_id,
 			side, order_type, tif,
 			price, stop_price, quantity, filled_qty, remaining_qty,
@@ -347,7 +347,7 @@ func (s *PgOrderStore) Get(id string) (*types.SecurityOrder, error) {
 		       quantity, filled_qty, status,
 		       TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		       TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-		FROM securities.orders
+		FROM ace_securities.orders
 		WHERE id = $1
 	`, id)
 
@@ -389,7 +389,7 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 		       quantity, filled_qty, status,
 		       TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 		       TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-		FROM securities.orders
+		FROM ace_securities.orders
 		WHERE 1=1`
 
 	var args []interface{}
@@ -454,7 +454,7 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 func (s *PgOrderStore) Update(order *types.SecurityOrder) error {
 	dbStatus := pendingToDBStatus(order.Status)
 	result, err := s.db.Exec(`
-		UPDATE securities.orders
+		UPDATE ace_securities.orders
 		SET status = $1, filled_qty = $2, updated_at = NOW()
 		WHERE id = $3
 	`, dbStatus, order.FilledQuantity, order.ID)
@@ -476,7 +476,7 @@ func (s *PgOrderStore) Update(order *types.SecurityOrder) error {
 // Returns an error if the order does not exist or is not cancellable.
 func (s *PgOrderStore) Cancel(id string) error {
 	result, err := s.db.Exec(`
-		UPDATE securities.orders
+		UPDATE ace_securities.orders
 		SET status = 'CANCELLED', updated_at = NOW()
 		WHERE id = $1
 		  AND status IN ('NEW', 'PARTIALLY_FILLED')
@@ -492,7 +492,7 @@ func (s *PgOrderStore) Cancel(id string) error {
 		// Distinguish "not found" from "wrong state" by fetching the row.
 		var exists bool
 		err2 := s.db.QueryRow(
-			"SELECT EXISTS(SELECT 1 FROM securities.orders WHERE id = $1)", id,
+			"SELECT EXISTS(SELECT 1 FROM ace_securities.orders WHERE id = $1)", id,
 		).Scan(&exists)
 		if err2 != nil {
 			return err2

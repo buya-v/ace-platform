@@ -205,7 +205,7 @@ func (s *PgStore) ListTradesForParticipant(ctx context.Context, participantID, f
 	query := `
 		SELECT row_to_json(t) FROM (
 			SELECT trade_id, instrument_id, side, quantity, price, created_at
-			FROM exchange.trades
+			FROM ace_exchange.trades
 			WHERE (buyer_participant_id = $1 OR seller_participant_id = $1)
 	`
 	args := []interface{}{participantID}

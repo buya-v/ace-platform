@@ -168,7 +168,12 @@ func main() {
 		return r.RemoteAddr
 	}
 
-	// Build middleware chain: RequestID → Tracing → Metrics → BodyLimit → Auth → RateLimit → Router
+	// Build tenant middleware with the registered tenant whitelist.
+	// TenantMiddleware must run BEFORE auth so that tenant context is available
+	// to all downstream handlers. Health/metrics bypass paths are exempt.
+	tenantMW := middleware.TenantMiddleware([]string{"ace-commodities", "mse-equities"})
+
+	// Build middleware chain: RequestID → Tracing → Metrics → BodyLimit → Tenant → Auth → RateLimit → Router
 	var httpHandler http.Handler = rt
 	if cfg.RateLimitEnabled {
 		if cfg.RedisURL != "" {
@@ -186,6 +191,7 @@ func main() {
 		}
 	}
 	httpHandler = middleware.Auth(jwtValidator, authCfg)(httpHandler)
+	httpHandler = tenantMW(httpHandler)
 	httpHandler = middleware.BodyLimit(cfg.MaxBodySize)(httpHandler)
 	httpHandler = metrics.MetricsMiddleware()(httpHandler)
 	httpHandler = observability.TracingMiddleware(logger)(httpHandler)

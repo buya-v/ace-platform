@@ -182,7 +182,7 @@ func (s *PgStore) ListCommodities(ctx context.Context) ([]Commodity, error) {
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, category, unit, grade_specs, created_at
-		FROM reference.commodities
+		FROM ace_reference.commodities
 		ORDER BY category, name
 	`)
 	if err != nil {
@@ -228,7 +228,7 @@ func (s *PgStore) ListInstruments(ctx context.Context, status string) ([]Instrum
 			       currency, trading_hours, first_trade_date::TEXT, last_trade_date::TEXT,
 			       delivery_start::TEXT, delivery_end::TEXT,
 			       settlement_type, status, created_at::TEXT, updated_at::TEXT
-			FROM reference.instruments
+			FROM ace_reference.instruments
 			WHERE status = $1
 			ORDER BY commodity_id, delivery_year, delivery_month
 		`, status)
@@ -239,7 +239,7 @@ func (s *PgStore) ListInstruments(ctx context.Context, status string) ([]Instrum
 			       currency, trading_hours, first_trade_date::TEXT, last_trade_date::TEXT,
 			       delivery_start::TEXT, delivery_end::TEXT,
 			       settlement_type, status, created_at::TEXT, updated_at::TEXT
-			FROM reference.instruments
+			FROM ace_reference.instruments
 			ORDER BY commodity_id, delivery_year, delivery_month
 		`)
 	}
@@ -277,7 +277,7 @@ func (s *PgStore) CreateInstrument(ctx context.Context, input InstrumentInput) (
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339)
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO reference.instruments
+		INSERT INTO ace_reference.instruments
 		  (id, commodity_id, name, delivery_month, delivery_year,
 		   contract_size, tick_size, currency, settlement_type, status)
 		VALUES ($1, $2, $3, $4, $5, $6::NUMERIC, $7::NUMERIC, $8, $9, 'active')
@@ -326,7 +326,7 @@ func (s *PgStore) UpdateInstrument(ctx context.Context, id string, updates map[s
 	setClauses = append(setClauses, fmt.Sprintf("updated_at = NOW()"))
 	args = append(args, id)
 	query := fmt.Sprintf(
-		"UPDATE reference.instruments SET %s WHERE id = $%d",
+		"UPDATE ace_reference.instruments SET %s WHERE id = $%d",
 		joinStrings(setClauses, ", "), argIdx,
 	)
 	result, err := s.db.ExecContext(ctx, query, args...)
@@ -349,7 +349,7 @@ func (s *PgStore) GetInstrumentByID(ctx context.Context, id string) (*Instrument
 		       currency, trading_hours, first_trade_date::TEXT, last_trade_date::TEXT,
 		       delivery_start::TEXT, delivery_end::TEXT,
 		       settlement_type, status, created_at::TEXT, updated_at::TEXT
-		FROM reference.instruments WHERE id = $1
+		FROM ace_reference.instruments WHERE id = $1
 	`, id).Scan(
 		&inst.ID, &inst.CommodityID, &inst.Name,
 		&inst.DeliveryMonth, &inst.DeliveryYear,
@@ -374,7 +374,7 @@ func (s *PgStore) CreateCommodity(ctx context.Context, input CommodityInput) (*C
 	}
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO reference.commodities (id, name, category, unit)
+		INSERT INTO ace_reference.commodities (id, name, category, unit)
 		VALUES ($1, $2, $3, $4)
 	`, input.ID, input.Name, input.Category, input.Unit)
 	if err != nil {
@@ -488,7 +488,7 @@ func (s *PgStore) GetInstrument(ctx context.Context, id string) (*InstrumentDeta
 		       currency, trading_hours, first_trade_date::TEXT, last_trade_date::TEXT,
 		       delivery_start::TEXT, delivery_end::TEXT,
 		       settlement_type, status, created_at::TEXT, updated_at::TEXT
-		FROM reference.instruments
+		FROM ace_reference.instruments
 		WHERE id = $1
 	`, id).Scan(
 		&detail.ID, &detail.CommodityID, &detail.Name,
@@ -512,7 +512,7 @@ func (s *PgStore) GetInstrument(ctx context.Context, id string) (*InstrumentDeta
 	var gradeSpecs sql.NullString
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id, name, category, unit, grade_specs, created_at
-		FROM reference.commodities
+		FROM ace_reference.commodities
 		WHERE id = $1
 	`, detail.CommodityID).Scan(&c.ID, &c.Name, &c.Category, &c.Unit, &gradeSpecs, &c.CreatedAt)
 	if err == nil {
