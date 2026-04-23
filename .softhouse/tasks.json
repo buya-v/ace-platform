@@ -1,7 +1,56 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-control-plane",
+  "feature": "Platform Control Plane",
+  "requirement": "Phase 0.7: platform-service, tenant registry CRUD, provisioning workflow, platform-admin UI",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Platform-service scaffold + tenant registry CRUD",
+      "description": "Create the platform-service Go microservice and implement tenant registry CRUD.\n\nFollow the securities-service pattern (src/securities-service/) for structure.\n\nScaffold:\n- src/platform-service/go.mod (github.com/garudax-platform/platform-service, go 1.25.0)\n- src/platform-service/cmd/platform-service/main.go — HTTP on port 8090, health on 9090\n- src/platform-service/Dockerfile\n- src/platform-service/internal/types/types.go — Tenant struct matching platform.tenants columns: ID, Name, Status (ACTIVE/SUSPENDED/ONBOARDING/DECOMMISSIONED), Flagship bool, GovernanceTier, OnboardingMetadata map[string]interface{}, CreatedAt, UpdatedAt — all json tags\n- src/platform-service/internal/store/store.go — TenantStore interface: List() []Tenant, Get(id) (*Tenant, error), Create(*Tenant) error, Update(id, partial) error, UpdateStatus(id, status) error. InMemoryTenantStore seeded with ace-commodities (ACTIVE) and mse-equities (ONBOARDING, flagship=true)\n- src/platform-service/internal/server/server.go — health endpoints, route registration\n\nHandlers (in server/handlers.go):\n- GET /platform/v1/tenants — list all tenants\n- GET /platform/v1/tenants/{id} — get by ID, 404 if not found\n- POST /platform/v1/tenants — create tenant (validate: id slug format, name required, status defaults to ONBOARDING)\n- PATCH /platform/v1/tenants/{id} — update name, governance_tier\n- PUT /platform/v1/tenants/{id}/status — change status (activate/suspend/decommission)\n\nNote: This is the PLATFORM admin API — separate from tenant APIs at /api/v1/*. No tenant middleware needed (this IS the platform).\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/platform-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/platform-service/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Tenant provisioning workflow + docker-compose + gateway",
+      "description": "Add tenant provisioning logic and wire platform-service into the stack.\n\nPart A — Provisioning workflow in src/platform-service/internal/provisioning/provisioner.go:\n- Provisioner struct with db *sql.DB (nullable for in-memory mode)\n- ProvisionTenant(tenant *Tenant) (*ProvisionResult, error):\n  1. Create tenant DB schemas: {tenant_id}_reference, {tenant_id}_exchange, etc. (8 schemas)\n  2. Log Kafka topic prefixes to create: {tenant_id}.trades.*, {tenant_id}.clearing.*, etc.\n  3. Create config entry in a tenant config store\n  4. Return ProvisionResult{SchemasCreated []string, TopicPrefixes []string, Status string}\n- For MVP: schemas are CREATE SCHEMA IF NOT EXISTS via SQL. If no DB, return a dry-run result listing what WOULD be created.\n- DeprovisionTenant(tenantID string) error — marks schemas for cleanup (does not DROP)\n\nPart B — Wire into create tenant handler:\n- After creating tenant in store, call provisioner.ProvisionTenant\n- Return provisioning result alongside tenant in response\n\nPart C — Add to docker-compose.yml:\n- platform-service: build src/platform-service, ports 8090:8090 9090:9090, healthcheck, depends_on postgres, garudax-network\n\nPart D — Add gateway proxy for platform API:\n- In src/gateway/cmd/gateway/main.go: add platform-service to backend client map (port 8090)\n- Add route: /platform/v1/* → platform-service (skip tenant middleware for platform routes)\n- In gateway config: add PlatformServiceAddr env var\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/platform-service && go build ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/platform-service/internal/provisioning/", "src/platform-service/internal/server/", "docker-compose.yml", "src/gateway/cmd/gateway/main.go", "src/gateway/internal/config/"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Platform admin page in admin-ui",
+      "description": "Add a Platform Admin page to the admin dashboard for tenant management.\n\nPart A — API functions in src/admin-ui/src/services/api.ts:\n- fetchTenants(signal?) — GET /platform/v1/tenants\n- createTenant(data) — POST /platform/v1/tenants\n- updateTenantStatus(id, status) — PUT /platform/v1/tenants/{id}/status\n\nPart B — Sidebar + routes:\n- Add 'Platform' entry to sidebar (use ShieldIcon, path: /dashboard/platform, adminOnly: true)\n- Add Route in App.tsx\n\nPart C — Platform page at src/admin-ui/src/pages/PlatformAdmin.tsx:\n- Title: 'Platform — Tenant Management'\n- DataGrid with columns: id (mono), name, status (StatusBadge), flagship (boolean badge), governance_tier, created_at\n- Actions: Activate/Suspend button based on current status\n- 'Create Tenant' button → modal with fields: id (slug, required), name (required), governance_tier (select: STANDARD/FLAGSHIP/SANDBOX)\n- usePolling every 30s, loading={isLoading}, toast on create/status change\n- Export validateTenantForm as pure function\n\nCSS module: src/admin-ui/src/pages/PlatformAdmin.module.css\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: shows skeleton/spinner while data loads\n□ Empty state: meaningful message when no data exists\n□ Error state: user-friendly error with retry\n□ Responsive: works on mobile (375px), tablet (768px), desktop (1280px+)\n□ Keyboard navigation: all interactive elements reachable via Tab\n□ Accessible: proper ARIA labels, semantic HTML\n□ Toast/feedback: user actions produce visible confirmation\n□ Form validation: inline errors shown on blur, submit disabled until valid\n□ No raw technical errors visible to user\n□ Consistent styling: uses project design tokens/theme\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/pages/PlatformAdmin.tsx", "src/admin-ui/src/pages/PlatformAdmin.module.css", "src/admin-ui/src/services/api.ts", "src/admin-ui/src/components/Sidebar.tsx", "src/admin-ui/src/App.tsx"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Unit tests for platform-service",
+      "description": "Write unit tests for the platform-service.\n\nRead .softhouse/handoff/T1.md and T2.md for what was implemented.\n\nCreate tests:\n\n1. src/platform-service/internal/store/store_test.go:\n- TestTenantStore_List — verify seeded tenants (ace-commodities, mse-equities)\n- TestTenantStore_Get — existing and non-existent\n- TestTenantStore_Create — valid tenant, duplicate ID error\n- TestTenantStore_Update — partial update, non-existent error\n- TestTenantStore_UpdateStatus — valid transitions, invalid status\n\n2. src/platform-service/internal/server/handlers_test.go:\n- TestListTenants — GET returns seeded tenants\n- TestGetTenant_Found — GET existing → 200\n- TestGetTenant_NotFound → 404\n- TestCreateTenant_Success — POST valid → 201\n- TestCreateTenant_MissingName → 422\n- TestCreateTenant_DuplicateID → 409\n- TestUpdateTenantStatus — PUT /status activate → 200\n- TestCreateTenant_InvalidSlug — special chars → 422\n\n3. src/platform-service/internal/provisioning/provisioner_test.go:\n- TestProvisionTenant_DryRun — no DB → returns expected schema/topic lists\n- TestDeprovisionTenant — verify decommission status\n\nTarget: 70%+ coverage.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/platform-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/platform-service/internal/store/store_test.go", "src/platform-service/internal/server/", "src/platform-service/internal/provisioning/"],
+      "dependencies": ["T1", "T2"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
