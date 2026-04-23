@@ -200,8 +200,8 @@ export function DataGrid<T>({
           ) : processedData.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className={styles.empty}>
-                <div className={styles.emptyContainer}>
-                  <span className={styles.emptyIcon}>
+                <div className={styles.emptyContainer} role="status" aria-live="polite">
+                  <span className={styles.emptyIcon} aria-hidden="true">
                     <InboxIcon size={32} />
                   </span>
                   <span className={styles.emptyText}>{emptyMessage}</span>

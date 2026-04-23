@@ -128,7 +128,7 @@ export function FilterIcon({ size = 16, className }: IconProps) {
 
 export function DownloadIcon({ size = 16, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M8 2v8" />
       <polyline points="4,7 8,11 12,7" />
       <line x1="2" y1="14" x2="14" y2="14" />
@@ -138,7 +138,7 @@ export function DownloadIcon({ size = 16, className }: IconProps) {
 
 export function SortAscIcon({ size = 16, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <polyline points="4,10 8,4 12,10" />
     </svg>
   );
@@ -146,7 +146,7 @@ export function SortAscIcon({ size = 16, className }: IconProps) {
 
 export function SortDescIcon({ size = 16, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <polyline points="4,6 8,12 12,6" />
     </svg>
   );
@@ -171,7 +171,7 @@ export function CheckIcon({ size = 16, className }: IconProps) {
 
 export function AlertIcon({ size = 16, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M7.13 1.66L1.08 12.33A1 1 0 001.94 14h12.12a1 1 0 00.86-1.67L8.87 1.66a1 1 0 00-1.74 0z" />
       <line x1="8" y1="6" x2="8" y2="9" />
       <circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />

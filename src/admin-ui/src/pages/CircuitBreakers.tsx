@@ -38,8 +38,38 @@ export function CircuitBreakersPage() {
     }
   };
 
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const validateEditForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    const upper = parseFloat(editForm.upper);
+    const lower = parseFloat(editForm.lower);
+    const cooldown = parseInt(editForm.cooldown, 10);
+    if (editForm.upper.trim() === '' || isNaN(upper)) {
+      errors.upper = 'Upper limit must be a number';
+    } else if (upper <= 0 || upper > 100) {
+      errors.upper = 'Upper limit must be between 0 and 100';
+    }
+    if (editForm.lower.trim() === '' || isNaN(lower)) {
+      errors.lower = 'Lower limit must be a number';
+    } else if (lower <= 0 || lower > 100) {
+      errors.lower = 'Lower limit must be between 0 and 100';
+    }
+    if (editForm.cooldown.trim() === '' || isNaN(cooldown)) {
+      errors.cooldown = 'Cooldown must be a whole number';
+    } else if (cooldown < 1) {
+      errors.cooldown = 'Cooldown must be at least 1 minute';
+    }
+    if (editForm.refPrice.trim() === '' || isNaN(parseFloat(editForm.refPrice))) {
+      errors.refPrice = 'Reference price must be a number';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleEditSave = async () => {
     if (!editTarget) return;
+    if (!validateEditForm()) return;
     try {
       await setCircuitBreaker(editTarget.instrument_id, {
         upper_limit_pct: parseFloat(editForm.upper),
@@ -48,6 +78,7 @@ export function CircuitBreakersPage() {
         reference_price: editForm.refPrice,
       });
       setEditTarget(null);
+      setFormErrors({});
       refresh();
       showToast('Circuit breaker limits updated', 'success');
     } catch (err) {
@@ -115,27 +146,31 @@ export function CircuitBreakersPage() {
       )}
 
       {editTarget && (
-        <div className={styles.overlay} onClick={() => setEditTarget(null)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()} role="dialog">
+        <div className={styles.overlay} onClick={() => { setEditTarget(null); setFormErrors({}); }}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Edit price limits for ${editTarget.ticker}`}>
             <h3>Edit Price Limits — {editTarget.ticker}</h3>
             <label className={styles.formLabel}>
               Upper Limit %
-              <input type="number" value={editForm.upper} onChange={e => setEditForm(f => ({ ...f, upper: e.target.value }))} className={styles.formInput} />
+              <input type="number" value={editForm.upper} onChange={e => setEditForm(f => ({ ...f, upper: e.target.value }))} className={styles.formInput} aria-invalid={!!formErrors.upper} />
+              {formErrors.upper && <span className={styles.fieldError}>{formErrors.upper}</span>}
             </label>
             <label className={styles.formLabel}>
               Lower Limit %
-              <input type="number" value={editForm.lower} onChange={e => setEditForm(f => ({ ...f, lower: e.target.value }))} className={styles.formInput} />
+              <input type="number" value={editForm.lower} onChange={e => setEditForm(f => ({ ...f, lower: e.target.value }))} className={styles.formInput} aria-invalid={!!formErrors.lower} />
+              {formErrors.lower && <span className={styles.fieldError}>{formErrors.lower}</span>}
             </label>
             <label className={styles.formLabel}>
               Cooldown (minutes)
-              <input type="number" value={editForm.cooldown} onChange={e => setEditForm(f => ({ ...f, cooldown: e.target.value }))} className={styles.formInput} />
+              <input type="number" value={editForm.cooldown} onChange={e => setEditForm(f => ({ ...f, cooldown: e.target.value }))} className={styles.formInput} aria-invalid={!!formErrors.cooldown} />
+              {formErrors.cooldown && <span className={styles.fieldError}>{formErrors.cooldown}</span>}
             </label>
             <label className={styles.formLabel}>
               Reference Price
-              <input type="text" value={editForm.refPrice} onChange={e => setEditForm(f => ({ ...f, refPrice: e.target.value }))} className={styles.formInput} />
+              <input type="text" value={editForm.refPrice} onChange={e => setEditForm(f => ({ ...f, refPrice: e.target.value }))} className={styles.formInput} aria-invalid={!!formErrors.refPrice} />
+              {formErrors.refPrice && <span className={styles.fieldError}>{formErrors.refPrice}</span>}
             </label>
             <div className={styles.modalActions}>
-              <button onClick={() => setEditTarget(null)} className={styles.cancelBtn}>Cancel</button>
+              <button onClick={() => { setEditTarget(null); setFormErrors({}); }} className={styles.cancelBtn}>Cancel</button>
               <button onClick={handleEditSave} className={styles.saveBtn}>Save</button>
             </div>
           </div>
