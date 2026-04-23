@@ -149,8 +149,9 @@ export function SecuritiesOrdersPage() {
           setSelectedInstrumentId(normalized[0].id);
         }
       })
-      .catch(() => {
-        // Silently handle — instruments list may be empty
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        showToast(err instanceof Error ? err.message : 'Failed to load instruments', 'error');
       });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps

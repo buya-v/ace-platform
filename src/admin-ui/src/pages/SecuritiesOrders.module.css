@@ -257,3 +257,44 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .submitBtn {
+    width: 100%;
+  }
+
+  .selectorBar {
+    flex-wrap: wrap;
+  }
+
+  .selector {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .section {
+    padding: 12px;
+    overflow-x: auto;
+  }
+
+  .tradesTable {
+    min-width: 420px;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 80vh;
+  }
+}

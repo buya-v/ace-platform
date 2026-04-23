@@ -226,17 +226,22 @@ export function SecuritiesInstrumentsPage() {
       <h1>Securities Instruments</h1>
 
       <div className={styles.toolbar}>
+        <label className={styles.srOnly} htmlFor="inst-search">Search instruments</label>
         <input
+          id="inst-search"
           type="text"
           placeholder="Search by ticker or name..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className={styles.searchInput}
         />
+        <label className={styles.srOnly} htmlFor="inst-asset-class">Asset class filter</label>
         <select
+          id="inst-asset-class"
           value={assetClassFilter}
           onChange={e => setAssetClassFilter(e.target.value)}
           className={styles.select}
+          aria-label="Filter by asset class"
         >
           <option value="">All Asset Classes</option>
           <option value="EQUITY">EQUITY</option>

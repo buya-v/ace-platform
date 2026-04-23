@@ -27,3 +27,12 @@
 .pnlNegative {
   color: var(--accent-red);
 }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .section {
+    padding: 12px;
+    overflow-x: auto;
+  }
+}
