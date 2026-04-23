@@ -151,4 +151,29 @@
   - Always set PATH=$PATH:/usr/local/go/bin in Go task prompts for this environment
   - When T4 found everything already done, it still provided value by confirming the state — verification tasks are worth including
 
+### Run 20260423-securities-specs — Securities Module Specs (2026-04-23)
+
+- **What worked**:
+  - 3/3 tasks completed on first attempt, zero rejections
+  - Opus model for T1 (architecture spec) produced a ~1,100-line comprehensive spec with exact field names, enum values, SQL DDL, API contracts, and Kafka topics — implementation-ready quality
+  - T2 + T3 ran in parallel after T1 dependency — clean serialization
+  - All three agents committed directly to main (no worktree branch issues)
+  - docs/securities-architecture.md serves as single source of truth — T2 and T3 consumed it directly
+
+- **What failed**:
+  - Nothing — clean run
+
+- **New knowledge**:
+  - Securities module scope: 18 database tables across 3 migrations (V26-V28)
+  - OpenAPI spec: 21 endpoints, 36 named schemas, ~1,973 lines
+  - T+2 settlement has 7 states (PENDING/AFFIRMED/NETTED/INSTRUCTED/SETTLING/SETTLED/FAILED)
+  - CSD integration needs 8 corporate action types (DIVIDEND through SPIN_OFF)
+  - Securities reuses existing gateway, auth, compliance — new: securities-service + CSD adapter
+
+- **Planning advice**:
+  - Specs-only runs are fast (3 tasks, ~20min total) and set up clean implementation sprints
+  - Use opus for architecture specs that define data models — the precision on field names/types is critical
+  - Migrations and OpenAPI can run in parallel since they consume the same spec but produce different files
+  - Specs-only approach avoids the Phase 7-9 failure (25-task plan that timed out ACP)
+
 <!-- LEARNED PATTERNS END -->
