@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -31,7 +32,10 @@ func newTestServer(t *testing.T) *httptest.Server {
 func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, orderStore store.OrderStore) *httptest.Server {
 	t.Helper()
 	cfg := DefaultConfig()
-	srv := New(instrStore, orderStore, cfg)
+	tradeStore := store.NewInMemoryTradeStore()
+	positionStore := store.NewInMemoryPositionStore()
+	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore)
+	srv := New(instrStore, orderStore, me, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()
@@ -548,7 +552,7 @@ func TestMethodNotAllowed_Instrument(t *testing.T) {
 
 func TestHealthzEndpoint(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()
@@ -570,7 +574,7 @@ func TestHealthzEndpoint(t *testing.T) {
 
 func TestReadyzEndpoint_NotReady(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
 	// NOT calling SetReady()
 
 	w := httptest.NewRecorder()
@@ -584,7 +588,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 
 func TestReadyzEndpoint_Ready(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()

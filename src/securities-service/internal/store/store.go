@@ -51,6 +51,21 @@ type OrderStore interface {
 	Get(id string) (*types.SecurityOrder, error)
 	List(filters OrderFilters) ([]types.SecurityOrder, error)
 	Cancel(id string) error
+	Update(order *types.SecurityOrder) error
+}
+
+// TradeStore defines the repository contract for security trades.
+type TradeStore interface {
+	Create(trade *types.SecurityTrade) error
+	Get(id string) (*types.SecurityTrade, error)
+	ListByInstrument(instrumentID string) ([]types.SecurityTrade, error)
+}
+
+// PositionStore defines the repository contract for participant positions.
+type PositionStore interface {
+	GetOrCreate(participantID, instrumentID string) (*types.Position, error)
+	Update(position *types.Position) error
+	List(participantID string) ([]types.Position, error)
 }
 
 // --- InMemoryInstrumentStore ---
@@ -218,6 +233,19 @@ func (s *InMemoryOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, 
 	return result, nil
 }
 
+// Update replaces an existing order record in the store.
+func (s *InMemoryOrderStore) Update(order *types.SecurityOrder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[order.ID]; !exists {
+		return ErrNotFound
+	}
+	copy := *order
+	s.data[order.ID] = &copy
+	return nil
+}
+
 // Cancel transitions an order to CANCELLED status.
 // Returns ErrNotFound if the order does not exist.
 // Returns an error if the order is already in a terminal state.
@@ -236,4 +264,130 @@ func (s *InMemoryOrderStore) Cancel(id string) error {
 	}
 	order.Status = types.OrderStatusCancelled
 	return nil
+}
+
+// --- InMemoryTradeStore ---
+
+// InMemoryTradeStore is a thread-safe, in-memory implementation of TradeStore.
+type InMemoryTradeStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.SecurityTrade
+}
+
+// NewInMemoryTradeStore returns an empty InMemoryTradeStore.
+func NewInMemoryTradeStore() *InMemoryTradeStore {
+	return &InMemoryTradeStore{
+		data: make(map[string]*types.SecurityTrade),
+	}
+}
+
+// Create stores a new trade.
+func (s *InMemoryTradeStore) Create(trade *types.SecurityTrade) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[trade.ID]; exists {
+		return errors.New("trade already exists: " + trade.ID)
+	}
+	copy := *trade
+	s.data[trade.ID] = &copy
+	return nil
+}
+
+// Get retrieves a trade by its ID.
+func (s *InMemoryTradeStore) Get(id string) (*types.SecurityTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	trade, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copy := *trade
+	return &copy, nil
+}
+
+// ListByInstrument returns all trades for a given instrument.
+func (s *InMemoryTradeStore) ListByInstrument(instrumentID string) ([]types.SecurityTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.SecurityTrade, 0)
+	for _, trade := range s.data {
+		if trade.InstrumentID == instrumentID {
+			result = append(result, *trade)
+		}
+	}
+	return result, nil
+}
+
+// --- InMemoryPositionStore ---
+
+// InMemoryPositionStore is a thread-safe, in-memory implementation of PositionStore.
+// Key format: "participantID:instrumentID".
+type InMemoryPositionStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Position
+}
+
+// NewInMemoryPositionStore returns an empty InMemoryPositionStore.
+func NewInMemoryPositionStore() *InMemoryPositionStore {
+	return &InMemoryPositionStore{
+		data: make(map[string]*types.Position),
+	}
+}
+
+// positionKey builds the composite map key.
+func positionKey(participantID, instrumentID string) string {
+	return participantID + ":" + instrumentID
+}
+
+// GetOrCreate retrieves an existing position or creates a new zero-quantity position.
+func (s *InMemoryPositionStore) GetOrCreate(participantID, instrumentID string) (*types.Position, error) {
+	key := positionKey(participantID, instrumentID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	pos, ok := s.data[key]
+	if ok {
+		copy := *pos
+		return &copy, nil
+	}
+
+	// Create a new zero position.
+	newPos := &types.Position{
+		ID:            key,
+		ParticipantID: participantID,
+		InstrumentID:  instrumentID,
+	}
+	s.data[key] = newPos
+	copy := *newPos
+	return &copy, nil
+}
+
+// Update replaces an existing position record.
+func (s *InMemoryPositionStore) Update(position *types.Position) error {
+	key := positionKey(position.ParticipantID, position.InstrumentID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copy := *position
+	s.data[key] = &copy
+	return nil
+}
+
+// List returns all positions for a given participant.
+func (s *InMemoryPositionStore) List(participantID string) ([]types.Position, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.Position, 0)
+	for _, pos := range s.data {
+		if pos.ParticipantID == participantID {
+			result = append(result, *pos)
+		}
+	}
+	return result, nil
 }

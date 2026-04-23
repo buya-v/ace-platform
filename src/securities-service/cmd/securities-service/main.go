@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/server"
 	"github.com/garudax-platform/securities-service/internal/store"
 )
@@ -61,7 +62,12 @@ func main() {
 		orderStore = store.NewInMemoryOrderStore()
 	}
 
-	srv := server.New(instrumentStore, orderStore, cfg)
+	tradeStore := store.NewInMemoryTradeStore()
+	positionStore := store.NewInMemoryPositionStore()
+
+	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore)
+
+	srv := server.New(instrumentStore, orderStore, matchingEngine, cfg)
 
 	// Start health server on port 9089.
 	go func() {

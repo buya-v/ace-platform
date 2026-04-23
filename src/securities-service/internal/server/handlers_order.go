@@ -160,7 +160,24 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusConflict, "CONFLICT", err.Error(), nil)
 		return
 	}
-	s.writeJSON(w, http.StatusCreated, order)
+
+	// Run matching engine if available.
+	var trades []types.SecurityTrade
+	if s.engine != nil {
+		matched, err := s.engine.MatchOrder(&order)
+		if err == nil {
+			trades = matched
+		}
+		// Non-fatal: if matching fails, the order is still stored as PENDING.
+	}
+	if trades == nil {
+		trades = []types.SecurityTrade{}
+	}
+
+	s.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"order":  order,
+		"trades": trades,
+	})
 }
 
 // handleListOrders handles GET /api/v1/securities/orders.

@@ -450,6 +450,27 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 	return result, nil
 }
 
+// Update writes the full order state back to the database.
+func (s *PgOrderStore) Update(order *types.SecurityOrder) error {
+	dbStatus := pendingToDBStatus(order.Status)
+	result, err := s.db.Exec(`
+		UPDATE securities.orders
+		SET status = $1, filled_qty = $2, updated_at = NOW()
+		WHERE id = $3
+	`, dbStatus, order.FilledQuantity, order.ID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Cancel transitions an order to CANCELLED status.
 // Only orders in NEW (PENDING) or PARTIALLY_FILLED state may be cancelled.
 // Returns an error if the order does not exist or is not cancellable.

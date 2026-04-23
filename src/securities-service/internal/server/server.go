@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -36,19 +37,22 @@ type Server struct {
 	cfg             Config
 	instrumentStore store.InstrumentStore
 	orderStore      store.OrderStore
+	engine          *engine.MatchingEngine
 	ready           atomic.Int32
 }
 
-// New creates a new Server with the given stores and configuration.
+// New creates a new Server with the given stores, matching engine, and configuration.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
+	matchingEngine *engine.MatchingEngine,
 	cfg Config,
 ) *Server {
 	return &Server{
 		cfg:             cfg,
 		instrumentStore: instrumentStore,
 		orderStore:      orderStore,
+		engine:          matchingEngine,
 	}
 }
 

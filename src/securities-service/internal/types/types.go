@@ -110,6 +110,42 @@ type SecurityOrder struct {
 	UpdatedAt      string      `json:"updated_at"`
 }
 
+// TradeStatus represents the lifecycle state of a trade.
+type TradeStatus string
+
+const (
+	TradeStatusPending   TradeStatus = "TRADE_PENDING"
+	TradeStatusConfirmed TradeStatus = "TRADE_CONFIRMED"
+	TradeStatusSettled   TradeStatus = "TRADE_SETTLED"
+	TradeStatusFailed    TradeStatus = "TRADE_FAILED"
+)
+
+// SecurityTrade represents a matched trade between a buy and sell order.
+type SecurityTrade struct {
+	ID             string      `json:"id"`
+	BuyOrderID     string      `json:"buy_order_id"`
+	SellOrderID    string      `json:"sell_order_id"`
+	InstrumentID   string      `json:"instrument_id"`
+	Price          float64     `json:"price"`
+	Quantity       int         `json:"quantity"`
+	TradeDate      string      `json:"trade_date"`
+	SettlementDate string      `json:"settlement_date"`
+	Status         TradeStatus `json:"status"`
+	CreatedAt      string      `json:"created_at"`
+}
+
+// Position represents a participant's holdings in a specific instrument.
+type Position struct {
+	ID            string  `json:"id"`
+	ParticipantID string  `json:"participant_id"`
+	InstrumentID  string  `json:"instrument_id"`
+	Quantity      int     `json:"quantity"`
+	AvgCost       float64 `json:"avg_cost"`
+	MarketValue   float64 `json:"market_value"`
+	UnrealizedPnl float64 `json:"unrealized_pnl"`
+	UpdatedAt     string  `json:"updated_at"`
+}
+
 // ErrorDetail carries a machine-readable code and human-readable message.
 type ErrorDetail struct {
 	Code    string   `json:"code"`

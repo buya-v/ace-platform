@@ -73,7 +73,8 @@ func submitBuyOrder(t *testing.T, ts *httptest.Server, instrID string, orderType
 	assertStatus(t, resp, http.StatusCreated)
 	var result map[string]interface{}
 	decodeBody(t, resp, &result)
-	return result["id"].(string)
+	order := result["order"].(map[string]interface{})
+	return order["id"].(string)
 }
 
 // newServerWithFilledOrder creates a server pre-seeded with a FILLED order.
@@ -142,17 +143,26 @@ func TestSubmitOrder_Success(t *testing.T) {
 	var result map[string]interface{}
 	decodeBody(t, resp, &result)
 
-	if id, ok := result["id"].(string); !ok || id == "" {
+	order := result["order"].(map[string]interface{})
+	if id, ok := order["id"].(string); !ok || id == "" {
 		t.Error("expected non-empty id in response")
 	}
-	if result["status"] != "PENDING" {
-		t.Errorf("expected status PENDING, got %v", result["status"])
+	if order["status"] != "PENDING" {
+		t.Errorf("expected status PENDING, got %v", order["status"])
 	}
-	if result["time_in_force"] != "GTC" {
-		t.Errorf("expected default time_in_force GTC, got %v", result["time_in_force"])
+	if order["time_in_force"] != "GTC" {
+		t.Errorf("expected default time_in_force GTC, got %v", order["time_in_force"])
 	}
-	if result["filled_quantity"] != float64(0) {
-		t.Errorf("expected filled_quantity 0, got %v", result["filled_quantity"])
+	if order["filled_quantity"] != float64(0) {
+		t.Errorf("expected filled_quantity 0, got %v", order["filled_quantity"])
+	}
+	// Verify trades array is present.
+	trades, ok := result["trades"].([]interface{})
+	if !ok {
+		t.Error("expected 'trades' array in response")
+	}
+	if len(trades) != 0 {
+		t.Errorf("expected 0 trades for unmatched order, got %d", len(trades))
 	}
 }
 
@@ -289,8 +299,9 @@ func TestSubmitOrder_MarketOrder(t *testing.T) {
 
 	var result map[string]interface{}
 	decodeBody(t, resp, &result)
-	if result["order_type"] != "MARKET" {
-		t.Errorf("expected order_type MARKET, got %v", result["order_type"])
+	order := result["order"].(map[string]interface{})
+	if order["order_type"] != "MARKET" {
+		t.Errorf("expected order_type MARKET, got %v", order["order_type"])
 	}
 }
 
