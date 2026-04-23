@@ -2,19 +2,21 @@
   "run_id": "20260423-cx-polish",
   "feature": "Admin Dashboard CX Polish",
   "requirement": "Fix top CX gaps across admin-ui: (1) Fix hardcoded localhost in config.ts WebSocket URL, (2) Add ErrorBoundary wrapper to DashboardLayout, (3) Wire loading={isLoading} to all DataGrid instances + add toast feedback to all mutation actions, (4) Improve DataGrid empty state with centered icon+message design, (5) Add basic responsive CSS for mobile 375px and tablet 768px to admin-ui layout and DataGrid",
-  "status": "planning",
+  "status": "executing",
   "tasks": [
     {
       "id": "T1",
       "title": "Fix hardcoded localhost in admin-ui WebSocket URL",
-      "description": "In src/admin-ui/src/config.ts line 16, replace the hardcoded 'ws://localhost:8080/api/v1/ws' with a dynamic URL that derives the WebSocket URL from the current window.location. Use the pattern: const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'; then `${protocol}//${window.location.host}/api/v1/ws`. The web-ui SPA already does this correctly in Trading.tsx — follow that pattern. Keep the runtime config override (__GARUDAX_CONFIG__) working.",
+      "description": "In src/admin-ui/src/config.ts line 16, replace the hardcoded 'ws://localhost:8080/api/v1/ws' with a dynamic URL that derives the WebSocket URL from the current window.location. Use the pattern: const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'; then `${protocol}//${window.location.host}/api/v1/ws`. The web-ui SPA already does this correctly in Trading.tsx \u2014 follow that pattern. Keep the runtime config override (__GARUDAX_CONFIG__) working.",
       "agent_role": "coder",
       "model": "haiku",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/src/config.ts"],
+      "files_hint": [
+        "src/admin-ui/src/config.ts"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T2",
@@ -23,10 +25,14 @@
       "agent_role": "coder",
       "model": "haiku",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/src/components/ErrorBoundary.tsx", "src/admin-ui/src/components/ErrorBoundary.module.css", "src/admin-ui/src/pages/DashboardLayout.tsx"],
+      "files_hint": [
+        "src/admin-ui/src/components/ErrorBoundary.tsx",
+        "src/admin-ui/src/components/ErrorBoundary.module.css",
+        "src/admin-ui/src/pages/DashboardLayout.tsx"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T3",
@@ -55,8 +61,8 @@
         "src/admin-ui/src/pages/Reports.tsx"
       ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T4",
@@ -65,10 +71,14 @@
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": ["src/admin-ui/src/components/DataGrid.tsx", "src/admin-ui/src/components/DataGrid.module.css", "src/admin-ui/src/components/icons.tsx"],
+      "files_hint": [
+        "src/admin-ui/src/components/DataGrid.tsx",
+        "src/admin-ui/src/components/DataGrid.module.css",
+        "src/admin-ui/src/components/icons.tsx"
+      ],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T5",
@@ -84,7 +94,10 @@
         "src/admin-ui/src/components/Sidebar.tsx",
         "src/admin-ui/src/components/TopBar.module.css"
       ],
-      "dependencies": ["T2", "T4"],
+      "dependencies": [
+        "T2",
+        "T4"
+      ],
       "status": "pending",
       "attempts": 0
     },
@@ -101,7 +114,13 @@
         "src/admin-ui/src/components/DataGrid.tsx",
         "src/admin-ui/src/pages/"
       ],
-      "dependencies": ["T1", "T2", "T3", "T4", "T5"],
+      "dependencies": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5"
+      ],
       "status": "pending",
       "attempts": 0
     }
