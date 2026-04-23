@@ -298,6 +298,37 @@ services:
     networks:
       - garudax-network
 
+  securities-service:
+    build:
+      context: ./src/securities-service
+      dockerfile: Dockerfile
+    container_name: garudax-securities-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      GRPC_PORT: "50059"
+      HEALTH_PORT: "9085"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-garudax}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-garudax_dev_password}
+      DB_NAME: ${POSTGRES_DB:-garudax}
+      DB_SSL_MODE: disable
+    ports:
+      - "50059:50059"
+      - "8085:8085"
+      - "9085:9085"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9085/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - garudax-network
+    restart: unless-stopped
+
   # ─── API Gateway ───────────────────────────────────────────────────
 
   gateway:
