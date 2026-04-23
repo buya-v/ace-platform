@@ -2,7 +2,7 @@
   "run_id": "20260423-cx-polish",
   "feature": "Admin Dashboard CX Polish",
   "requirement": "Fix top CX gaps across admin-ui: (1) Fix hardcoded localhost in config.ts WebSocket URL, (2) Add ErrorBoundary wrapper to DashboardLayout, (3) Wire loading={isLoading} to all DataGrid instances + add toast feedback to all mutation actions, (4) Improve DataGrid empty state with centered icon+message design, (5) Add basic responsive CSS for mobile 375px and tablet 768px to admin-ui layout and DataGrid",
-  "status": "executing",
+  "status": "complete",
   "tasks": [
     {
       "id": "T1",
@@ -98,8 +98,8 @@
         "T2",
         "T4"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T6",
@@ -121,8 +121,8 @@
         "T4",
         "T5"
       ],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     }
   ]
 }
