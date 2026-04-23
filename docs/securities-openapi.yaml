@@ -1,0 +1,1973 @@
+openapi: "3.0.3"
+info:
+  title: GarudaX Securities API
+  description: |
+    REST API for the GarudaX Securities module — equities, bonds, and ETFs.
+    All endpoints are served by the existing API gateway under the `/api/v1/securities/` prefix.
+    Authentication and rate limiting are handled by the gateway middleware.
+  version: "1.0.0"
+  contact:
+    name: GarudaX Platform Engineering
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.garudax.mn/api/v1/securities
+    description: Production
+  - url: https://staging-api.garudax.mn/api/v1/securities
+    description: Staging
+
+tags:
+  - name: Instruments
+    description: Securities instrument reference data — equities, bonds, ETFs
+  - name: Orders
+    description: Securities order submission, cancellation, modification, and queries
+  - name: Positions
+    description: Securities positions for the authenticated participant
+  - name: Settlements
+    description: T+2 settlement obligations, netting cycles, and settlement monitoring
+  - name: Corporate Actions
+    description: Dividends, stock splits, rights issues, and other corporate events
+  - name: CSD Accounts
+    description: Custody accounts and securities transfers via Central Securities Depository
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ─── Instruments ──────────────────────────────────────────────────────────
+  /instruments:
+    get:
+      tags: [Instruments]
+      summary: List securities instruments
+      operationId: listInstruments
+      security: []
+      parameters:
+        - name: asset_class
+          in: query
+          description: Filter by asset class
+          schema:
+            $ref: "#/components/schemas/AssetClass"
+        - name: trading_status
+          in: query
+          description: Filter by trading status
+          schema:
+            $ref: "#/components/schemas/TradingStatus"
+        - name: exchange_code
+          in: query
+          description: Filter by exchange code (e.g. MXUB)
+          schema:
+            type: string
+            example: MXUB
+        - name: search
+          in: query
+          description: Full-text search on ticker, ISIN, name
+          schema:
+            type: string
+            example: APU
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: List of securities instruments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstrumentListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+    post:
+      tags: [Instruments]
+      summary: Create a new securities instrument (admin)
+      operationId: createInstrument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInstrumentRequest"
+      responses:
+        "201":
+          description: Instrument created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instrument"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /instruments/{instrument_id}:
+    get:
+      tags: [Instruments]
+      summary: Get instrument details by ID
+      operationId: getInstrument
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/InstrumentId"
+      responses:
+        "200":
+          description: Instrument details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instrument"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [Instruments]
+      summary: Update instrument attributes (admin)
+      operationId: updateInstrument
+      parameters:
+        - $ref: "#/components/parameters/InstrumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInstrumentRequest"
+      responses:
+        "200":
+          description: Instrument updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Instrument"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /instruments/{instrument_id}/status:
+    put:
+      tags: [Instruments]
+      summary: Change trading status of an instrument (admin)
+      description: |
+        Transitions the instrument to a new trading status.
+        Valid transitions: ACTIVE → HALTED, HALTED → ACTIVE, ACTIVE → SUSPENDED, SUSPENDED → DELISTED.
+      operationId: setInstrumentStatus
+      parameters:
+        - $ref: "#/components/parameters/InstrumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetInstrumentStatusRequest"
+      responses:
+        "200":
+          description: Instrument status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstrumentStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  # ─── Orders ───────────────────────────────────────────────────────────────
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Submit a securities order
+      operationId: submitSecuritiesOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitSecuritiesOrderRequest"
+      responses:
+        "201":
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritiesExecutionReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+    get:
+      tags: [Orders]
+      summary: List securities orders
+      operationId: listSecuritiesOrders
+      parameters:
+        - name: instrument_id
+          in: query
+          schema:
+            type: string
+            example: SEC-EQ-001
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: side
+          in: query
+          schema:
+            $ref: "#/components/schemas/Side"
+        - name: from
+          in: query
+          description: Filter orders created at or after this timestamp
+          schema:
+            type: string
+            format: date-time
+            example: "2026-04-23T00:00:00Z"
+        - name: to
+          in: query
+          description: Filter orders created at or before this timestamp
+          schema:
+            type: string
+            format: date-time
+            example: "2026-04-23T23:59:59Z"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritiesOrderListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Get order details by ID
+      operationId: getSecuritiesOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritiesOrderDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [Orders]
+      summary: Cancel a securities order
+      operationId: cancelSecuritiesOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Cancellation execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritiesExecutionReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    patch:
+      tags: [Orders]
+      summary: Amend order price or quantity
+      description: |
+        Cancel-replace: submits a new order replacing the existing one.
+        Only `new_price` and/or `new_quantity` may be changed.
+        Amended order loses price-time priority in the book.
+      operationId: amendSecuritiesOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AmendOrderRequest"
+      responses:
+        "200":
+          description: Amendment execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritiesExecutionReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ─── Positions ────────────────────────────────────────────────────────────
+  /positions:
+    get:
+      tags: [Positions]
+      summary: List all securities positions for the authenticated participant
+      operationId: listSecuritiesPositions
+      parameters:
+        - name: instrument_id
+          in: query
+          description: Filter to a specific instrument
+          schema:
+            type: string
+            example: SEC-EQ-001
+        - name: asset_class
+          in: query
+          schema:
+            $ref: "#/components/schemas/AssetClass"
+      responses:
+        "200":
+          description: Position list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /positions/summary:
+    get:
+      tags: [Positions]
+      summary: Aggregate position summary across all securities
+      description: Returns portfolio-level aggregates — total market value, unrealized P&L, realized P&L.
+      operationId: getPositionSummary
+      responses:
+        "200":
+          description: Position summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Settlements ──────────────────────────────────────────────────────────
+  /settlements:
+    get:
+      tags: [Settlements]
+      summary: List settlement obligations
+      operationId: listSettlements
+      parameters:
+        - name: settlement_date
+          in: query
+          description: Filter by settlement date (ISO 8601 date)
+          schema:
+            type: string
+            format: date
+            example: "2026-04-25"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SettlementStatus"
+        - name: participant_id
+          in: query
+          schema:
+            type: string
+            example: PART-001
+        - name: instrument_id
+          in: query
+          schema:
+            type: string
+            example: SEC-EQ-001
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Settlement obligation list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /settlements/cycle:
+    post:
+      tags: [Settlements]
+      summary: Trigger a settlement cycle for a settlement date
+      description: Initiates netting, CSD instruction generation, and settlement processing for the given date.
+      operationId: triggerSettlementCycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerSettlementCycleRequest"
+      responses:
+        "202":
+          description: Settlement cycle accepted and running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementCycleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /settlements/netting:
+    get:
+      tags: [Settlements]
+      summary: Get netting batches
+      description: Returns the current set of netting batches grouped by instrument and settlement date.
+      operationId: getNettingBatches
+      parameters:
+        - name: settlement_date
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2026-04-25"
+        - name: run_id
+          in: query
+          description: Filter to a specific netting run
+          schema:
+            type: string
+            example: NET-20260424-001
+      responses:
+        "200":
+          description: Netting batch list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NettingBatchListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─── Corporate Actions ────────────────────────────────────────────────────
+  /corporate-actions:
+    get:
+      tags: [Corporate Actions]
+      summary: List corporate actions
+      operationId: listCorporateActions
+      parameters:
+        - name: instrument_id
+          in: query
+          schema:
+            type: string
+            example: SEC-EQ-001
+        - name: action_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/CorporateActionType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CorporateActionStatus"
+        - name: from_date
+          in: query
+          description: Filter actions with ex_date on or after this date
+          schema:
+            type: string
+            format: date
+            example: "2026-04-01"
+        - name: to_date
+          in: query
+          description: Filter actions with ex_date on or before this date
+          schema:
+            type: string
+            format: date
+            example: "2026-06-30"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Corporate action list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorporateActionListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Corporate Actions]
+      summary: Announce a corporate action (admin)
+      operationId: announceCorporateAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnounceCorporateActionRequest"
+      responses:
+        "201":
+          description: Corporate action announced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorporateAction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ─── CSD Accounts ─────────────────────────────────────────────────────────
+  /csd/accounts:
+    get:
+      tags: [CSD Accounts]
+      summary: List custody accounts for the authenticated participant
+      operationId: listCSDAccounts
+      responses:
+        "200":
+          description: CSD account list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSDAccountListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [CSD Accounts]
+      summary: Create a new CSD custody account
+      operationId: createCSDAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCSDAccountRequest"
+      responses:
+        "201":
+          description: CSD account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSDAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /csd/accounts/{account_id}/balances:
+    get:
+      tags: [CSD Accounts]
+      summary: Get securities balances for a CSD account
+      operationId: getCSDAccountBalances
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Account balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSDAccountBalances"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /csd/transfers:
+    post:
+      tags: [CSD Accounts]
+      summary: Initiate a securities transfer (FoP or DvP)
+      operationId: initiateTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiateTransferRequest"
+      responses:
+        "202":
+          description: Transfer instruction accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferInstruction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT issued by the auth service. Roles required per endpoint — trader, clearing_admin, or exchange_admin.
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Page size
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 200
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque pagination cursor from previous response
+      schema:
+        type: string
+        example: eyJpZCI6IlNFQy1FUS0wMDIifQ
+    InstrumentId:
+      name: instrument_id
+      in: path
+      required: true
+      description: Securities instrument identifier
+      schema:
+        type: string
+        example: SEC-EQ-001
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      description: Securities order identifier
+      schema:
+        type: string
+        example: ORD-SEC-001
+    AccountId:
+      name: account_id
+      in: path
+      required: true
+      description: CSD custody account identifier
+      schema:
+        type: string
+        example: CSD-ACCT-001
+
+  responses:
+    BadRequest:
+      description: Invalid request — malformed JSON, missing required field, or constraint violation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: BAD_REQUEST
+              message: "quantity must be a positive multiple of lot_size (100)"
+              request_id: req-abc-001
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: Missing or invalid authorization token
+              request_id: req-abc-002
+    Forbidden:
+      description: Insufficient permissions — role does not allow this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: FORBIDDEN
+              message: "Role 'trader' cannot create instruments; requires 'exchange_admin'"
+              request_id: req-abc-003
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: NOT_FOUND
+              message: Instrument SEC-EQ-999 not found
+              request_id: req-abc-004
+    Conflict:
+      description: Request conflicts with current state — duplicate resource, invalid status transition, or concurrent modification
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: CONFLICT
+              message: Instrument with ISIN MN0000012345 already exists
+              request_id: req-abc-005
+    UnprocessableEntity:
+      description: Semantically invalid request — business rule violation (e.g. short-sell without locate, price outside band)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: UNPROCESSABLE_ENTITY
+              message: Short sell requires a valid locate_id
+              details:
+                - field: locate_id
+                  reason: "required when is_short_sell is true"
+              request_id: req-abc-006
+
+  schemas:
+    # ─── Common ───────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              example: NOT_FOUND
+            message:
+              type: string
+              description: Human-readable error description
+              example: Instrument SEC-EQ-001 not found
+            details:
+              type: array
+              description: Per-field validation errors
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: quantity
+                  reason:
+                    type: string
+                    example: "must be a positive multiple of lot_size (100)"
+            request_id:
+              type: string
+              description: Correlation ID for support traces
+              example: req-abc-001
+
+    Pagination:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor to pass as `cursor` in the next request. Null when no more pages.
+          example: eyJpZCI6IlNFQy1FUS0wMDIifQ
+        has_more:
+          type: boolean
+          example: true
+
+    # ─── Enums ────────────────────────────────────────────────────────────
+    AssetClass:
+      type: string
+      enum: [EQUITY, BOND, ETF]
+      description: Top-level securities asset class
+      example: EQUITY
+
+    SecurityType:
+      type: string
+      enum: [COMMON, PREFERRED, GOVT_BOND, CORP_BOND, ZERO_COUPON, ETF]
+      description: Specific security sub-type within the asset class
+      example: COMMON
+
+    TradingStatus:
+      type: string
+      enum: [ACTIVE, HALTED, SUSPENDED, DELISTED]
+      description: |
+        ACTIVE — trading normally; HALTED — temporarily paused (circuit breaker or admin halt);
+        SUSPENDED — extended suspension; DELISTED — no longer tradeable.
+      example: ACTIVE
+
+    Side:
+      type: string
+      enum: [buy, sell]
+      example: buy
+
+    OrderType:
+      type: string
+      enum: [limit, market, stop_limit, stop_market]
+      example: limit
+
+    TimeInForce:
+      type: string
+      enum: [day, gtc, gtd, ioc, fok]
+      description: |
+        day — cancel at session close; gtc — good till cancelled;
+        gtd — good till date (requires expire_at); ioc — immediate or cancel; fok — fill or kill.
+      example: day
+
+    OrderStatus:
+      type: string
+      enum: [new, partially_filled, filled, cancelled, rejected, expired, pending_new]
+      example: new
+
+    SettlementStatus:
+      type: string
+      enum: [PENDING, AFFIRMED, NETTED, INSTRUCTED, SETTLING, SETTLED, FAILED]
+      description: T+2 settlement obligation lifecycle status
+      example: AFFIRMED
+
+    CorporateActionType:
+      type: string
+      enum: [DIVIDEND, STOCK_SPLIT, RIGHTS_ISSUE, MERGER, SPIN_OFF, BONUS_ISSUE, BUYBACK]
+      example: DIVIDEND
+
+    CorporateActionStatus:
+      type: string
+      enum: [ANNOUNCED, CONFIRMED, PROCESSING, PROCESSED, CANCELLED]
+      example: ANNOUNCED
+
+    CouponFrequency:
+      type: string
+      enum: [ANNUAL, SEMI_ANNUAL, QUARTERLY, MONTHLY, NONE]
+      example: SEMI_ANNUAL
+
+    DayCountConvention:
+      type: string
+      enum: [ACT/365, ACT/360, ACT/ACT, 30/360]
+      example: ACT/365
+
+    TransferType:
+      type: string
+      enum: [FOP, DVP]
+      description: Free of Payment (securities only) or Delivery versus Payment (securities + cash)
+      example: DVP
+
+    # ─── Instruments ──────────────────────────────────────────────────────
+    Instrument:
+      type: object
+      description: Securities instrument. Bond-specific fields (coupon_rate, maturity_date, etc.) are present only when asset_class is BOND.
+      properties:
+        instrument_id:
+          type: string
+          description: Internal platform identifier
+          example: SEC-EQ-001
+        isin:
+          type: string
+          description: 12-character ISO 6166 identifier
+          example: MN0000012345
+        cusip:
+          type: string
+          nullable: true
+          description: 9-character CUSIP (US/Canada)
+          example: null
+        sedol:
+          type: string
+          nullable: true
+          description: 7-character SEDOL (London Stock Exchange)
+          example: null
+        ticker:
+          type: string
+          description: Exchange ticker symbol
+          example: APU.UB
+        exchange_code:
+          type: string
+          description: MIC or internal exchange code
+          example: MXUB
+        name:
+          type: string
+          description: Full instrument name
+          example: APU JSC Common Stock
+        asset_class:
+          $ref: "#/components/schemas/AssetClass"
+        security_type:
+          $ref: "#/components/schemas/SecurityType"
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          example: MNT
+        lot_size:
+          type: integer
+          description: Minimum tradeable unit (board lot)
+          example: 100
+        tick_size:
+          type: string
+          description: Minimum price increment (decimal string)
+          example: "1.0000"
+        listing_date:
+          type: string
+          format: date
+          example: "2011-03-15"
+        trading_status:
+          $ref: "#/components/schemas/TradingStatus"
+        issuer_name:
+          type: string
+          example: APU JSC
+        issuer_country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: MN
+        sector:
+          type: string
+          nullable: true
+          description: Industry/sector classification (equities and ETFs)
+          example: Consumer Goods
+        shares_outstanding:
+          type: integer
+          nullable: true
+          description: Total shares outstanding (equities only)
+          example: 83542000
+        market_cap:
+          type: string
+          nullable: true
+          description: Market capitalisation as decimal string in instrument currency (equities only)
+          example: "1254000000.0000"
+        short_sell_allowed:
+          type: boolean
+          example: true
+        margin_eligible:
+          type: boolean
+          example: true
+        price_band_pct:
+          type: string
+          description: Maximum intraday price movement as a percentage (decimal string)
+          example: "10.00"
+        # Bond-specific fields
+        par_value:
+          type: string
+          nullable: true
+          description: Face value per bond (decimal string, bonds only)
+          example: "1000.0000"
+        coupon_rate:
+          type: string
+          nullable: true
+          description: Annual coupon rate as percentage (decimal string, bonds only)
+          example: "8.5000"
+        coupon_frequency:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/CouponFrequency"
+        day_count_convention:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/DayCountConvention"
+        maturity_date:
+          type: string
+          format: date
+          nullable: true
+          description: Bond maturity date
+          example: "2028-06-01"
+        issue_date:
+          type: string
+          format: date
+          nullable: true
+          description: Original issue date (bonds only)
+          example: "2023-06-01"
+        next_coupon_date:
+          type: string
+          format: date
+          nullable: true
+          description: Next coupon payment date (bonds only)
+          example: "2026-06-01"
+        accrued_interest:
+          type: string
+          nullable: true
+          description: Accrued interest per unit at last calculation (decimal string, bonds only)
+          example: "23.4247"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-01T00:00:00Z"
+
+    InstrumentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Instrument"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CreateInstrumentRequest:
+      type: object
+      required: [isin, ticker, exchange_code, name, asset_class, security_type, currency, lot_size, tick_size]
+      properties:
+        isin:
+          type: string
+          description: 12-character ISO 6166 identifier (must be unique)
+          example: MN0000012345
+        cusip:
+          type: string
+          example: null
+        sedol:
+          type: string
+          example: null
+        ticker:
+          type: string
+          description: Exchange ticker symbol (must be unique within exchange_code)
+          example: APU.UB
+        exchange_code:
+          type: string
+          example: MXUB
+        name:
+          type: string
+          example: APU JSC Common Stock
+        asset_class:
+          $ref: "#/components/schemas/AssetClass"
+        security_type:
+          $ref: "#/components/schemas/SecurityType"
+        currency:
+          type: string
+          example: MNT
+        lot_size:
+          type: integer
+          minimum: 1
+          example: 100
+        tick_size:
+          type: string
+          description: Minimum price increment (decimal string)
+          example: "1.0000"
+        listing_date:
+          type: string
+          format: date
+          example: "2026-04-01"
+        issuer_name:
+          type: string
+          example: APU JSC
+        issuer_country:
+          type: string
+          example: MN
+        sector:
+          type: string
+          example: Consumer Goods
+        shares_outstanding:
+          type: integer
+          example: 83542000
+        short_sell_allowed:
+          type: boolean
+          default: false
+        margin_eligible:
+          type: boolean
+          default: true
+        price_band_pct:
+          type: string
+          description: Intraday price band percentage (decimal string)
+          example: "10.00"
+        # Bond-specific (required when security_type in [GOVT_BOND, CORP_BOND, ZERO_COUPON])
+        par_value:
+          type: string
+          example: "1000.0000"
+        coupon_rate:
+          type: string
+          example: "8.5000"
+        coupon_frequency:
+          $ref: "#/components/schemas/CouponFrequency"
+        day_count_convention:
+          $ref: "#/components/schemas/DayCountConvention"
+        maturity_date:
+          type: string
+          format: date
+          example: "2028-06-01"
+        issue_date:
+          type: string
+          format: date
+          example: "2023-06-01"
+
+    UpdateInstrumentRequest:
+      type: object
+      description: All fields are optional — only provided fields are updated.
+      properties:
+        name:
+          type: string
+          example: APU JSC Common Stock (Updated)
+        issuer_name:
+          type: string
+          example: APU JSC
+        sector:
+          type: string
+          example: Consumer Staples
+        shares_outstanding:
+          type: integer
+          example: 85000000
+        short_sell_allowed:
+          type: boolean
+          example: true
+        margin_eligible:
+          type: boolean
+          example: true
+        price_band_pct:
+          type: string
+          example: "10.00"
+        next_coupon_date:
+          type: string
+          format: date
+          example: "2026-12-01"
+
+    SetInstrumentStatusRequest:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          $ref: "#/components/schemas/TradingStatus"
+        reason:
+          type: string
+          description: Reason for the status change (audit trail)
+          example: Circuit breaker triggered — price moved 10.2% in 5 minutes
+        resume_with_auction:
+          type: boolean
+          default: true
+          description: When transitioning HALTED → ACTIVE, whether to start with an opening auction (ignored for other transitions)
+
+    InstrumentStatusResponse:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        previous_status:
+          $ref: "#/components/schemas/TradingStatus"
+        current_status:
+          $ref: "#/components/schemas/TradingStatus"
+        reason:
+          type: string
+          example: Circuit breaker triggered — price moved 10.2% in 5 minutes
+        changed_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T10:05:00Z"
+
+    # ─── Orders ───────────────────────────────────────────────────────────
+    SubmitSecuritiesOrderRequest:
+      type: object
+      required: [instrument_id, side, order_type, quantity]
+      properties:
+        client_order_id:
+          type: string
+          description: Client-assigned idempotency key (max 64 chars)
+          example: my-sec-order-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        side:
+          $ref: "#/components/schemas/Side"
+        order_type:
+          $ref: "#/components/schemas/OrderType"
+        time_in_force:
+          $ref: "#/components/schemas/TimeInForce"
+        price:
+          type: string
+          description: Limit price as decimal string. Required for limit and stop_limit orders. Must be aligned to tick_size.
+          example: "15000.0000"
+        stop_price:
+          type: string
+          description: Stop trigger price as decimal string. Required for stop_limit and stop_market orders.
+          example: "14800.0000"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Order quantity in shares/units. Must be a positive multiple of lot_size.
+          example: 500
+        expire_at:
+          type: string
+          format: date-time
+          description: Required for GTD orders. Must be a future trading session close time.
+          example: "2026-04-25T16:00:00Z"
+        is_short_sell:
+          type: boolean
+          default: false
+          description: Whether this is a short sell order. When true, locate_id is required.
+        locate_id:
+          type: string
+          description: Short-sell locate reference. Required when is_short_sell is true.
+          example: LOC-20260423-000001
+        stp_mode:
+          type: string
+          enum: [cancel_newest, cancel_oldest, cancel_both]
+          default: cancel_newest
+          description: Self-trade prevention mode.
+
+    SecuritiesExecutionReport:
+      type: object
+      description: FIX-aligned execution report returned for new, filled, cancelled, and rejected orders.
+      properties:
+        exec_id:
+          type: string
+          example: EXEC-SEC-001
+        order_id:
+          type: string
+          example: ORD-SEC-001
+        client_order_id:
+          type: string
+          example: my-sec-order-001
+        exec_type:
+          type: string
+          enum: [new, partial_fill, fill, cancelled, rejected, expired, trade_bust]
+          example: new
+        order_status:
+          $ref: "#/components/schemas/OrderStatus"
+        side:
+          $ref: "#/components/schemas/Side"
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        price:
+          type: string
+          description: Order limit price (decimal string)
+          example: "15000.0000"
+        quantity:
+          type: integer
+          description: Original order quantity
+          example: 500
+        last_qty:
+          type: integer
+          description: Quantity filled in this execution
+          example: 0
+        last_price:
+          type: string
+          description: Price of last fill (decimal string, "0" if no fill in this report)
+          example: "0"
+        cumulative_qty:
+          type: integer
+          description: Total quantity filled so far
+          example: 0
+        leaves_qty:
+          type: integer
+          description: Remaining open quantity
+          example: 500
+        settlement_date:
+          type: string
+          format: date
+          description: T+2 settlement date for trades arising from this order
+          example: "2026-04-25"
+        transact_time:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:15:00.123Z"
+        reject_reason:
+          type: string
+          nullable: true
+          description: Rejection reason when exec_type is rejected
+          example: null
+        account_id:
+          type: string
+          description: Participant identifier
+          example: PART-001
+
+    SecuritiesOrderDetail:
+      type: object
+      properties:
+        order_id:
+          type: string
+          example: ORD-SEC-001
+        client_order_id:
+          type: string
+          example: my-sec-order-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        account_id:
+          type: string
+          example: PART-001
+        side:
+          $ref: "#/components/schemas/Side"
+        order_type:
+          $ref: "#/components/schemas/OrderType"
+        time_in_force:
+          $ref: "#/components/schemas/TimeInForce"
+        price:
+          type: string
+          nullable: true
+          example: "15000.0000"
+        stop_price:
+          type: string
+          nullable: true
+          example: null
+        quantity:
+          type: integer
+          example: 500
+        filled_qty:
+          type: integer
+          example: 0
+        remaining_qty:
+          type: integer
+          example: 500
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        is_short_sell:
+          type: boolean
+          example: false
+        locate_id:
+          type: string
+          nullable: true
+          example: null
+        settlement_date:
+          type: string
+          format: date
+          example: "2026-04-25"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:15:00.123Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:15:00.123Z"
+        expire_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    SecuritiesOrderListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecuritiesOrderDetail"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AmendOrderRequest:
+      type: object
+      description: At least one of new_price or new_quantity must be provided.
+      properties:
+        new_price:
+          type: string
+          description: New limit price (decimal string). Must be aligned to tick_size.
+          example: "15100.0000"
+        new_quantity:
+          type: integer
+          description: New total quantity. Must be >= filled_qty and a multiple of lot_size.
+          minimum: 1
+          example: 300
+
+    # ─── Positions ────────────────────────────────────────────────────────
+    SecuritiesPosition:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          example: PART-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        ticker:
+          type: string
+          example: APU.UB
+        net_qty:
+          type: integer
+          description: Net position (positive = long, negative = short)
+          example: 1500
+        avg_price:
+          type: string
+          description: Volume-weighted average entry price (decimal string)
+          example: "14800.0000"
+        market_value:
+          type: string
+          description: Current market value in instrument currency (decimal string)
+          example: "22500000.0000"
+        unrealized_pnl:
+          type: string
+          description: Mark-to-market unrealized P&L (decimal string)
+          example: "300000.0000"
+        realized_pnl:
+          type: string
+          description: Realized P&L from closed trades (decimal string)
+          example: "150000.0000"
+        short_qty:
+          type: integer
+          description: Open short quantity (non-negative)
+          example: 0
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:30:00Z"
+
+    PositionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecuritiesPosition"
+
+    PositionSummary:
+      type: object
+      properties:
+        participant_id:
+          type: string
+          example: PART-001
+        total_market_value:
+          type: string
+          description: Sum of market_value across all long positions (decimal string, MNT)
+          example: "45000000.0000"
+        total_unrealized_pnl:
+          type: string
+          description: Sum of unrealized_pnl across all positions (decimal string)
+          example: "620000.0000"
+        total_realized_pnl:
+          type: string
+          description: Sum of realized_pnl across all positions this session (decimal string)
+          example: "310000.0000"
+        long_position_count:
+          type: integer
+          example: 5
+        short_position_count:
+          type: integer
+          example: 1
+        calculated_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:30:00Z"
+
+    # ─── Settlements ──────────────────────────────────────────────────────
+    SettlementObligation:
+      type: object
+      properties:
+        obligation_id:
+          type: string
+          example: OBL-SEC-001
+        trade_id:
+          type: string
+          example: TRD-SEC-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        participant_id:
+          type: string
+          example: PART-001
+        counterparty_id:
+          type: string
+          example: GARUDAX-CCP
+        side:
+          type: string
+          enum: [BUY, SELL]
+          example: BUY
+        quantity:
+          type: integer
+          example: 500
+        price:
+          type: string
+          description: Trade execution price (decimal string)
+          example: "15000.0000"
+        settlement_value:
+          type: string
+          description: Cash settlement amount including accrued interest (decimal string)
+          example: "7500000.0000"
+        accrued_interest:
+          type: string
+          description: Accrued interest component for bonds (decimal string, "0.0000" for equities)
+          example: "0.0000"
+        settlement_date:
+          type: string
+          format: date
+          example: "2026-04-25"
+        status:
+          $ref: "#/components/schemas/SettlementStatus"
+        buyer_affirmed:
+          type: boolean
+          example: true
+        seller_affirmed:
+          type: boolean
+          example: true
+        affirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-04-24T10:00:00Z"
+        netting_run_id:
+          type: string
+          nullable: true
+          description: ID of the netting run that netted this obligation
+          example: NET-20260424-001
+        csd_instruction_id:
+          type: string
+          nullable: true
+          description: CSD settlement instruction reference
+          example: CSD-INSTR-001
+        fail_reason:
+          type: string
+          nullable: true
+          description: Failure reason when status is FAILED
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:15:00Z"
+
+    SettlementListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettlementObligation"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    TriggerSettlementCycleRequest:
+      type: object
+      required: [settlement_date]
+      properties:
+        settlement_date:
+          type: string
+          format: date
+          description: The settlement date to process (typically T+2 from today)
+          example: "2026-04-25"
+        dry_run:
+          type: boolean
+          default: false
+          description: When true, calculates netting and reports without issuing CSD instructions
+
+    SettlementCycleResponse:
+      type: object
+      properties:
+        cycle_id:
+          type: string
+          example: CYCLE-20260425-001
+        settlement_date:
+          type: string
+          format: date
+          example: "2026-04-25"
+        status:
+          type: string
+          enum: [accepted, running, completed, failed]
+          example: accepted
+        dry_run:
+          type: boolean
+          example: false
+        obligations_count:
+          type: integer
+          description: Number of settlement obligations in scope
+          example: 142
+        triggered_at:
+          type: string
+          format: date-time
+          example: "2026-04-25T08:00:00Z"
+
+    NettingBatch:
+      type: object
+      properties:
+        batch_id:
+          type: string
+          example: BATCH-SEC-EQ-001-20260425
+        run_id:
+          type: string
+          example: NET-20260424-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        settlement_date:
+          type: string
+          format: date
+          example: "2026-04-25"
+        gross_buy_qty:
+          type: integer
+          example: 5200
+        gross_sell_qty:
+          type: integer
+          example: 4800
+        net_qty:
+          type: integer
+          description: Net position after bilateral netting (positive = net buy, negative = net sell)
+          example: 400
+        gross_obligations_count:
+          type: integer
+          example: 38
+        net_obligations_count:
+          type: integer
+          description: Number of netted obligations after multilateral netting
+          example: 12
+        netting_efficiency_pct:
+          type: string
+          description: Percentage reduction in settlement obligations (decimal string)
+          example: "68.42"
+        netted_at:
+          type: string
+          format: date-time
+          example: "2026-04-24T18:00:00Z"
+
+    NettingBatchListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NettingBatch"
+        run_id:
+          type: string
+          nullable: true
+          example: NET-20260424-001
+        settlement_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-25"
+
+    # ─── Corporate Actions ────────────────────────────────────────────────
+    CorporateAction:
+      type: object
+      properties:
+        action_id:
+          type: string
+          example: CA-001
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        action_type:
+          $ref: "#/components/schemas/CorporateActionType"
+        status:
+          $ref: "#/components/schemas/CorporateActionStatus"
+        announcement_date:
+          type: string
+          format: date
+          example: "2026-04-20"
+        ex_date:
+          type: string
+          format: date
+          description: Ex-dividend / ex-rights date. Trades with settlement >= ex_date are not entitled.
+          example: "2026-05-01"
+        record_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-05-02"
+        payment_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date on which entitlements are paid or delivered
+          example: "2026-05-15"
+        # DIVIDEND fields
+        dividend_per_share:
+          type: string
+          nullable: true
+          description: Cash dividend amount per share (decimal string, DIVIDEND only)
+          example: "150.0000"
+        dividend_currency:
+          type: string
+          nullable: true
+          description: ISO 4217 currency code for dividend payment
+          example: MNT
+        # STOCK_SPLIT / BONUS_ISSUE fields
+        split_ratio_from:
+          type: integer
+          nullable: true
+          description: Split ratio denominator (STOCK_SPLIT only). E.g. 1 in a 1-for-2 split.
+          example: 1
+        split_ratio_to:
+          type: integer
+          nullable: true
+          description: Split ratio numerator (STOCK_SPLIT only). E.g. 2 in a 1-for-2 split.
+          example: 2
+        description:
+          type: string
+          nullable: true
+          example: Q1 2026 cash dividend of 150 MNT per share
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T10:00:00Z"
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    CorporateActionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CorporateAction"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AnnounceCorporateActionRequest:
+      type: object
+      required: [instrument_id, action_type, announcement_date, ex_date]
+      properties:
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        action_type:
+          $ref: "#/components/schemas/CorporateActionType"
+        announcement_date:
+          type: string
+          format: date
+          example: "2026-04-20"
+        ex_date:
+          type: string
+          format: date
+          example: "2026-05-01"
+        record_date:
+          type: string
+          format: date
+          example: "2026-05-02"
+        payment_date:
+          type: string
+          format: date
+          example: "2026-05-15"
+        # DIVIDEND
+        dividend_per_share:
+          type: string
+          description: Required when action_type is DIVIDEND
+          example: "150.0000"
+        dividend_currency:
+          type: string
+          description: Required when action_type is DIVIDEND
+          example: MNT
+        # STOCK_SPLIT / BONUS_ISSUE
+        split_ratio_from:
+          type: integer
+          description: Required when action_type is STOCK_SPLIT or BONUS_ISSUE
+          example: 1
+        split_ratio_to:
+          type: integer
+          description: Required when action_type is STOCK_SPLIT or BONUS_ISSUE
+          example: 2
+        description:
+          type: string
+          example: Q1 2026 cash dividend of 150 MNT per share
+
+    # ─── CSD Accounts ─────────────────────────────────────────────────────
+    CSDAccount:
+      type: object
+      properties:
+        account_id:
+          type: string
+          description: Internal platform CSD account identifier
+          example: CSD-ACCT-001
+        participant_id:
+          type: string
+          example: PART-001
+        csd_account_ref:
+          type: string
+          description: Reference number at the external CSD (e.g. Mongolia CSD)
+          example: MN-CSD-12345-PROP
+        account_type:
+          type: string
+          enum: [PROPRIETARY, CLIENT_OMNIBUS, CLIENT_SEGREGATED]
+          description: |
+            PROPRIETARY — firm's own holdings;
+            CLIENT_OMNIBUS — commingled client assets;
+            CLIENT_SEGREGATED — individually segregated client assets.
+          example: PROPRIETARY
+        currency:
+          type: string
+          example: MNT
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-01T00:00:00Z"
+
+    CSDAccountListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CSDAccount"
+
+    CreateCSDAccountRequest:
+      type: object
+      required: [account_type, currency]
+      properties:
+        account_type:
+          type: string
+          enum: [PROPRIETARY, CLIENT_OMNIBUS, CLIENT_SEGREGATED]
+          example: PROPRIETARY
+        currency:
+          type: string
+          example: MNT
+        csd_account_ref:
+          type: string
+          description: Pre-existing CSD reference number if the account was opened directly with the CSD
+          example: MN-CSD-12345-PROP
+
+    CSDBalance:
+      type: object
+      properties:
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        ticker:
+          type: string
+          example: APU.UB
+        total_qty:
+          type: integer
+          description: Total securities held in the account
+          example: 5000
+        available_qty:
+          type: integer
+          description: Quantity available for trading or transfer (total minus pledged and pending-out)
+          example: 4500
+        pledged_qty:
+          type: integer
+          description: Quantity pledged as collateral
+          example: 300
+        pending_in_qty:
+          type: integer
+          description: Quantity expected to be received (pending settlement buys)
+          example: 500
+        pending_out_qty:
+          type: integer
+          description: Quantity expected to be delivered (pending settlement sells)
+          example: 200
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-04-23T09:30:00Z"
+
+    CSDAccountBalances:
+      type: object
+      properties:
+        account_id:
+          type: string
+          example: CSD-ACCT-001
+        csd_account_ref:
+          type: string
+          example: MN-CSD-12345-PROP
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/CSDBalance"
+
+    InitiateTransferRequest:
+      type: object
+      required: [transfer_type, instrument_id, quantity, from_account_id, to_account_id]
+      properties:
+        transfer_type:
+          $ref: "#/components/schemas/TransferType"
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        quantity:
+          type: integer
+          minimum: 1
+          example: 500
+        from_account_id:
+          type: string
+          description: Source CSD custody account
+          example: CSD-ACCT-001
+        to_account_id:
+          type: string
+          description: Destination CSD custody account
+          example: CSD-ACCT-002
+        settlement_value:
+          type: string
+          description: Cash leg amount (decimal string). Required when transfer_type is DVP.
+          example: "7500000.0000"
+        settlement_date:
+          type: string
+          format: date
+          description: Intended settlement date. Defaults to T+0 for FoP, T+2 for DvP.
+          example: "2026-04-25"
+        obligation_id:
+          type: string
+          nullable: true
+          description: Associated settlement obligation ID (for CCP-instructed transfers)
+          example: OBL-SEC-001
+        notes:
+          type: string
+          example: Internal repo agreement leg 1
+
+    TransferInstruction:
+      type: object
+      properties:
+        transfer_id:
+          type: string
+          example: XFER-001
+        transfer_type:
+          $ref: "#/components/schemas/TransferType"
+        instrument_id:
+          type: string
+          example: SEC-EQ-001
+        quantity:
+          type: integer
+          example: 500
+        from_account_id:
+          type: string
+          example: CSD-ACCT-001
+        to_account_id:
+          type: string
+          example: CSD-ACCT-002
+        settlement_value:
+          type: string
+          nullable: true
+          example: "7500000.0000"
+        settlement_date:
+          type: string
+          format: date
+          example: "2026-04-25"
+        status:
+          type: string
+          enum: [PENDING, INSTRUCTED, SETTLED, FAILED, CANCELLED]
+          example: PENDING
+        obligation_id:
+          type: string
+          nullable: true
+          example: OBL-SEC-001
+        csd_reference:
+          type: string
+          nullable: true
+          description: Reference number assigned by the external CSD upon instruction submission
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-25T08:00:00Z"
