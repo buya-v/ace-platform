@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/garudax-platform/securities-service/internal/server"
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -36,12 +39,31 @@ func main() {
 		cfg.BindAddress = addr
 	}
 
-	instrumentStore := store.NewInMemoryInstrumentStore()
-	orderStore := store.NewInMemoryOrderStore()
+	var instrumentStore store.InstrumentStore
+	var orderStore store.OrderStore
+
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
+		db, err := sql.Open("pgx", databaseURL)
+		if err != nil {
+			logger.Error("failed to open database", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		if err := db.Ping(); err != nil {
+			logger.Error("database ping failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		logger.Info("connected to PostgreSQL database")
+		instrumentStore = store.NewPgInstrumentStore(db)
+		orderStore = store.NewPgOrderStore(db)
+	} else {
+		logger.Info("DATABASE_URL not set, using in-memory stores")
+		instrumentStore = store.NewInMemoryInstrumentStore()
+		orderStore = store.NewInMemoryOrderStore()
+	}
 
 	srv := server.New(instrumentStore, orderStore, cfg)
 
-	// Start health server on port 9085.
+	// Start health server on port 9089.
 	go func() {
 		logger.Info("health server starting",
 			slog.String("bind", cfg.BindAddress),
@@ -53,7 +75,7 @@ func main() {
 		}
 	}()
 
-	// Start API server on port 8085.
+	// Start API server on port 8089.
 	go func() {
 		logger.Info("API server starting",
 			slog.String("bind", cfg.BindAddress),

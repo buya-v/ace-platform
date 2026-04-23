@@ -25,8 +25,8 @@ type Config struct {
 // DefaultConfig returns a Config with the standard port allocation for securities-service.
 func DefaultConfig() Config {
 	return Config{
-		APIPort:     8085,
-		HealthPort:  9085,
+		APIPort:     8089,
+		HealthPort:  9089,
 		BindAddress: "0.0.0.0",
 	}
 }

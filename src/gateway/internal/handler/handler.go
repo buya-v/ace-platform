@@ -385,6 +385,7 @@ func (h *Handler) AdminHealth(w http.ResponseWriter, r *http.Request) {
 		{"name": "compliance-service", "status": "healthy", "port": 8086},
 		{"name": "market-data-service", "status": "healthy", "port": 8087},
 		{"name": "warehouse-service", "status": "healthy", "port": 8088},
+		{"name": "securities-service", "status": "healthy", "port": 8089},
 		{"name": "gateway", "status": "healthy", "port": 8080},
 	}
 
@@ -441,6 +442,40 @@ func (h *Handler) CreateDelivery(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, "warehouse-service", "WarehouseService/GetInventory")
+}
+
+// --- Securities Endpoints (securities-service) ---
+
+func (h *Handler) ListSecuritiesInstruments(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/ListInstruments")
+}
+
+func (h *Handler) CreateSecuritiesInstrument(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/CreateInstrument")
+}
+
+func (h *Handler) GetSecuritiesInstrument(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/GetInstrument")
+}
+
+func (h *Handler) UpdateSecuritiesInstrument(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/UpdateInstrument")
+}
+
+func (h *Handler) ListSecuritiesOrders(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/ListOrders")
+}
+
+func (h *Handler) SubmitSecuritiesOrder(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/SubmitOrder")
+}
+
+func (h *Handler) GetSecuritiesOrder(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/GetOrder")
+}
+
+func (h *Handler) CancelSecuritiesOrder(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/CancelOrder")
 }
 
 // --- Admin Risk Endpoints (direct DB) ---

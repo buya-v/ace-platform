@@ -28,14 +28,15 @@ type Config struct {
 	ProductionMode     bool
 
 	// Backend services
-	MatchingEngineAddr  string
-	ClearingEngineAddr  string
-	MarginEngineAddr    string
-	SettlementEngineAddr string
+	MatchingEngineAddr    string
+	ClearingEngineAddr    string
+	MarginEngineAddr      string
+	SettlementEngineAddr  string
 	AuthServiceAddr       string
 	ComplianceServiceAddr string
 	MarketDataServiceAddr string
 	WarehouseServiceAddr  string
+	SecuritiesServiceAddr string
 
 	// Rate limiting
 	RateLimitEnabled bool
@@ -77,6 +78,7 @@ func FromEnv() *Config {
 		ComplianceServiceAddr: envStr("COMPLIANCE_SERVICE_ADDR", "localhost:50056"),
 		MarketDataServiceAddr: envStr("MARKET_DATA_SERVICE_ADDR", "localhost:50057"),
 		WarehouseServiceAddr:  envStr("WAREHOUSE_SERVICE_ADDR", "localhost:50058"),
+		SecuritiesServiceAddr: envStr("SECURITIES_SERVICE_ADDR", "localhost:50059"),
 
 		RateLimitEnabled: envBool("RATE_LIMIT_ENABLED", true),
 

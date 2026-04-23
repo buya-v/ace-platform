@@ -9,5 +9,5 @@ FROM alpine:3.19
 RUN adduser -D -u 1000 appuser
 COPY --from=builder /build/securities-service /usr/local/bin/securities-service
 USER appuser
-EXPOSE 8085 9085
+EXPOSE 8089 9089
 ENTRYPOINT ["securities-service"]

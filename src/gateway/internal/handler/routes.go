@@ -99,6 +99,17 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("GET", "/api/v1/admin/risk/order-limits", h.ListOrderLimits)
 	rt.Handle("PUT", "/api/v1/admin/risk/order-limits/{instrument_id}", h.UpdateOrderLimits)
 
+	// --- Securities (securities-service) ---
+	rt.Handle("GET", "/api/v1/securities/instruments", h.ListSecuritiesInstruments)
+	rt.Handle("POST", "/api/v1/securities/instruments", h.CreateSecuritiesInstrument)
+	rt.Handle("GET", "/api/v1/securities/instruments/{id}", h.GetSecuritiesInstrument)
+	rt.Handle("PATCH", "/api/v1/securities/instruments/{id}", h.UpdateSecuritiesInstrument)
+	rt.Handle("PUT", "/api/v1/securities/instruments/{id}", h.UpdateSecuritiesInstrument)
+	rt.Handle("GET", "/api/v1/securities/orders", h.ListSecuritiesOrders)
+	rt.Handle("POST", "/api/v1/securities/orders", h.SubmitSecuritiesOrder)
+	rt.Handle("GET", "/api/v1/securities/orders/{id}", h.GetSecuritiesOrder)
+	rt.Handle("DELETE", "/api/v1/securities/orders/{id}", h.CancelSecuritiesOrder)
+
 	// --- Reference Data (direct DB, public) ---
 	// These routes are registered separately via RefDataHandlers.RegisterRoutes()
 }

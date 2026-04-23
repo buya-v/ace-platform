@@ -311,7 +311,8 @@ services:
     environment:
       <<: *common-env
       GRPC_PORT: "50059"
-      HEALTH_PORT: "9085"
+      API_PORT: "8089"
+      HEALTH_PORT: "9089"
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: ${POSTGRES_USER:-garudax}
@@ -320,10 +321,10 @@ services:
       DB_SSL_MODE: disable
     ports:
       - "50059:50059"
-      - "8085:8085"
-      - "9085:9085"
+      - "8089:8089"
+      - "9089:9089"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9085/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9089/healthz"]
       <<: *healthcheck-http
     networks:
       - garudax-network
@@ -364,6 +365,7 @@ services:
       COMPLIANCE_SERVICE_ADDR: compliance-service:50056
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
+      SECURITIES_SERVICE_ADDR: securities-service:50059
       BOT_ORCHESTRATOR_URL: "http://admin-bot-orchestrator:3100"
     ports:
       - "8080:8080"

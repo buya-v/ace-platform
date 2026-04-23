@@ -45,7 +45,8 @@ func main() {
 		"auth-service":      fmt.Sprintf("http://%s", strings.Replace(cfg.AuthServiceAddr, ":50055", ":8085", 1)),
 		"compliance-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.ComplianceServiceAddr, ":50056", ":8086", 1)),
 		"market-data-service":  fmt.Sprintf("http://%s", strings.Replace(cfg.MarketDataServiceAddr, ":50057", ":8087", 1)),
-		"warehouse-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.WarehouseServiceAddr, ":50058", ":8088", 1)),
+		"warehouse-service":    fmt.Sprintf("http://%s", strings.Replace(cfg.WarehouseServiceAddr, ":50058", ":8088", 1)),
+		"securities-service":   fmt.Sprintf("http://%s", strings.Replace(cfg.SecuritiesServiceAddr, ":50059", ":8089", 1)),
 	})
 
 	// Initialize handler and router
@@ -153,6 +154,8 @@ func main() {
 			strings.HasPrefix(path, "/api/v1/participants") ||
 			strings.HasPrefix(path, "/api/v1/risk-scores/"):
 			return "compliance"
+		case strings.HasPrefix(path, "/api/v1/securities/"):
+			return "securities"
 		default:
 			return "default"
 		}
