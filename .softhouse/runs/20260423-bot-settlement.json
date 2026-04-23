@@ -1,0 +1,59 @@
+{
+  "run_id": "20260423-bot-settlement",
+  "feature": "Securities Bot Tools + Settlement",
+  "requirement": "MCP tools for securities, bot commands, T+2 settlement state machine",
+  "status": "complete",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "MCP tools for securities",
+      "description": "Add securities MCP tools to admin-bot following the existing pattern in src/admin-bot/mcp-server/src/tools/trading.ts.\n\nCreate src/admin-bot/mcp-server/src/tools/securities.ts:\n\nImport McpServer from @modelcontextprotocol/sdk, z from zod, GatewayClient.\n\nexport function registerSecuritiesTools(server: McpServer, client: GatewayClient): void {\n\n1. list_securities_instruments \u2014 GET /api/v1/securities/instruments\n   Params: asset_class (optional string: EQUITY/BOND/ETF), trading_status (optional string)\n   Returns formatted table: ticker | name | asset_class | lot_size | tick_size | status\n\n2. get_securities_instrument \u2014 GET /api/v1/securities/instruments/{id}\n   Params: instrument_id (required string)\n\n3. create_securities_instrument \u2014 POST /api/v1/securities/instruments\n   Params: ticker, name, asset_class (EQUITY/BOND/ETF), lot_size (number), tick_size (number), currency (default MNT)\n\n4. submit_securities_order \u2014 POST /api/v1/securities/orders\n   Params: instrument_id, side (BUY/SELL), order_type (LIMIT/MARKET), quantity (number), price (number, optional for MARKET)\n   Returns order + any trades from matching\n\n5. list_securities_positions \u2014 GET /api/v1/securities/positions\n   Params: participant_id (optional)\n   Returns formatted table: instrument | quantity | avg_cost | P&L\n\n6. list_securities_orders \u2014 GET /api/v1/securities/orders\n   Params: instrument_id (optional), status (optional)\n\n7. cancel_securities_order \u2014 DELETE /api/v1/securities/orders/{id}\n   Params: order_id (required)\n\nThen register in src/admin-bot/mcp-server/src/index.ts \u2014 add import and call registerSecuritiesTools(server, client).\n\nFormat responses as readable text tables (not raw JSON) for bot readability.\n\nRun: cd src/admin-bot/mcp-server && npx tsc --noEmit\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/admin-bot/mcp-server/src/tools/securities.ts",
+        "src/admin-bot/mcp-server/src/index.ts"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T2",
+      "title": "T+2 settlement engine",
+      "description": "Implement the T+2 settlement state machine in the securities-service.\n\nRead docs/securities-architecture.md section 7 (T+2 Settlement State Machine) for the full spec.\n\nCreate src/securities-service/internal/settlement/engine.go:\n\n1. SettlementEngine struct with tradeStore, positionStore, and a new SettlementStore\n\n2. Add SettlementObligation type to types.go:\n   - ID, TradeID, InstrumentID, BuyerParticipantID, SellerParticipantID\n   - Quantity int, Price float64, NetAmount float64\n   - SettlementDate string, Status string (PENDING/AFFIRMED/NETTED/INSTRUCTED/SETTLING/SETTLED/FAILED)\n   - CreatedAt, UpdatedAt\n\n3. Add SettlementStore interface to store.go:\n   - Create(*SettlementObligation) error\n   - Get(id string) (*SettlementObligation, error)\n   - ListByDate(date string) ([]SettlementObligation, error)\n   - ListByStatus(status string) ([]SettlementObligation, error)\n   - UpdateStatus(id string, status string) error\n   - InMemorySettlementStore implementation\n\n4. SettlementEngine methods:\n   - CreateObligationsFromTrades(trades []SecurityTrade) error \u2014 for each trade, create a SettlementObligation with status PENDING\n   - ProcessSettlementCycle(date string) (*SettlementResult, error):\n     a. Get all obligations for date with status PENDING \u2192 mark AFFIRMED\n     b. Net obligations by instrument+participant \u2192 mark AFFIRMED \u2192 NETTED\n     c. Mark NETTED \u2192 SETTLED (simplified \u2014 no real CSD integration)\n     d. Return SettlementResult{Processed, Settled, Failed int}\n\n5. Wire into matching engine \u2014 after creating trades in MatchOrder, call settlement.CreateObligationsFromTrades\n\n6. Add settlement HTTP endpoints to securities-service:\n   - GET /api/v1/securities/settlements?date=2026-04-25&status=PENDING\n   - POST /api/v1/securities/settlements/cycle {\"date\": \"2026-04-25\"} \u2014 trigger ProcessSettlementCycle\n   - Wire routes in server.go\n\n7. Add gateway proxy routes for /api/v1/securities/settlements/*\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/settlement/engine.go",
+        "src/securities-service/internal/types/types.go",
+        "src/securities-service/internal/store/store.go",
+        "src/securities-service/internal/server/server.go",
+        "src/securities-service/internal/engine/engine.go"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T3",
+      "title": "Settlement tests + bot MCP tool for /settle",
+      "description": "Write tests for the settlement engine and add a settle MCP tool.\n\nPart A \u2014 Settlement tests at src/securities-service/internal/settlement/engine_test.go:\n1. TestCreateObligationsFromTrades \u2014 create 2 trades, verify 2 obligations with PENDING status\n2. TestProcessSettlementCycle_Simple \u2014 create obligations, run cycle, verify all SETTLED\n3. TestProcessSettlementCycle_NoObligations \u2014 run cycle for date with no obligations \u2192 0 processed\n4. TestProcessSettlementCycle_Netting \u2014 2 trades same instrument+participants, verify netted quantities\n5. TestSettlementStore_CRUD \u2014 create, get, list by date, list by status, update status\n\nPart B \u2014 Add settle MCP tool to src/admin-bot/mcp-server/src/tools/securities.ts:\n- trigger_settlement_cycle \u2014 POST /api/v1/securities/settlements/cycle\n  Params: date (string, YYYY-MM-DD format)\n  Returns: settled count, failed count\n- list_settlement_obligations \u2014 GET /api/v1/securities/settlements\n  Params: date (optional), status (optional)\n  Returns: formatted table\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/settlement/engine_test.go",
+        "src/admin-bot/mcp-server/src/tools/securities.ts"
+      ],
+      "dependencies": [
+        "T1",
+        "T2"
+      ],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
