@@ -1,7 +1,68 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-securities-service",
+  "feature": "Securities Service Core",
+  "requirement": "Bootstrap securities-service Go microservice with instrument CRUD and order submission. Follow matching-engine pattern.",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Scaffold securities-service Go module",
+      "description": "Create the securities-service Go microservice following the matching-engine pattern.\n\nCreate these files:\n- src/securities-service/go.mod (module github.com/garudax-platform/securities-service, go 1.25.0)\n- src/securities-service/cmd/securities-service/main.go — HTTP server on port 8085, health server on port 9085, register routes, set readyFlag after init. Follow src/matching-engine/cmd/matching-engine/main.go pattern.\n- src/securities-service/Dockerfile — multi-stage Go build, same pattern as src/matching-engine/Dockerfile\n- src/securities-service/internal/types/types.go — all types from docs/securities-architecture.md section 3 (Instrument Model): Instrument struct with all fields (id, isin, cusip, sedol, ticker, name, asset_class enum, exchange_code, lot_size, tick_size, currency, listing_date, trading_status enum, created_at, updated_at), BondDetails struct, SecurityOrder struct with all fields, TradingStatus enum (ACTIVE/HALTED/SUSPENDED/DELISTED), AssetClass enum (EQUITY/BOND/ETF), OrderType enum (LIMIT/MARKET/STOP/STOP_LIMIT), OrderSide enum (BUY/SELL/SHORT_SELL), OrderStatus enum, TimeInForce enum\n- src/securities-service/internal/store/store.go — InstrumentStore interface (List, Get, Create, Update, UpdateStatus), OrderStore interface (Submit, Get, List, Cancel, Amend). InMemoryInstrumentStore and InMemoryOrderStore implementations using sync.RWMutex + map\n- src/securities-service/internal/server/server.go — HTTP server setup, route registration, health endpoints (/healthz, /readyz with atomic readyFlag). Follow gateway health.go pattern.\n\nIMPORTANT: Go is at /usr/local/go/bin/go — set PATH. Run: go build ./... to verify compilation.\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Instrument CRUD handlers",
+      "description": "Implement the instrument CRUD HTTP handlers in src/securities-service/internal/server/handlers.go (or handlers_instrument.go).\n\nRead docs/securities-openapi.yaml for the exact API contracts. Read .softhouse/handoff/T1.md for the types and store interfaces.\n\nEndpoints:\n- GET /api/v1/securities/instruments — list instruments, query params: asset_class, trading_status, exchange_code, search (name/ticker), limit, cursor. Return JSON array with pagination.\n- GET /api/v1/securities/instruments/{id} — get by ID. Return 404 if not found.\n- POST /api/v1/securities/instruments — create instrument. Validate required fields (ticker, name, asset_class, lot_size, tick_size, currency). Return 201 with created instrument.\n- PATCH /api/v1/securities/instruments/{id} — update instrument fields. Return 200.\n- PUT /api/v1/securities/instruments/{id}/status — change trading_status. Validate status enum. Return 200.\n\nAll handlers should:\n- Use the InstrumentStore interface from T1\n- Return consistent JSON error responses: {\"error\": {\"code\": \"NOT_FOUND\", \"message\": \"...\"}}\n- Use snake_case JSON field names (add json tags to all structs)\n- Wire routes in server.go\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Order submission with lot/tick validation",
+      "description": "Implement securities order submission handler in src/securities-service/internal/server/handlers_order.go.\n\nRead docs/securities-architecture.md section 4 (Order Types) for validation rules. Read .softhouse/handoff/T1.md and T2.md for context.\n\nEndpoints:\n- POST /api/v1/securities/orders — submit order. Validate:\n  - instrument_id exists and instrument trading_status is ACTIVE\n  - quantity > 0 and quantity % instrument.lot_size == 0 (lot validation)\n  - For LIMIT/STOP_LIMIT: price > 0 and price % instrument.tick_size == 0 (tick validation)\n  - For MARKET orders: no price required\n  - For STOP/STOP_LIMIT: stop_price required and must be valid\n  - For SHORT_SELL: reject with 422 if short selling is not enabled (placeholder)\n  - side must be BUY, SELL, or SHORT_SELL\n  - order_type must be LIMIT, MARKET, STOP, or STOP_LIMIT\n  - time_in_force defaults to GTC if not provided\n  Return 201 with created order (status=PENDING, filled_quantity=0)\n\n- GET /api/v1/securities/orders — list orders, filter by instrument_id, status, side\n- GET /api/v1/securities/orders/{id} — get by ID\n- DELETE /api/v1/securities/orders/{id} — cancel order (only if status is PENDING or PARTIALLY_FILLED)\n\nAll validation errors return 422 with specific error messages:\n- \"quantity must be a multiple of lot_size (N)\"\n- \"price must be a multiple of tick_size (N)\"\n- \"instrument is not active for trading\"\n\nWire routes in server.go.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/"],
+      "dependencies": ["T2"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Add securities-service to docker-compose.yml",
+      "description": "Add the securities-service to docker-compose.yml following the existing service patterns.\n\nRead docker-compose.yml to understand the existing conventions (health checks, networks, depends_on, env vars).\n\nAdd:\n- securities-service container: build from src/securities-service/Dockerfile, port 8085 (HTTP), port 9085 (metrics/health), healthcheck using x-healthcheck-http anchor, depends_on postgres, part of garudax-network\n- Add appropriate environment variables (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD matching other services)\n\nAlso add a gateway route proxy entry if the gateway uses a config file to route to backends (check how other services are routed through the gateway).\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "coder",
+      "model": "haiku",
+      "target": "infra",
+      "files_hint": ["docker-compose.yml"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T5",
+      "title": "Unit tests for instruments and orders",
+      "description": "Write Go unit tests for the securities-service.\n\nRead .softhouse/handoff/T1.md, T2.md, T3.md for what was implemented.\n\nCreate test files:\n\n1. src/securities-service/internal/store/store_test.go:\n- Test InMemoryInstrumentStore: Create, Get, List (with filters), Update, UpdateStatus\n- Test InMemoryOrderStore: Submit, Get, List (with filters), Cancel\n- Test concurrent access (goroutines calling Create/List simultaneously)\n\n2. src/securities-service/internal/server/handlers_test.go:\n- Test instrument CRUD via HTTP: POST create → GET verify → PATCH update → GET verify\n- Test instrument listing with filters (asset_class, trading_status)\n- Test 404 for non-existent instrument\n- Test validation errors (missing required fields)\n\n3. src/securities-service/internal/server/handlers_order_test.go:\n- Test order submission success\n- Test lot_size validation: quantity=7 with lot_size=5 → 422\n- Test tick_size validation: price=10.03 with tick_size=0.05 → 422\n- Test order on halted instrument → 422\n- Test order cancellation (PENDING → CANCELLED)\n- Test cancel non-cancellable order → 409\n- Test market order (no price required)\n- Test stop-limit order (stop_price required)\n\nTarget: 60%+ coverage on business logic packages.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: go test ./... -cover\n\nWrite handoff to .softhouse/handoff/T5.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/server/"],
+      "dependencies": ["T3"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
