@@ -166,9 +166,9 @@ func (s *Server) handleInstrument(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.listOrders(w, r)
+		s.handleListOrders(w, r)
 	case http.MethodPost:
-		s.submitOrder(w, r)
+		s.handleSubmitOrder(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
@@ -178,98 +178,12 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.getOrder(w, r)
+		s.handleGetOrder(w, r)
 	case http.MethodDelete:
-		s.cancelOrder(w, r)
+		s.handleCancelOrder(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
-}
-
-// listOrders handles GET /api/v1/securities/orders
-func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
-	filters := store.OrderFilters{
-		InstrumentID:  r.URL.Query().Get("instrument_id"),
-		ParticipantID: r.URL.Query().Get("participant_id"),
-		Status:        types.OrderStatus(r.URL.Query().Get("status")),
-	}
-
-	orders, err := s.orderStore.List(filters)
-	if err != nil {
-		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
-		return
-	}
-
-	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":  orders,
-		"total": len(orders),
-	})
-}
-
-// submitOrder handles POST /api/v1/securities/orders
-func (s *Server) submitOrder(w http.ResponseWriter, r *http.Request) {
-	var order types.SecurityOrder
-	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
-		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
-		return
-	}
-	if order.ID == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "id is required", nil)
-		return
-	}
-	if order.InstrumentID == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "instrument_id is required", nil)
-		return
-	}
-	if order.Status == "" {
-		order.Status = types.OrderStatusPending
-	}
-
-	if err := s.orderStore.Submit(&order); err != nil {
-		s.writeError(w, http.StatusConflict, "ALREADY_EXISTS", err.Error(), nil)
-		return
-	}
-	s.writeJSON(w, http.StatusCreated, order)
-}
-
-// getOrder handles GET /api/v1/securities/orders/{id}
-func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/securities/orders/"):]
-	if id == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "order id is required", nil)
-		return
-	}
-
-	order, err := s.orderStore.Get(id)
-	if err != nil {
-		if err == store.ErrNotFound {
-			s.writeError(w, http.StatusNotFound, "NOT_FOUND", "order not found", nil)
-			return
-		}
-		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
-		return
-	}
-	s.writeJSON(w, http.StatusOK, order)
-}
-
-// cancelOrder handles DELETE /api/v1/securities/orders/{id}
-func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/securities/orders/"):]
-	if id == "" {
-		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "order id is required", nil)
-		return
-	}
-
-	if err := s.orderStore.Cancel(id); err != nil {
-		if err == store.ErrNotFound {
-			s.writeError(w, http.StatusNotFound, "NOT_FOUND", "order not found", nil)
-			return
-		}
-		s.writeError(w, http.StatusConflict, "INVALID_STATE", err.Error(), nil)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- JSON helpers ---
