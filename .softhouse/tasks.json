@@ -1,7 +1,68 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-prod-hardening",
+  "feature": "Production Hardening",
+  "requirement": "Fix e2e test failures, add observability (metrics + tracing), clean up dead code, improve health checks",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Fix e2e test failures — response format mismatches",
+      "description": "Fix the 6 documented e2e test failures:\n\n1. In tests/e2e/e2e_test.go or tests/e2e/lifecycle_test.go — fix tests that expect JSON objects but receive arrays from list endpoints. The clearing/netting/margin/settlement endpoints CORRECTLY return arrays. Update the e2e tests to handle array responses (use []interface{} or check first element of array).\n\n2. Fix compliance KYC test — check if the compliance-service KYC endpoint returns array or object. If it's a creation endpoint (POST), it should return the created object. Check src/compliance-service/ handler to verify and fix either the handler or the test.\n\n3. Gateway 404 routing — check if the RouteChecker middleware (added in earlier sprint) is properly returning 404 for unknown paths BEFORE auth runs. Read src/gateway/internal/middleware/auth.go and src/gateway/cmd/gateway/main.go to verify middleware ordering. If auth still runs before routing on unknown paths, fix the middleware chain.\n\nRun the Go unit tests for gateway and compliance-service to verify fixes don't break anything: cd src/gateway && go test ./... && cd ../compliance-service && go test ./...",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["tests/e2e/e2e_test.go", "tests/e2e/lifecycle_test.go", "src/gateway/internal/middleware/", "src/gateway/cmd/gateway/main.go", "src/compliance-service/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Add OpenTelemetry trace context propagation",
+      "description": "Add W3C traceparent header propagation to all services.\n\nIn src/shared/internal/observability/tracing.go (new file):\n1. Parse W3C traceparent header: version-trace_id-parent_id-trace_flags (e.g., 00-4bf92f3577b6a27520e8ecf678db76-00f067aa0ba902b7-01)\n2. Generate trace_id (16 bytes hex) and span_id (8 bytes hex) if no incoming traceparent\n3. Create TraceContext struct: TraceID, SpanID, ParentSpanID, Sampled\n4. TraceMiddleware HTTP middleware that: extracts traceparent from request, creates span context, injects traceparent into response header, adds trace_id to request context\n5. Helper to extract TraceContext from context.Context\n6. Helper to inject traceparent into outgoing HTTP requests (for service-to-service calls)\n\nIn src/shared/internal/observability/tracing_test.go:\n- Test traceparent parsing (valid, invalid, missing)\n- Test trace_id generation\n- Test middleware propagation\n- Test context injection/extraction\n\nKeep zero-dependency: implement W3C traceparent format manually (it's just hex string parsing). Do NOT import opentelemetry-go.\n\nWire TraceMiddleware into gateway middleware chain in src/gateway/cmd/gateway/main.go (after RequestID, before auth).\n\nAdd trace_id to the existing logger output in src/shared/internal/observability/logger.go if there's a structured logger.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/shared/internal/observability/tracing.go", "src/shared/internal/observability/tracing_test.go", "src/shared/internal/observability/logger.go", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Add /metrics endpoint and wire to all services",
+      "description": "Enhance the existing metrics in src/shared/internal/observability/ and wire them into all 9 Go services.\n\nThe metrics.go already has request_count and request_duration_seconds. Enhance it:\n1. Add http_request_errors_total counter (5xx responses)\n2. Add http_response_size_bytes histogram\n3. Add a /metrics HTTP handler that serves Prometheus text format (already partially implemented — verify and fix)\n4. Add MetricsServer that runs on a separate port (service_port + 100, e.g., matching-engine 8081 → metrics on 8181)\n\nWire into each service's main.go or server.go:\n- matching-engine (8081 → metrics 8181)\n- clearing-engine (8082 → metrics 8182)\n- margin-engine (8083 → metrics 8183)\n- settlement-engine (8084 → metrics 8184)\n- auth-service → metrics on next available\n- compliance-service → metrics on next available\n- gateway (8080 → metrics 8180)\n- market-data-service → metrics on next available\n- warehouse-service → metrics on next available\n\nFor each service, add MetricsMiddleware to the HTTP handler chain.\n\nAdd tests: src/shared/internal/observability/metrics_test.go — test counter increments, histogram recording, /metrics text format output.\n\nKeep zero-dependency: the existing Prometheus text format implementation is manual — enhance it, don't replace with prometheus/client_golang.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/shared/internal/observability/metrics.go", "src/shared/internal/observability/metrics_test.go", "src/shared/internal/observability/middleware.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Clean up dead code + health check improvements",
+      "description": "1. Remove src/clearing-service/ directory entirely (it's a stub with only a Dockerfile — the real implementation is in src/clearing-engine/).\n\n2. Add readiness probes to all services. The gateway already has /healthz (liveness) and /readyz (readiness). Add the same pattern to other services:\n- Each service should have /healthz (always 200 if process is running — liveness)\n- Each service should have /readyz (200 only when the service has completed initialization and can serve requests — readiness)\n- Use the existing pattern from src/gateway/internal/handler/health.go (atomic readyFlag)\n\n3. Add a /healthz/dependencies endpoint to the gateway that checks connectivity to all backend services and returns aggregate health status. This gives operators a single endpoint to verify the full platform health.\n\n4. Update docker-compose.yml healthcheck directives to use /healthz for each service.\n\nRun: go test ./... in each modified service to verify.",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/clearing-service/", "docker-compose.yml"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T5",
+      "title": "Integration test — verify all fixes",
+      "description": "Run the full test suite across all Go services to verify T1-T4 changes don't break anything:\n1. Run Go tests for all 9 services: for each service in src/*/; do cd $service && go test ./... && cd ../..; done\n2. Run the e2e tests (they'll skip if gateway isn't running, that's fine — verify they compile)\n3. Verify src/clearing-service/ no longer exists\n4. Verify /metrics, /healthz, /readyz endpoints exist in service code\n5. Run admin-ui tests: cd src/admin-ui && npm test -- --run\n6. Report pass/fail counts per service",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["tests/e2e/"],
+      "dependencies": ["T1", "T2", "T3", "T4"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
