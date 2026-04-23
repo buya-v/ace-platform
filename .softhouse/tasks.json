@@ -1,44 +1,7 @@
 {
-  "run_id": "20260423-matching-engine",
-  "feature": "Securities Matching Engine",
-  "requirement": "Order matching, trade creation, position updates, Kafka events, unit tests",
-  "status": "planning",
-  "tasks": [
-    {
-      "id": "T1",
-      "title": "Types + matching engine + trade creation",
-      "description": "Add Trade/Position types and implement the securities matching engine with trade creation.\n\nPart A — Add types to src/securities-service/internal/types/types.go:\n- SecurityTrade struct: ID string, BuyOrderID string, SellOrderID string, InstrumentID string, Price float64, Quantity int, TradeDate string, SettlementDate string (T+2), Status string, CreatedAt string — all with json tags\n- Position struct: ID string, ParticipantID string, InstrumentID string, Quantity int, AvgCost float64, MarketValue float64, UnrealizedPnl float64, UpdatedAt string — all with json tags\n- TradeStatus enum: PENDING, CONFIRMED, SETTLED, FAILED\n\nPart B — Add store interfaces to src/securities-service/internal/store/store.go:\n- TradeStore interface: Create(*SecurityTrade) error, Get(id string) (*SecurityTrade, error), ListByInstrument(instrumentID string) ([]SecurityTrade, error)\n- PositionStore interface: GetOrCreate(participantID, instrumentID string) (*Position, error), Update(*Position) error, List(participantID string) ([]Position, error)\n- InMemoryTradeStore and InMemoryPositionStore implementations\n\nPart C — Create matching engine at src/securities-service/internal/engine/engine.go:\n- MatchingEngine struct with: instrumentStore, orderStore, tradeStore, positionStore\n- MatchOrder(order *SecurityOrder) ([]SecurityTrade, error) method:\n  1. Get instrument (validate ACTIVE)\n  2. Get all resting orders for same instrument on opposite side, sorted by price-time priority:\n     - BUY side resting: descending price, ascending time (best bid first)\n     - SELL side resting: ascending price, ascending time (best ask first)\n  3. For LIMIT orders: match if incoming buy price >= resting sell price, or incoming sell price <= resting buy price\n  4. For MARKET orders: match against best available price immediately\n  5. On each match: create SecurityTrade with trade_date=today, settlement_date=today+2 business days, price=resting order price, quantity=min(incoming remaining, resting qty)\n  6. Update matched orders: decrement remaining qty, set FILLED if fully matched, PARTIALLY_FILLED if partial\n  7. Update positions: buyer gets +quantity, seller gets -quantity via PositionStore.GetOrCreate + Update\n  8. If incoming order has remaining qty after matching, store as resting order (PENDING)\n  9. Return list of trades created\n\nKeep it simple — no auction mode, no iceberg orders, no stop triggers. Just price-time priority continuous matching.\n\nPart D — Wire into order submission:\n- Update src/securities-service/internal/server/handlers_order.go handleSubmitOrder:\n  After storing the order, call engine.MatchOrder(order). If trades are created, return them in the response alongside the order.\n- Update Server struct to hold the MatchingEngine\n- Update main.go to create MatchingEngine with all stores\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
-      "agent_role": "coder",
-      "model": "opus",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/engine/engine.go", "src/securities-service/internal/server/handlers_order.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T2",
-      "title": "Kafka events for trade execution",
-      "description": "Add channel-based Kafka event publishing for trade execution, following the template pattern from src/matching-engine/internal/kafka/.\n\nRead src/matching-engine/internal/kafka/event.go for the event envelope pattern.\nRead src/matching-engine/internal/kafka/producer.go for the Producer interface and ChannelProducer.\nRead .softhouse/patterns.md — pattern says: 'channel-based Producer/Consumer interfaces with zero external dependencies'\n\nCreate src/securities-service/internal/kafka/ package:\n\n1. event.go — Event envelope struct: ID, Type, Source, Timestamp, Data (interface{}), copy from matching-engine template\n2. producer.go — Producer interface with Publish(topic string, event Event) error, ChannelProducer implementation using Go channels\n3. topics.go — Topic constants: TopicTradeExecuted = \"securities.trade.executed\", TopicOrderCreated = \"securities.order.created\", TopicOrderCancelled = \"securities.order.cancelled\"\n4. wiring.go — PublishTradeExecuted(producer, trade) and PublishOrderCreated(producer, order) helper functions that wrap data into Event envelope and publish\n\nThen wire into the matching engine:\n- Add a Producer field to the MatchingEngine struct\n- After creating each trade in MatchOrder, call PublishTradeExecuted\n- After submitting an order, call PublishOrderCreated\n- Use nil-safe check: if producer != nil, publish (so tests without Kafka still work)\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/kafka/"],
-      "dependencies": ["T1"],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T3",
-      "title": "Unit tests for matching + trades + positions",
-      "description": "Write comprehensive unit tests for the matching engine, trade creation, and position management.\n\nRead .softhouse/handoff/T1.md and T2.md for what was implemented.\n\nCreate src/securities-service/internal/engine/engine_test.go:\n\n1. TestMatchOrder_LimitBuySellCross — submit sell@100, then buy@100 → 1 trade at price 100\n2. TestMatchOrder_LimitBuyAboveSell — submit sell@100, then buy@105 → trade at 100 (resting price)\n3. TestMatchOrder_NoMatch — submit sell@100, then buy@95 → 0 trades, both orders resting\n4. TestMatchOrder_PartialFill — submit sell 100@100, then buy 60@100 → trade qty 60, sell has 40 remaining (PARTIALLY_FILLED)\n5. TestMatchOrder_MultipleFills — submit sell 30@100 + sell 30@101, then buy 50@101 → 2 trades (30@100 + 20@101), price-time priority\n6. TestMatchOrder_MarketOrder — submit sell@100, then market buy qty 50 → trade at 100\n7. TestMatchOrder_MarketOrderNoLiquidity — market buy with no resting sells → order stays pending (no match)\n8. TestMatchOrder_PositionUpdate — after match, verify buyer position +qty, seller position -qty\n9. TestMatchOrder_SelfTradeCheck — same participant on both sides → should still work (no STP in v1)\n10. TestMatchOrder_HaltedInstrument — match on halted instrument → error\n\nAlso add to existing test files:\n- src/securities-service/internal/store/store_test.go: TestTradeStore_Create, TestTradeStore_Get, TestTradeStore_ListByInstrument, TestPositionStore_GetOrCreate, TestPositionStore_Update\n\nTarget: 80%+ coverage on engine package.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
-      "agent_role": "test_writer",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/engine/engine_test.go", "src/securities-service/internal/store/store_test.go"],
-      "dependencies": ["T1", "T2"],
-      "status": "pending",
-      "attempts": 0
-    }
-  ]
+  "run_id": null,
+  "feature": null,
+  "requirement": null,
+  "status": "idle",
+  "tasks": []
 }
