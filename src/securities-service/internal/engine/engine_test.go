@@ -628,3 +628,237 @@ func TestMatchOrder_KafkaEventPublished(t *testing.T) {
 		t.Errorf("partition key: want trade ID %s, got %s", trades[0].ID, recs[0].Key)
 	}
 }
+
+// ── Self-Trade Prevention tests ───────────────────────────────────────────────
+
+// createInstrumentWithSTP creates a test instrument with the given STP mode.
+func createInstrumentWithSTP(t *testing.T, s *testStores, id string, stpMode types.STPMode) {
+	t.Helper()
+	inst := &types.Instrument{
+		ID:            id,
+		Ticker:        "STP-TEST",
+		Name:          "STP Test Corp",
+		AssetClass:    types.AssetClassEquity,
+		LotSize:       1,
+		TickSize:      0.01,
+		TradingStatus: types.TradingStatusActive,
+		ExchangeCode:  "MSE",
+		STPMode:       stpMode,
+		CreatedAt:     ts(0),
+		UpdatedAt:     ts(0),
+	}
+	if err := s.inst.Create(inst); err != nil {
+		t.Fatalf("createInstrumentWithSTP: %v", err)
+	}
+}
+
+// TestSTP_CancelNewest verifies that when STPMode=STP_CANCEL_NEWEST and the
+// incoming and resting orders share the same participant, the incoming order
+// skips the resting order (no trade produced) and the resting order stays PENDING.
+func TestSTP_CancelNewest(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-NEWEST"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelNewest)
+	eng := newEngine(s, nil)
+
+	// Resting sell order from "trader-A".
+	sell := limitOrder("sell-stp-newest", stpInstID, "trader-A", types.OrderSideSell, 100, 50.0, ts(0))
+	submit(t, s, sell)
+
+	// Incoming buy order from the SAME participant "trader-A".
+	buy := limitOrder("buy-stp-newest", stpInstID, "trader-A", types.OrderSideBuy, 100, 50.0, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// STP_CANCEL_NEWEST: incoming skips the same-participant resting order.
+	// No trade should be produced.
+	if len(trades) != 0 {
+		t.Errorf("STP_CANCEL_NEWEST: want 0 trades, got %d", len(trades))
+	}
+
+	// Resting sell should still be PENDING (not cancelled).
+	storedSell, err := s.ord.Get("sell-stp-newest")
+	if err != nil {
+		t.Fatalf("get resting sell: %v", err)
+	}
+	if storedSell.Status != types.OrderStatusPending {
+		t.Errorf("resting sell status: want PENDING, got %s", storedSell.Status)
+	}
+
+	// Incoming buy should remain PENDING (not filled, not cancelled).
+	if buy.Status != types.OrderStatusPending {
+		t.Errorf("incoming buy status: want PENDING, got %s", buy.Status)
+	}
+}
+
+// TestSTP_CancelNewest_DifferentParticipant confirms that STP_CANCEL_NEWEST
+// does NOT prevent trades between different participants.
+func TestSTP_CancelNewest_DifferentParticipant(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-NEWEST2"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelNewest)
+	eng := newEngine(s, nil)
+
+	sell := limitOrder("sell-diff", stpInstID, "seller", types.OrderSideSell, 50, 50.0, ts(0))
+	submit(t, s, sell)
+
+	buy := limitOrder("buy-diff", stpInstID, "buyer", types.OrderSideBuy, 50, 50.0, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+	if len(trades) != 1 {
+		t.Errorf("different participants: want 1 trade, got %d", len(trades))
+	}
+}
+
+// TestSTP_CancelOldest verifies that when STPMode=STP_CANCEL_OLDEST and the
+// incoming and resting orders share the same participant, the resting order is
+// cancelled and the matching loop continues (incoming may fill against others).
+func TestSTP_CancelOldest(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-OLDEST"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelOldest)
+	eng := newEngine(s, nil)
+
+	// Same-participant resting sell — should be cancelled by STP.
+	selfSell := limitOrder("sell-self", stpInstID, "trader-B", types.OrderSideSell, 100, 50.0, ts(0))
+	submit(t, s, selfSell)
+
+	// Different-participant resting sell — should be matched.
+	otherSell := limitOrder("sell-other", stpInstID, "other-seller", types.OrderSideSell, 100, 50.0, ts(1))
+	submit(t, s, otherSell)
+
+	// Incoming buy from "trader-B" — same as selfSell.
+	buy := limitOrder("buy-oldest", stpInstID, "trader-B", types.OrderSideBuy, 100, 50.0, ts(2))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// STP_CANCEL_OLDEST: self sell is cancelled, matching continues with other sell.
+	if len(trades) != 1 {
+		t.Errorf("STP_CANCEL_OLDEST: want 1 trade (against other-seller), got %d", len(trades))
+	}
+	if len(trades) > 0 && trades[0].SellOrderID != "sell-other" {
+		t.Errorf("trade should be against sell-other, got %s", trades[0].SellOrderID)
+	}
+
+	// The self-sell resting order must be CANCELLED.
+	storedSelfSell, err := s.ord.Get("sell-self")
+	if err != nil {
+		t.Fatalf("get self sell: %v", err)
+	}
+	if storedSelfSell.Status != types.OrderStatusCancelled {
+		t.Errorf("self sell status: want CANCELLED (STP_CANCEL_OLDEST), got %s", storedSelfSell.Status)
+	}
+}
+
+// TestSTP_CancelBoth verifies that when STPMode=STP_CANCEL_BOTH and the
+// incoming and resting orders share the same participant, both are cancelled and
+// no trades are produced.
+func TestSTP_CancelBoth(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-BOTH"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelBoth)
+	eng := newEngine(s, nil)
+
+	// Resting sell from "trader-C".
+	sell := limitOrder("sell-both", stpInstID, "trader-C", types.OrderSideSell, 100, 50.0, ts(0))
+	submit(t, s, sell)
+
+	// Incoming buy from same participant "trader-C".
+	buy := limitOrder("buy-both", stpInstID, "trader-C", types.OrderSideBuy, 100, 50.0, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// STP_CANCEL_BOTH: both orders cancelled, zero trades.
+	if len(trades) != 0 {
+		t.Errorf("STP_CANCEL_BOTH: want 0 trades, got %d", len(trades))
+	}
+
+	// Resting sell must be CANCELLED.
+	storedSell, err := s.ord.Get("sell-both")
+	if err != nil {
+		t.Fatalf("get resting sell: %v", err)
+	}
+	if storedSell.Status != types.OrderStatusCancelled {
+		t.Errorf("resting sell status: want CANCELLED, got %s", storedSell.Status)
+	}
+
+	// Incoming buy must also be CANCELLED.
+	if buy.Status != types.OrderStatusCancelled {
+		t.Errorf("incoming buy status: want CANCELLED, got %s", buy.Status)
+	}
+}
+
+// TestSTP_CancelBoth_OnlyMatchesSelf verifies that STP_CANCEL_BOTH cancels
+// the self-sell and stops matching, even when other sellers exist.
+func TestSTP_CancelBoth_OnlyMatchesSelf(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-BOTH2"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelBoth)
+	eng := newEngine(s, nil)
+
+	// Same-participant resting sell (best price — will be matched first).
+	selfSell := limitOrder("sell-self-both", stpInstID, "trader-D", types.OrderSideSell, 50, 50.0, ts(0))
+	submit(t, s, selfSell)
+
+	// Different-participant resting sell at the same price.
+	otherSell := limitOrder("sell-other-both", stpInstID, "other-seller", types.OrderSideSell, 50, 50.0, ts(1))
+	submit(t, s, otherSell)
+
+	// Incoming buy from "trader-D" — triggers STP with selfSell.
+	buy := limitOrder("buy-cancel-both", stpInstID, "trader-D", types.OrderSideBuy, 100, 50.0, ts(2))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// STP_CANCEL_BOTH stops matching after cancelling both orders.
+	// The other-sell should not be matched since incoming is cancelled.
+	if len(trades) != 0 {
+		t.Errorf("STP_CANCEL_BOTH: want 0 trades, got %d", len(trades))
+	}
+	if buy.Status != types.OrderStatusCancelled {
+		t.Errorf("incoming buy: want CANCELLED, got %s", buy.Status)
+	}
+}
+
+// TestSTP_DifferentParticipants verifies that when buyers and sellers have
+// different participant IDs, normal matching proceeds regardless of STP mode.
+func TestSTP_DifferentParticipants(t *testing.T) {
+	s := newTestStores()
+	const stpInstID = "INST-STP-DIFF"
+	createInstrumentWithSTP(t, s, stpInstID, types.STPCancelBoth)
+	eng := newEngine(s, nil)
+
+	sell := limitOrder("sell-diff-part", stpInstID, "seller-X", types.OrderSideSell, 100, 75.0, ts(0))
+	submit(t, s, sell)
+
+	buy := limitOrder("buy-diff-part", stpInstID, "buyer-Y", types.OrderSideBuy, 100, 75.0, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+	if len(trades) != 1 {
+		t.Fatalf("different participants with STP_CANCEL_BOTH: want 1 trade, got %d", len(trades))
+	}
+	if trades[0].Price != 75.0 {
+		t.Errorf("trade price: want 75.0, got %v", trades[0].Price)
+	}
+	if trades[0].Quantity != 100 {
+		t.Errorf("trade qty: want 100, got %d", trades[0].Quantity)
+	}
+	if buy.Status != types.OrderStatusFilled {
+		t.Errorf("buy status: want FILLED, got %s", buy.Status)
+	}
+	storedSell, _ := s.ord.Get("sell-diff-part")
+	if storedSell.Status != types.OrderStatusFilled {
+		t.Errorf("sell status: want FILLED, got %s", storedSell.Status)
+	}
+}

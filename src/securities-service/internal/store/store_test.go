@@ -1072,3 +1072,446 @@ func TestConcurrentAccess_CorporateActionStore(t *testing.T) {
 		t.Errorf("expected %d corporate actions, got %d", goroutines, len(all))
 	}
 }
+
+// ============================================================
+// MarketStore tests
+// ============================================================
+
+func TestMarketStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryMarketStore()
+
+	m := &types.Market{
+		ID:        "NYSE",
+		Name:      "New York Stock Exchange",
+		Status:    types.MarketActive,
+		Timezone:  "America/New_York",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}
+
+	if err := s.Create(m); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("NYSE")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ID != "NYSE" {
+		t.Errorf("ID: want NYSE, got %s", got.ID)
+	}
+	if got.Name != "New York Stock Exchange" {
+		t.Errorf("Name: want %q, got %q", "New York Stock Exchange", got.Name)
+	}
+	if got.Status != types.MarketActive {
+		t.Errorf("Status: want %s, got %s", types.MarketActive, got.Status)
+	}
+	if got.Timezone != "America/New_York" {
+		t.Errorf("Timezone: want %q, got %q", "America/New_York", got.Timezone)
+	}
+
+	t.Run("get non-existent returns error", func(t *testing.T) {
+		_, err := s.Get("NO-MARKET")
+		if err == nil {
+			t.Error("expected error for non-existent market, got nil")
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(m); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestMarketStore_List(t *testing.T) {
+	// NewInMemoryMarketStore seeds the "MSE" market.
+	s := store.NewInMemoryMarketStore()
+
+	markets, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(markets) < 1 {
+		t.Fatalf("expected at least 1 market (seeded MSE), got %d", len(markets))
+	}
+
+	// Verify the seeded MSE market is present.
+	found := false
+	for _, m := range markets {
+		if m.ID == "MSE" {
+			found = true
+			if m.Name != "Mongolian Stock Exchange" {
+				t.Errorf("MSE Name: want %q, got %q", "Mongolian Stock Exchange", m.Name)
+			}
+			if m.Status != types.MarketActive {
+				t.Errorf("MSE Status: want %s, got %s", types.MarketActive, m.Status)
+			}
+		}
+	}
+	if !found {
+		t.Error("seeded MSE market not found in List()")
+	}
+
+	// Add a second market and verify total increases.
+	s.Create(&types.Market{ID: "LDN", Name: "London Stock Exchange", Status: types.MarketActive, Timezone: "Europe/London"})
+	markets2, _ := s.List()
+	if len(markets2) != len(markets)+1 {
+		t.Errorf("after adding LDN: want %d markets, got %d", len(markets)+1, len(markets2))
+	}
+}
+
+func TestMarketStore_UpdateStatus(t *testing.T) {
+	s := store.NewInMemoryMarketStore()
+
+	t.Run("MARKET_ACTIVE → MARKET_SUSPENDED", func(t *testing.T) {
+		if err := s.UpdateStatus("MSE", types.MarketSuspended); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("MSE")
+		if got.Status != types.MarketSuspended {
+			t.Errorf("Status: want %s, got %s", types.MarketSuspended, got.Status)
+		}
+		// UpdatedAt should be set.
+		if got.UpdatedAt == "" {
+			t.Error("UpdatedAt must not be empty after UpdateStatus")
+		}
+	})
+
+	t.Run("MARKET_SUSPENDED → MARKET_CLOSED", func(t *testing.T) {
+		if err := s.UpdateStatus("MSE", types.MarketClosed); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("MSE")
+		if got.Status != types.MarketClosed {
+			t.Errorf("Status: want %s, got %s", types.MarketClosed, got.Status)
+		}
+	})
+
+	t.Run("non-existent ID returns error", func(t *testing.T) {
+		if err := s.UpdateStatus("NO-MARKET", types.MarketActive); err == nil {
+			t.Error("expected error for non-existent market, got nil")
+		}
+	})
+}
+
+func TestMarketStore_Get_ReturnsCopy(t *testing.T) {
+	s := store.NewInMemoryMarketStore()
+
+	got, _ := s.Get("MSE")
+	got.Name = "MUTATED"
+
+	got2, _ := s.Get("MSE")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}
+
+// ============================================================
+// SegmentStore tests
+// ============================================================
+
+func TestSegmentStore_Create_Get(t *testing.T) {
+	s := store.NewInMemorySegmentStore()
+
+	seg := &types.Segment{
+		ID:        "BOND-SEG",
+		MarketID:  "MSE",
+		Name:      "Bonds",
+		Status:    types.SegActive,
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}
+
+	if err := s.Create(seg); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("BOND-SEG")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ID != "BOND-SEG" {
+		t.Errorf("ID: want BOND-SEG, got %s", got.ID)
+	}
+	if got.MarketID != "MSE" {
+		t.Errorf("MarketID: want MSE, got %s", got.MarketID)
+	}
+	if got.Name != "Bonds" {
+		t.Errorf("Name: want Bonds, got %s", got.Name)
+	}
+	if got.Status != types.SegActive {
+		t.Errorf("Status: want %s, got %s", types.SegActive, got.Status)
+	}
+
+	t.Run("get non-existent returns error", func(t *testing.T) {
+		_, err := s.Get("NO-SEG")
+		if err == nil {
+			t.Error("expected error for non-existent segment, got nil")
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(seg); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestSegmentStore_ListByMarket(t *testing.T) {
+	// NewInMemorySegmentStore seeds "EQUITY" segment for market "MSE".
+	s := store.NewInMemorySegmentStore()
+
+	// Verify seeded segment is present.
+	segs, err := s.ListByMarket("MSE")
+	if err != nil {
+		t.Fatalf("ListByMarket MSE: %v", err)
+	}
+	if len(segs) < 1 {
+		t.Fatalf("expected at least 1 segment for MSE (seeded EQUITY), got %d", len(segs))
+	}
+	foundEquity := false
+	for _, seg := range segs {
+		if seg.ID == "EQUITY" {
+			foundEquity = true
+			if seg.MarketID != "MSE" {
+				t.Errorf("seeded EQUITY segment: MarketID want MSE, got %s", seg.MarketID)
+			}
+		}
+	}
+	if !foundEquity {
+		t.Error("seeded EQUITY segment not found in ListByMarket(MSE)")
+	}
+
+	// Add segments for a different market.
+	s.Create(&types.Segment{ID: "LDN-EQ", MarketID: "LDN", Name: "London Equities", Status: types.SegActive})
+	s.Create(&types.Segment{ID: "LDN-BD", MarketID: "LDN", Name: "London Bonds", Status: types.SegActive})
+
+	ldnSegs, err := s.ListByMarket("LDN")
+	if err != nil {
+		t.Fatalf("ListByMarket LDN: %v", err)
+	}
+	if len(ldnSegs) != 2 {
+		t.Errorf("want 2 segments for LDN, got %d", len(ldnSegs))
+	}
+
+	// Empty market_id returns all segments.
+	allSegs, err := s.ListByMarket("")
+	if err != nil {
+		t.Fatalf("ListByMarket empty: %v", err)
+	}
+	if len(allSegs) < 3 {
+		t.Errorf("want at least 3 segments (1 seeded + 2 added), got %d", len(allSegs))
+	}
+
+	// Non-existent market returns empty slice.
+	noSegs, err := s.ListByMarket("UNKNOWN-MKT")
+	if err != nil {
+		t.Fatalf("ListByMarket unknown: %v", err)
+	}
+	if len(noSegs) != 0 {
+		t.Errorf("want 0 segments for unknown market, got %d", len(noSegs))
+	}
+}
+
+func TestSegmentStore_Get_ReturnsCopy(t *testing.T) {
+	s := store.NewInMemorySegmentStore()
+
+	got, _ := s.Get("EQUITY")
+	got.Name = "MUTATED"
+
+	got2, _ := s.Get("EQUITY")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}
+
+// ============================================================
+// CircuitBreakerStore tests
+// ============================================================
+
+func newCB(instrumentID string) *types.CircuitBreaker {
+	return &types.CircuitBreaker{
+		InstrumentID:    instrumentID,
+		ReferencePrice:  100.0,
+		StaticUpperPct:  10.0,
+		StaticLowerPct:  10.0,
+		DynamicUpperPct: 5.0,
+		DynamicLowerPct: 5.0,
+		LastTradedPrice: 100.0,
+		Status:          types.CBActive,
+		CooldownMinutes: 15,
+	}
+}
+
+func TestCircuitBreakerStore_SetGetDelete(t *testing.T) {
+	s := store.NewInMemoryCircuitBreakerStore()
+
+	cb := newCB("INST-CB-1")
+
+	// Set.
+	if err := s.Set(cb); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	// Get returns the record.
+	got, err := s.Get("INST-CB-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil circuit breaker, got nil")
+	}
+	if got.InstrumentID != "INST-CB-1" {
+		t.Errorf("InstrumentID: want INST-CB-1, got %s", got.InstrumentID)
+	}
+	if got.ReferencePrice != 100.0 {
+		t.Errorf("ReferencePrice: want 100.0, got %v", got.ReferencePrice)
+	}
+	if got.StaticUpperPct != 10.0 {
+		t.Errorf("StaticUpperPct: want 10.0, got %v", got.StaticUpperPct)
+	}
+	if got.Status != types.CBActive {
+		t.Errorf("Status: want %s, got %s", types.CBActive, got.Status)
+	}
+
+	// Get non-existent returns nil (not an error).
+	missing, err := s.Get("INST-MISSING")
+	if err != nil {
+		t.Fatalf("Get missing: %v", err)
+	}
+	if missing != nil {
+		t.Errorf("expected nil for non-existent instrument, got %+v", missing)
+	}
+
+	// Delete removes the record.
+	if err := s.Delete("INST-CB-1"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	afterDelete, err := s.Get("INST-CB-1")
+	if err != nil {
+		t.Fatalf("Get after Delete: %v", err)
+	}
+	if afterDelete != nil {
+		t.Errorf("expected nil after Delete, got %+v", afterDelete)
+	}
+
+	// Delete non-existent is a no-op (no error).
+	if err := s.Delete("INST-MISSING"); err != nil {
+		t.Errorf("Delete non-existent: want nil error, got %v", err)
+	}
+}
+
+func TestCircuitBreakerStore_List(t *testing.T) {
+	s := store.NewInMemoryCircuitBreakerStore()
+
+	// Empty initially.
+	all, err := s.List()
+	if err != nil {
+		t.Fatalf("List empty: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 entries initially, got %d", len(all))
+	}
+
+	// Add three circuit breakers.
+	for _, id := range []string{"CB-A", "CB-B", "CB-C"} {
+		if err := s.Set(newCB(id)); err != nil {
+			t.Fatalf("Set %s: %v", id, err)
+		}
+	}
+
+	all, err = s.List()
+	if err != nil {
+		t.Fatalf("List after Set: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3 circuit breakers, got %d", len(all))
+	}
+}
+
+func TestCircuitBreakerStore_UpdateStatus(t *testing.T) {
+	s := store.NewInMemoryCircuitBreakerStore()
+	s.Set(newCB("CB-UPST"))
+
+	t.Run("CB_ACTIVE → CB_TRIGGERED sets TriggeredAt", func(t *testing.T) {
+		if err := s.UpdateStatus("CB-UPST", types.CBTriggered); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("CB-UPST")
+		if got.Status != types.CBTriggered {
+			t.Errorf("Status: want %s, got %s", types.CBTriggered, got.Status)
+		}
+		if got.TriggeredAt == "" {
+			t.Error("TriggeredAt must be set when status transitions to CB_TRIGGERED")
+		}
+	})
+
+	t.Run("CB_TRIGGERED → CB_COOLDOWN", func(t *testing.T) {
+		if err := s.UpdateStatus("CB-UPST", types.CBCooldown); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("CB-UPST")
+		if got.Status != types.CBCooldown {
+			t.Errorf("Status: want %s, got %s", types.CBCooldown, got.Status)
+		}
+	})
+
+	t.Run("non-existent ID returns error", func(t *testing.T) {
+		if err := s.UpdateStatus("CB-MISSING", types.CBActive); err == nil {
+			t.Error("expected error for non-existent circuit breaker, got nil")
+		}
+	})
+}
+
+func TestCircuitBreakerStore_UpdateLastPrice(t *testing.T) {
+	s := store.NewInMemoryCircuitBreakerStore()
+	s.Set(newCB("CB-PRICE"))
+
+	if err := s.UpdateLastPrice("CB-PRICE", 105.5); err != nil {
+		t.Fatalf("UpdateLastPrice: %v", err)
+	}
+	got, _ := s.Get("CB-PRICE")
+	if got.LastTradedPrice != 105.5 {
+		t.Errorf("LastTradedPrice: want 105.5, got %v", got.LastTradedPrice)
+	}
+
+	// UpdateLastPrice for non-existent instrument is a no-op (no error).
+	if err := s.UpdateLastPrice("CB-MISSING", 50.0); err != nil {
+		t.Errorf("UpdateLastPrice non-existent: want nil error, got %v", err)
+	}
+}
+
+func TestCircuitBreakerStore_Set_Overwrites(t *testing.T) {
+	// Set should overwrite an existing record (upsert semantics).
+	s := store.NewInMemoryCircuitBreakerStore()
+	s.Set(newCB("CB-OVER"))
+
+	updated := newCB("CB-OVER")
+	updated.ReferencePrice = 200.0
+	updated.StaticUpperPct = 20.0
+
+	if err := s.Set(updated); err != nil {
+		t.Fatalf("Set (overwrite): %v", err)
+	}
+	got, _ := s.Get("CB-OVER")
+	if got.ReferencePrice != 200.0 {
+		t.Errorf("ReferencePrice after overwrite: want 200.0, got %v", got.ReferencePrice)
+	}
+	if got.StaticUpperPct != 20.0 {
+		t.Errorf("StaticUpperPct after overwrite: want 20.0, got %v", got.StaticUpperPct)
+	}
+}
+
+func TestCircuitBreakerStore_Get_ReturnsCopy(t *testing.T) {
+	s := store.NewInMemoryCircuitBreakerStore()
+	s.Set(newCB("CB-COPY"))
+
+	got, _ := s.Get("CB-COPY")
+	got.ReferencePrice = 9999.0
+
+	got2, _ := s.Get("CB-COPY")
+	if got2.ReferencePrice == 9999.0 {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}
