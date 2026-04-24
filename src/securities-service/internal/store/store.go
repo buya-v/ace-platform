@@ -36,6 +36,8 @@ type InstrumentUpdate struct {
 	LotSize           int
 	TickSize          float64
 	OutstandingShares int64
+	DeletionStatus    string // P3b: "FLAGGED" when instrument is marked for deletion
+	DeletionDate      string // P3b: ISO date 30 days after flagging
 }
 
 // InstrumentStore defines the repository contract for instrument reference data.
@@ -331,6 +333,12 @@ func (s *InMemoryInstrumentStore) Update(id string, partial InstrumentUpdate) er
 	}
 	if partial.OutstandingShares != 0 {
 		inst.OutstandingShares = partial.OutstandingShares
+	}
+	if partial.DeletionStatus != "" {
+		inst.DeletionStatus = partial.DeletionStatus
+	}
+	if partial.DeletionDate != "" {
+		inst.DeletionDate = partial.DeletionDate
 	}
 	return nil
 }

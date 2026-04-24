@@ -263,6 +263,18 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/off-book-trades", s.handleOffBookTrades)
 	mux.HandleFunc("/api/v1/securities/off-book-trades/", s.handleOffBookTrade)
 
+	// Market data (P3b Part B)
+	mux.HandleFunc("/api/v1/securities/market-data/book/", s.handleMarketDataBook)
+	mux.HandleFunc("/api/v1/securities/market-data/ticker/", s.handleMarketDataTicker)
+	mux.HandleFunc("/api/v1/securities/market-data/trades/", s.handleMarketDataTrades)
+
+	// Service desk (P3b Part C)
+	mux.HandleFunc("/api/v1/securities/service-desk/orders", s.handleServiceDeskSubmitOrder)
+	mux.HandleFunc("/api/v1/securities/service-desk/cancel-order", s.handleServiceDeskCancelOrder)
+
+	// Bulk upload (P3b Part D)
+	mux.HandleFunc("/api/v1/securities/bulk/instruments", s.handleBulkInstruments)
+
 }
 
 // --- Health endpoints ---
@@ -334,6 +346,8 @@ func (s *Server) handleInstrument(w http.ResponseWriter, r *http.Request) {
 		s.handleGetInstrument(w, r)
 	case http.MethodPatch:
 		s.handleUpdateInstrument(w, r)
+	case http.MethodDelete:
+		s.handleDeleteInstrument(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}

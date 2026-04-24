@@ -331,6 +331,61 @@ func (s *Server) handleUpdateInstrumentStatus(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, resp)
 }
 
+// handleDeleteInstrument handles DELETE /api/v1/securities/instruments/{id}.
+//
+// Soft-deletes an instrument by setting DeletionStatus to "FLAGGED" and
+// DeletionDate to 30 days from now. The instrument record is NOT removed from
+// the store — it remains readable and tradeable until the deletion date is
+// processed by a scheduled job.
+func (s *Server) handleDeleteInstrument(w http.ResponseWriter, r *http.Request) {
+	id := extractLastSegment(r.URL.Path)
+	if id == "" || id == "status" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "instrument id is required", nil)
+		return
+	}
+
+	inst, err := s.instrumentStore.Get(id)
+	if err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("instrument %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Flag for deletion 30 calendar days from now.
+	deletionDate := time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02")
+	partial := store.InstrumentUpdate{
+		// Carry through existing values so the partial update doesn't zero them.
+		Name:              inst.Name,
+		TradingStatus:     inst.TradingStatus,
+		LotSize:           inst.LotSize,
+		TickSize:          inst.TickSize,
+		OutstandingShares: inst.OutstandingShares,
+		DeletionStatus:    "FLAGGED",
+		DeletionDate:      deletionDate,
+	}
+
+	if err := s.instrumentStore.Update(id, partial); err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("instrument %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	updated, err := s.instrumentStore.Get(id)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, updated)
+}
+
 // extractLastSegment returns the last non-empty path segment of rawPath.
 // e.g. "/api/v1/securities/instruments/abc-123" → "abc-123"
 func extractLastSegment(rawPath string) string {

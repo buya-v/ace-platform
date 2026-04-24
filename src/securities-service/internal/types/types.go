@@ -80,6 +80,8 @@ type Instrument struct {
 	OutstandingShares int64         `json:"outstanding_shares"`
 	SegmentID         string        `json:"segment_id,omitempty"`
 	STPMode           STPMode       `json:"stp_mode,omitempty"`
+	DeletionStatus    string        `json:"deletion_status,omitempty"`
+	DeletionDate      string        `json:"deletion_date,omitempty"`
 	CreatedAt         string        `json:"created_at"`
 	UpdatedAt         string        `json:"updated_at"`
 }
@@ -624,4 +626,48 @@ type OffBookTrade struct {
 	Notes           string        `json:"notes,omitempty"`
 	CreatedAt       string        `json:"created_at"`
 	UpdatedAt       string        `json:"updated_at"`
+}
+
+// ── P3b — Market Data ─────────────────────────────────────────────────────────
+
+// PriceLevel represents an aggregated price level in the order book.
+type PriceLevel struct {
+	Price      float64 `json:"price"`
+	Quantity   int     `json:"quantity"`
+	OrderCount int     `json:"order_count"`
+}
+
+// OrderBookSnapshot is a point-in-time view of the CLOB for one instrument.
+type OrderBookSnapshot struct {
+	InstrumentID string       `json:"instrument_id"`
+	Bids         []PriceLevel `json:"bids"`
+	Asks         []PriceLevel `json:"asks"`
+	Timestamp    string       `json:"timestamp"`
+}
+
+// TickerData carries the latest market summary for one instrument.
+type TickerData struct {
+	InstrumentID string  `json:"instrument_id"`
+	LastPrice    float64 `json:"last_price"`
+	BidPrice     float64 `json:"bid_price"`
+	AskPrice     float64 `json:"ask_price"`
+	Volume       int     `json:"volume"`
+	DayHigh      float64 `json:"day_high"`
+	DayLow       float64 `json:"day_low"`
+	Timestamp    string  `json:"timestamp"`
+}
+
+// BulkUploadResult summarises the outcome of a bulk instrument upload.
+type BulkUploadResult struct {
+	Total   int         `json:"total"`
+	Created int         `json:"created"`
+	Failed  int         `json:"failed"`
+	Errors  []BulkError `json:"errors"`
+}
+
+// BulkError describes a single validation failure within a bulk upload.
+type BulkError struct {
+	Index  int    `json:"index"`
+	Ticker string `json:"ticker"`
+	Error  string `json:"error"`
 }
