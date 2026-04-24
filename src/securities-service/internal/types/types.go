@@ -424,3 +424,42 @@ const (
 	STPCancelOldest STPMode = "STP_CANCEL_OLDEST"
 	STPCancelBoth   STPMode = "STP_CANCEL_BOTH"
 )
+
+// ── IOC / FOK aliases (Part C) ────────────────────────────────────────────────
+// TimeInForceIOC and TimeInForceFOK are the canonical constants; these aliases
+// provide the TIF_ prefix expected by matching-engine and order-validation code.
+const (
+	TIF_IOC = TimeInForceIOC // Immediate Or Cancel
+	TIF_FOK = TimeInForceFOK // Fill Or Kill
+)
+
+// ── Trade Correction (Part A) ─────────────────────────────────────────────────
+
+// TradeCorrection represents a post-trade correction action (bust, correct, or reinstate).
+type TradeCorrection struct {
+	ID                string  `json:"id"`
+	TradeID           string  `json:"trade_id"`
+	Action            string  `json:"action"`             // BUST | CORRECT | REINSTATE
+	Reason            string  `json:"reason"`
+	OriginalPrice     float64 `json:"original_price"`
+	OriginalQuantity  int     `json:"original_quantity"`
+	CorrectedPrice    float64 `json:"corrected_price"`
+	CorrectedQuantity int     `json:"corrected_quantity"`
+	ActorID           string  `json:"actor_id"`
+	Timestamp         string  `json:"timestamp"`
+}
+
+// ── Tiered Tick Table (Part B) ────────────────────────────────────────────────
+
+// TickTier defines the tick size applicable within a specific price band.
+type TickTier struct {
+	MinPrice float64 `json:"min_price"`
+	MaxPrice float64 `json:"max_price"`
+	TickSize float64 `json:"tick_size"`
+}
+
+// TickTable holds the ordered list of price tiers for a single instrument.
+type TickTable struct {
+	InstrumentID string     `json:"instrument_id"`
+	Tiers        []TickTier `json:"tiers"`
+}

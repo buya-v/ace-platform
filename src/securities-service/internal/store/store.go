@@ -972,3 +972,155 @@ func (s *InMemoryCircuitBreakerStore) Delete(instrumentID string) error {
 	delete(s.data, instrumentID)
 	return nil
 }
+
+// ── TradeCorrectionStore ──────────────────────────────────────────────────────
+
+// TradeCorrectionStore defines the repository contract for trade corrections.
+type TradeCorrectionStore interface {
+	Create(correction *types.TradeCorrection) error
+	ListByTrade(tradeID string) ([]types.TradeCorrection, error)
+}
+
+// InMemoryTradeCorrectionStore is a thread-safe, in-memory implementation of TradeCorrectionStore.
+type InMemoryTradeCorrectionStore struct {
+	mu   sync.RWMutex
+	data []types.TradeCorrection
+}
+
+// NewInMemoryTradeCorrectionStore returns an empty InMemoryTradeCorrectionStore.
+func NewInMemoryTradeCorrectionStore() *InMemoryTradeCorrectionStore {
+	return &InMemoryTradeCorrectionStore{}
+}
+
+// Create appends a new trade correction record.
+func (s *InMemoryTradeCorrectionStore) Create(correction *types.TradeCorrection) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := *correction
+	s.data = append(s.data, c)
+	return nil
+}
+
+// ListByTrade returns all corrections for a given trade ID.
+func (s *InMemoryTradeCorrectionStore) ListByTrade(tradeID string) ([]types.TradeCorrection, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]types.TradeCorrection, 0)
+	for _, c := range s.data {
+		if c.TradeID == tradeID {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}
+
+// ── TickTableStore ────────────────────────────────────────────────────────────
+
+// TickTableStore defines the repository contract for tiered tick tables.
+type TickTableStore interface {
+	Get(instrumentID string) (*types.TickTable, error)
+	Set(table *types.TickTable) error
+	Delete(instrumentID string) error
+}
+
+// InMemoryTickTableStore is a thread-safe, in-memory implementation of TickTableStore.
+type InMemoryTickTableStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.TickTable
+}
+
+// NewInMemoryTickTableStore returns an empty InMemoryTickTableStore.
+func NewInMemoryTickTableStore() *InMemoryTickTableStore {
+	return &InMemoryTickTableStore{data: make(map[string]*types.TickTable)}
+}
+
+// Get retrieves a tick table by instrument ID. Returns ErrNotFound if absent.
+func (s *InMemoryTickTableStore) Get(instrumentID string) (*types.TickTable, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.data[instrumentID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	// Return a deep copy so callers cannot mutate stored state.
+	cp := types.TickTable{
+		InstrumentID: t.InstrumentID,
+		Tiers:        make([]types.TickTier, len(t.Tiers)),
+	}
+	copy(cp.Tiers, t.Tiers)
+	return &cp, nil
+}
+
+// Set upserts a tick table for the given instrument.
+func (s *InMemoryTickTableStore) Set(table *types.TickTable) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := types.TickTable{
+		InstrumentID: table.InstrumentID,
+		Tiers:        make([]types.TickTier, len(table.Tiers)),
+	}
+	copy(cp.Tiers, table.Tiers)
+	s.data[table.InstrumentID] = &cp
+	return nil
+}
+
+// Delete removes the tick table for the given instrument.
+func (s *InMemoryTickTableStore) Delete(instrumentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, instrumentID)
+	return nil
+}
+
+// ── ThrottleStore ─────────────────────────────────────────────────────────────
+
+// ThrottleStore defines the repository contract for per-firm order rate limiting.
+type ThrottleStore interface {
+	// CheckAndIncrement returns (allowed bool, error). It increments the counter
+	// for firmID within the current 1-second window and returns false if the count
+	// would exceed maxPerSecond.
+	CheckAndIncrement(firmID string, maxPerSecond int) (bool, error)
+}
+
+// throttleBucket tracks the request count within a 1-second window.
+type throttleBucket struct {
+	count     int64
+	windowEnd time.Time
+}
+
+// InMemoryThrottleStore is a thread-safe, time-windowed, in-memory implementation
+// of ThrottleStore. Each firm gets an independent 1-second tumbling window.
+type InMemoryThrottleStore struct {
+	mu      sync.Mutex
+	buckets map[string]*throttleBucket
+}
+
+// NewInMemoryThrottleStore returns an empty InMemoryThrottleStore.
+func NewInMemoryThrottleStore() *InMemoryThrottleStore {
+	return &InMemoryThrottleStore{buckets: make(map[string]*throttleBucket)}
+}
+
+// CheckAndIncrement is the core rate-limit operation. It uses a tumbling 1-second
+// window: if the current time has passed the bucket's windowEnd, the counter resets.
+// Returns (true, nil) when the request is allowed, (false, nil) when throttled.
+func (s *InMemoryThrottleStore) CheckAndIncrement(firmID string, maxPerSecond int) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	bucket, ok := s.buckets[firmID]
+	if !ok || now.After(bucket.windowEnd) {
+		// Start a new 1-second window.
+		s.buckets[firmID] = &throttleBucket{
+			count:     1,
+			windowEnd: now.Add(time.Second),
+		}
+		return true, nil
+	}
+
+	if int(bucket.count) >= maxPerSecond {
+		return false, fmt.Errorf("throttle limit %d/s exceeded for firm %s", maxPerSecond, firmID)
+	}
+	bucket.count++
+	return true, nil
+}
