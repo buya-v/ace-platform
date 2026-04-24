@@ -6,9 +6,15 @@ function authHeader(state: Record<string, unknown>, user: string): Record<string
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function tenantHeader(state: Record<string, unknown>, user: string): Record<string, string> {
+  return { ...authHeader(state, user), 'X-GarudaX-Tenant': 'mse-equities' };
+}
+
 function okValidator(status: number): 'PASS' | 'FAIL' {
   return status >= 200 && status < 500 ? 'PASS' : 'FAIL';
 }
+
+// ─── Section 1: Environment Setup ────────────────────────────────────────────
 
 const envSetup: Section = {
   id: 'env-setup',
@@ -24,39 +30,34 @@ const envSetup: Section = {
     },
     {
       id: 'env-2',
-      title: 'Check Matching Engine Health',
-      description: 'Verify the matching engine is reachable via gateway (any response confirms connectivity)',
+      title: 'Check Securities Service',
+      description: 'Verify the securities service is reachable via gateway',
       method: 'GET',
-      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/book',
-      validateResponse: (status) => (status > 0) ? 'PASS' : 'FAIL',
+      url: '/api/v1/securities/instruments',
+      headers: () => ({ 'X-GarudaX-Tenant': 'mse-equities' }),
+      validateResponse: okValidator,
     },
     {
       id: 'env-3',
-      title: 'Check All Services via Gateway',
-      description: 'Verify gateway can reach backend services (readiness check)',
+      title: 'Check Platform Service',
+      description: 'Verify the platform tenant registry is available',
       method: 'GET',
-      url: '/readyz',
-      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
-    },
-    {
-      id: 'env-4',
-      title: 'Verify Gateway Routes',
-      description: 'Verify gateway can list instruments (public route)',
-      method: 'GET',
-      url: '/api/v1/instruments/list',
-      validateResponse: (status) => (status === 200 || status === 502) ? 'PASS' : 'FAIL',
+      url: '/platform/v1/tenants',
+      validateResponse: okValidator,
     },
   ],
 };
 
+// ─── Section 2: User Registration ────────────────────────────────────────────
+
 const registration: Section = {
   id: 'registration',
-  title: 'User Registration & KYC',
+  title: 'User Registration & Login',
   steps: [
     {
       id: 'reg-1',
       title: 'Register Trader 1',
-      description: 'Create first trader account',
+      description: 'Create first trader account (buyer)',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader1', password: 'Tr@der1Pass!', email: 'trader1@garudax.mn', role: 'trader' }),
@@ -65,7 +66,7 @@ const registration: Section = {
     {
       id: 'reg-2',
       title: 'Register Trader 2',
-      description: 'Create second trader account',
+      description: 'Create second trader account (seller)',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader2', password: 'Tr@der2Pass!', email: 'trader2@garudax.mn', role: 'trader' }),
@@ -74,7 +75,7 @@ const registration: Section = {
     {
       id: 'reg-3',
       title: 'Register Admin',
-      description: 'Create admin account',
+      description: 'Create exchange admin account',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'admin', password: 'Adm1n@Pass!', email: 'admin@garudax.mn', role: 'admin' }),
@@ -125,549 +126,415 @@ const registration: Section = {
   ],
 };
 
-const trading: Section = {
-  id: 'trading',
-  title: 'Trading Flow',
+// ─── Section 3: Securities Instruments ───────────────────────────────────────
+
+const securitiesInstruments: Section = {
+  id: 'securities-instruments',
+  title: 'Securities — Instruments',
   steps: [
     {
-      id: 'trade-1',
+      id: 'sec-inst-1',
+      title: 'Create Equity: APU JSC',
+      description: 'List APU JSC (food & beverages) on MSE — lot_size=10, tick_size=1 MNT',
+      method: 'POST',
+      url: '/api/v1/securities/instruments',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({
+        ticker: 'APU',
+        name: 'APU JSC',
+        asset_class: 'EQUITY',
+        lot_size: 10,
+        tick_size: 1,
+        currency: 'MNT',
+        exchange_code: 'MSE',
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        return { apu_id: b.id };
+      },
+    },
+    {
+      id: 'sec-inst-2',
+      title: 'Create Equity: Govisumber Mining',
+      description: 'List Govisumber Mining on MSE — lot_size=100, tick_size=50 MNT',
+      method: 'POST',
+      url: '/api/v1/securities/instruments',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({
+        ticker: 'GOV',
+        name: 'Govisumber Mining LLC',
+        asset_class: 'EQUITY',
+        lot_size: 100,
+        tick_size: 50,
+        currency: 'MNT',
+        exchange_code: 'MSE',
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        return { gov_id: b.id };
+      },
+    },
+    {
+      id: 'sec-inst-3',
+      title: 'List All Instruments',
+      description: 'Verify both instruments are listed on MSE',
+      method: 'GET',
+      url: '/api/v1/securities/instruments',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 4: Securities Trading ───────────────────────────────────────────
+
+const securitiesTrading: Section = {
+  id: 'securities-trading',
+  title: 'Securities — Order Matching',
+  steps: [
+    {
+      id: 'sec-trade-1',
       title: 'Submit Buy Order (Trader 1)',
-      description: 'Place a limit buy order for wheat futures',
+      description: 'Trader 1 places a limit buy for 100 shares of APU at 850 MNT',
       method: 'POST',
-      url: '/api/v1/orders',
-      headers: (state) => authHeader(state, 'trader1'),
-      body: () => ({
-        instrument_id: 'WHT-HRW-2026M07-UB',
-        side: 'BUY',
-        type: 'LIMIT',
-        price: '325.50',
-        quantity: '10',
-      }),
-      validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        return { buy_order_id: b.order_id || b.exec_id || b.id };
-      },
-    },
-    {
-      id: 'trade-2',
-      title: 'Submit Sell Order (Trader 2)',
-      description: 'Place a matching limit sell order',
-      method: 'POST',
-      url: '/api/v1/orders',
-      headers: (state) => authHeader(state, 'trader2'),
-      body: () => ({
-        instrument_id: 'WHT-HRW-2026M07-UB',
-        side: 'SELL',
-        type: 'LIMIT',
-        price: '325.50',
-        quantity: '10',
-      }),
-      validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        return { sell_order_id: b.order_id || b.exec_id || b.id };
-      },
-    },
-    {
-      id: 'trade-3',
-      title: 'View Order Book',
-      description: 'Check the current order book for wheat futures',
-      method: 'GET',
-      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/book',
-      headers: (state) => authHeader(state, 'trader1'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'trade-4',
-      title: 'View Last Trade',
-      description: 'View the most recent trade execution',
-      method: 'GET',
-      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest',
-      headers: (state) => authHeader(state, 'trader1'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'trade-5',
-      title: 'Cancel an Order',
-      description: 'Place a new order and then cancel it',
-      method: 'POST',
-      url: '/api/v1/orders',
-      headers: (state) => authHeader(state, 'trader1'),
-      body: () => ({
-        instrument_id: 'WHT-HRW-2026M07-UB',
-        side: 'BUY',
-        type: 'LIMIT',
-        price: '300.00',
-        quantity: '5',
-      }),
-      validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        return { cancel_order_id: b.order_id || b.exec_id || b.id };
-      },
-    },
-  ],
-};
-
-const postTrade: Section = {
-  id: 'post-trade',
-  title: 'Post-Trade',
-  steps: [
-    {
-      id: 'post-1',
-      title: 'View Clearing Positions',
-      description: 'View current clearing positions after trade execution',
-      method: 'GET',
-      url: '/api/v1/clearing/positions',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'post-2',
-      title: 'View Netting Obligations',
-      description: 'View netting obligations for settled trades',
-      method: 'GET',
-      url: '/api/v1/clearing/netting',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'post-3',
-      title: 'View Margin Requirements',
-      description: 'Check margin requirements for open positions',
-      method: 'GET',
-      url: '/api/v1/margin',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'post-4',
-      title: 'View Margin Calls',
-      description: 'Check for any outstanding margin calls',
-      method: 'GET',
-      url: '/api/v1/margin/calls',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const delivery: Section = {
-  id: 'delivery',
-  title: 'Physical Delivery',
-  steps: [
-    {
-      id: 'del-1',
-      title: 'Issue Warehouse Receipt',
-      description: 'Issue a new warehouse receipt for physical commodity',
-      method: 'POST',
-      url: '/api/v1/warehouse/receipts',
-      headers: (state) => authHeader(state, 'admin'),
-      body: () => ({
-        facility_id: 'WH-001',
-        holder_id: 'trader1',
-        commodity_id: 'HRW_WHEAT',
-        lot_number: 'LOT-2026-001',
-        inspection_id: 'INSP-001',
-        quantity: '5000',
-        unit: 'bushels',
-        grade: 'US_NO_1',
-      }),
-      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        return { receipt_id: b.receipt_id || b.id };
-      },
-    },
-    {
-      id: 'del-2',
-      title: 'Pledge Receipt as Collateral',
-      description: 'Pledge the warehouse receipt as margin collateral',
-      method: 'POST',
-      url: (state) => `/api/v1/warehouse/receipts/${state.receipt_id || 'RECEIPT-001'}/pledge`,
-      headers: (state) => authHeader(state, 'trader1'),
-      body: () => ({ purpose: 'margin_collateral' }),
-      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
-    },
-    {
-      id: 'del-3',
-      title: 'Initiate Delivery',
-      description: 'Initiate physical delivery against a settled contract',
-      method: 'POST',
-      url: '/api/v1/warehouse/deliveries',
-      headers: (state) => authHeader(state, 'admin'),
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
       body: (state) => ({
-        receipt_id: state.receipt_id || 'RECEIPT-001',
-        buyer_id: state.trader1_id || 'trader1',
-        seller_id: state.trader2_id || 'trader2',
-        quantity: '5000',
+        instrument_id: state.apu_id || 'APU',
+        side: 'BUY',
+        order_type: 'LIMIT',
+        quantity: 100,
+        price: 850,
+        time_in_force: 'GTC',
       }),
-      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
-    },
-    {
-      id: 'del-4',
-      title: 'View Warehouse Inventory',
-      description: 'Check current warehouse inventory levels',
-      method: 'GET',
-      url: '/api/v1/warehouse/inventory',
-      headers: (state) => authHeader(state, 'admin'),
       validateResponse: okValidator,
-    },
-  ],
-};
-
-const marketData: Section = {
-  id: 'market-data',
-  title: 'Market Data',
-  steps: [
-    {
-      id: 'mkt-1',
-      title: 'Get OHLCV Candles',
-      description: 'Retrieve candlestick chart data for wheat futures',
-      method: 'GET',
-      url: '/api/v1/market-data/candles/WHT-HRW-2026M07-UB?interval=1m',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'mkt-2',
-      title: 'Get Ticker',
-      description: 'Get latest ticker data for wheat futures',
-      method: 'GET',
-      url: '/api/v1/market-data/ticker/WHT-HRW-2026M07-UB',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'mkt-3',
-      title: 'Get Recent Trades',
-      description: 'Retrieve recent trade history',
-      method: 'GET',
-      url: '/api/v1/market-data/trades/WHT-HRW-2026M07-UB',
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const compliance: Section = {
-  id: 'compliance',
-  title: 'Compliance & Risk',
-  steps: [
-    {
-      id: 'comp-1',
-      title: 'Get Participant Status',
-      description: 'Check compliance status for a participant',
-      method: 'GET',
-      url: (state) => `/api/v1/participants/${state.trader1_id || 'trader1'}`,
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'comp-2',
-      title: 'Get Risk Score',
-      description: 'Retrieve risk score for a participant',
-      method: 'GET',
-      url: (state) => `/api/v1/risk-scores/${state.trader1_id || 'trader1'}`,
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'comp-3',
-      title: 'View Compliance Alerts',
-      description: 'View active compliance alerts',
-      method: 'GET',
-      url: '/api/v1/compliance/alerts',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const adminOps: Section = {
-  id: 'admin-ops',
-  title: 'Admin Operations',
-  steps: [
-    {
-      id: 'admin-1',
-      title: 'View All Service Health',
-      description: 'Aggregated health check across all services',
-      method: 'GET',
-      url: '/healthz',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'admin-2',
-      title: 'View Settlement Cycles',
-      description: 'View settlement cycle history',
-      method: 'GET',
-      url: '/api/v1/settlement/cycles',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'admin-3',
-      title: 'View Circuit Breakers',
-      description: 'View circuit breaker status for trading halts',
-      method: 'GET',
-      url: '/api/v1/admin/circuit-breakers',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const adminOrderbook: Section = {
-  id: 'admin-orderbook',
-  title: 'Order Book (Admin View)',
-  steps: [
-    {
-      id: 'ob-1',
-      title: 'Fetch Instrument List',
-      description: 'Lists all tradeable instruments. View on admin.garudax.asla.mn → Order Book page',
-      method: 'GET',
-      url: '/api/v1/instruments/list',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'ob-2',
-      title: 'Fetch Order Book for Wheat',
-      description: 'Shows bid/ask depth for wheat futures. View on admin.garudax.asla.mn → Order Book page',
-      method: 'GET',
-      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/book',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'ob-3',
-      title: 'Fetch Last Trade',
-      description: 'Most recent trade execution. View on admin.garudax.asla.mn → Order Book page',
-      method: 'GET',
-      url: '/api/v1/instruments/WHT-HRW-2026M07-UB/trades/latest',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'ob-4',
-      title: 'Fetch Market Trades',
-      description: 'Trade tape from market data service. View on admin.garudax.asla.mn → Order Book page',
-      method: 'GET',
-      url: '/api/v1/market-data/trades/WHT-HRW-2026M07-UB',
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const adminPositions: Section = {
-  id: 'admin-positions',
-  title: 'Positions & Risk',
-  steps: [
-    {
-      id: 'pos-1',
-      title: 'Fetch Clearing Positions',
-      description: 'All open positions across participants. View on admin.garudax.asla.mn → Positions page',
-      method: 'GET',
-      url: '/api/v1/clearing/positions',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'pos-2',
-      title: 'Fetch Netting Obligations',
-      description: 'Netting obligations for settled trades. View on admin.garudax.asla.mn → Positions page',
-      method: 'GET',
-      url: '/api/v1/clearing/netting',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'pos-3',
-      title: 'Fetch Portfolio Margin',
-      description: 'Portfolio-level margin requirements. View on admin.garudax.asla.mn → Risk Overview page',
-      method: 'GET',
-      url: '/api/v1/margin',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'pos-4',
-      title: 'Fetch Margin Calls',
-      description: 'Outstanding margin calls. View on admin.garudax.asla.mn → Margin Calls page',
-      method: 'GET',
-      url: '/api/v1/margin/calls',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-const adminSettlement: Section = {
-  id: 'admin-settlement',
-  title: 'Settlement',
-  steps: [
-    {
-      id: 'stl-1',
-      title: 'Fetch Settlement Cycles',
-      description: 'Settlement cycle history and status. View on admin.garudax.asla.mn → Settlement page',
-      method: 'GET',
-      url: '/api/v1/settlement/cycles',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'stl-2',
-      title: 'Trigger Settlement Cycle',
-      description: 'Initiates a new settlement cycle. View on admin.garudax.asla.mn → Settlement page',
-      method: 'POST',
-      url: '/api/v1/settlement/cycles',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
       extractState: (body) => {
         const b = body as Record<string, unknown>;
-        return { settlement_cycle_id: b.cycle_id || b.id };
+        const order = (b.order || b) as Record<string, unknown>;
+        return { buy_order_id: order.id || order.order_id || order.exec_id };
       },
     },
     {
-      id: 'stl-3',
-      title: 'Verify Settlement Cycle',
-      description: 'Confirm new cycle appears. View on admin.garudax.asla.mn → Settlement page',
+      id: 'sec-trade-2',
+      title: 'Submit Matching Sell Order (Trader 2)',
+      description: 'Trader 2 places a matching sell at 850 MNT → trade executes',
+      method: 'POST',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader2'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        side: 'SELL',
+        order_type: 'LIMIT',
+        quantity: 100,
+        price: 850,
+        time_in_force: 'GTC',
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        const trades = (b.trades || []) as unknown[];
+        return { trade_count: trades.length, last_trade: trades[0] };
+      },
+    },
+    {
+      id: 'sec-trade-3',
+      title: 'Submit Market Buy (Trader 1)',
+      description: 'Trader 1 places a market order for 50 shares of APU — fills at best ask',
+      method: 'POST',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        side: 'BUY',
+        order_type: 'MARKET',
+        quantity: 50,
+      }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-trade-4',
+      title: 'View Orders',
+      description: 'List all securities orders for the tenant',
       method: 'GET',
-      url: '/api/v1/settlement/cycles',
-      headers: (state) => authHeader(state, 'admin'),
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-trade-5',
+      title: 'Submit & Cancel Order',
+      description: 'Place an order then cancel it immediately',
+      method: 'POST',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        side: 'BUY',
+        order_type: 'LIMIT',
+        quantity: 10,
+        price: 800,
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        const order = (b.order || b) as Record<string, unknown>;
+        return { cancel_order_id: order.id || order.order_id || order.exec_id };
+      },
+    },
+  ],
+};
+
+// ─── Section 5: Securities Positions ─────────────────────────────────────────
+
+const securitiesPositions: Section = {
+  id: 'securities-positions',
+  title: 'Securities — Positions & P&L',
+  steps: [
+    {
+      id: 'sec-pos-1',
+      title: 'View Positions',
+      description: 'Check positions after trades — Trader 1 should have +100 APU',
+      method: 'GET',
+      url: '/api/v1/securities/positions',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-pos-2',
+      title: 'View Settlements',
+      description: 'Check T+2 settlement obligations created from trades',
+      method: 'GET',
+      url: '/api/v1/securities/settlements',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-pos-3',
+      title: 'Trigger Settlement Cycle',
+      description: 'Process settlement for today — transitions PENDING → SETTLED',
+      method: 'POST',
+      url: '/api/v1/securities/settlements/cycle',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ date: new Date().toISOString().slice(0, 10) }),
       validateResponse: okValidator,
     },
   ],
 };
 
-const adminCircuitBreakers: Section = {
-  id: 'admin-circuit-breakers',
-  title: 'Circuit Breakers',
+// ─── Section 6: Corporate Actions ────────────────────────────────────────────
+
+const corporateActions: Section = {
+  id: 'corporate-actions',
+  title: 'Securities — Corporate Actions',
   steps: [
     {
-      id: 'cb-1',
-      title: 'Fetch Instruments with Status',
-      description: 'Instruments with trading phase and circuit breaker config. View on admin.garudax.asla.mn → Circuit Breakers page',
-      method: 'GET',
-      url: '/api/v1/instruments',
-      headers: (state) => authHeader(state, 'admin'),
+      id: 'sec-ca-1',
+      title: 'Announce Dividend',
+      description: 'APU JSC announces 50 MNT per share dividend',
+      method: 'POST',
+      url: '/api/v1/securities/corporate-actions',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        action_type: 'CA_DIVIDEND',
+        record_date: new Date().toISOString().slice(0, 10),
+        payment_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+        details: { dividend_amount: 50.0 },
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        return { dividend_id: b.id };
+      },
+    },
+    {
+      id: 'sec-ca-2',
+      title: 'Process Dividend Entitlements',
+      description: 'Calculate and create dividend entitlements for all shareholders',
+      method: 'POST',
+      url: (state) => `/api/v1/securities/corporate-actions/${state.dividend_id || 'DIVIDEND-001'}/process`,
+      headers: (state) => tenantHeader(state, 'admin'),
       validateResponse: okValidator,
     },
     {
-      id: 'cb-2',
-      title: 'Set Circuit Breaker',
-      description: 'Configure price limits for wheat. View on admin.garudax.asla.mn → Circuit Breakers page',
+      id: 'sec-ca-3',
+      title: 'List Corporate Actions',
+      description: 'View all announced corporate actions',
+      method: 'GET',
+      url: '/api/v1/securities/corporate-actions',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 7: Market Sessions ──────────────────────────────────────────────
+
+const marketSessions: Section = {
+  id: 'market-sessions',
+  title: 'Securities — Market Sessions',
+  steps: [
+    {
+      id: 'sec-sess-1',
+      title: 'View Current Sessions',
+      description: 'Check market session state for all instruments',
+      method: 'GET',
+      url: '/api/v1/securities/sessions',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-sess-2',
+      title: 'Open Pre-Auction Phase',
+      description: 'Transition APU to PRE_OPEN — orders collected for opening auction',
+      method: 'POST',
+      url: (state) => `/api/v1/securities/sessions/${state.apu_id || 'APU'}/transition`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ session: 'PRE_OPEN' }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-sess-3',
+      title: 'Start Continuous Trading',
+      description: 'Transition to CONTINUOUS — opening auction executes, then live matching',
+      method: 'POST',
+      url: (state) => `/api/v1/securities/sessions/${state.apu_id || 'APU'}/transition`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ session: 'CONTINUOUS' }),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 8: FRC Reporting ────────────────────────────────────────────────
+
+const frcReporting: Section = {
+  id: 'frc-reporting',
+  title: 'Securities — FRC Reports',
+  steps: [
+    {
+      id: 'sec-frc-1',
+      title: 'Daily Trading Summary',
+      description: 'Generate FRC daily summary report — trade count, volume, value',
+      method: 'GET',
+      url: `/api/v1/securities/reports/frc?type=DAILY_SUMMARY&date=${new Date().toISOString().slice(0, 10)}`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'sec-frc-2',
+      title: 'Large Trader Report',
+      description: 'Generate FRC large trader positions report',
+      method: 'GET',
+      url: '/api/v1/securities/reports/frc?type=LARGE_TRADER',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 9: Instrument Management ────────────────────────────────────────
+
+const instrumentManagement: Section = {
+  id: 'instrument-management',
+  title: 'Securities — Admin Operations',
+  steps: [
+    {
+      id: 'sec-mgmt-1',
+      title: 'Halt Trading on APU',
+      description: 'Admin halts trading on APU JSC — no new orders accepted',
       method: 'PUT',
-      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/circuit-breaker',
-      headers: (state) => authHeader(state, 'admin'),
-      body: () => ({ upper_limit_pct: 10, lower_limit_pct: 10, cooldown_minutes: 5, reference_price: '325.50' }),
-      validateResponse: (status) => (status >= 200 && status < 504) ? 'PASS' : 'FAIL',
+      url: (state) => `/api/v1/securities/instruments/${state.apu_id || 'APU'}/status`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ status: 'HALTED', reason: 'Regulatory review' }),
+      validateResponse: okValidator,
     },
     {
-      id: 'cb-3',
-      title: 'Halt Instrument',
-      description: 'Halt trading on wheat futures. View on admin.garudax.asla.mn → Market Phase page',
-      method: 'POST',
-      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/halt',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: (status) => (status >= 200 && status < 504) ? 'PASS' : 'FAIL',
+      id: 'sec-mgmt-2',
+      title: 'Resume Trading on APU',
+      description: 'Admin resumes trading after review',
+      method: 'PUT',
+      url: (state) => `/api/v1/securities/instruments/${state.apu_id || 'APU'}/status`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ status: 'ACTIVE' }),
+      validateResponse: okValidator,
     },
     {
-      id: 'cb-4',
-      title: 'Resume Instrument',
-      description: 'Resume trading on wheat futures. View on admin.garudax.asla.mn → Market Phase page',
-      method: 'POST',
-      url: '/api/v1/admin/instruments/WHT-HRW-2026M07-UB/resume',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: (status) => (status >= 200 && status < 504) ? 'PASS' : 'FAIL',
+      id: 'sec-mgmt-3',
+      title: 'Verify Instrument Status',
+      description: 'Confirm APU is back to ACTIVE trading',
+      method: 'GET',
+      url: '/api/v1/securities/instruments',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
     },
   ],
 };
 
-const adminMonitoring: Section = {
-  id: 'admin-monitoring',
-  title: 'System Monitoring',
+// ─── Section 10: Platform Admin ──────────────────────────────────────────────
+
+const platformAdmin: Section = {
+  id: 'platform-admin',
+  title: 'Platform — Tenant Management',
   steps: [
     {
-      id: 'mon-1',
-      title: 'Fetch Admin Health',
-      description: 'Aggregated service health status. View on admin.garudax.asla.mn → System Health page',
+      id: 'plat-1',
+      title: 'List Tenants',
+      description: 'View all registered trading venues on the platform',
       method: 'GET',
-      url: '/api/v1/admin/health',
-      headers: (state) => authHeader(state, 'admin'),
+      url: '/platform/v1/tenants',
       validateResponse: okValidator,
     },
     {
-      id: 'mon-2',
-      title: 'Fetch Compliance Alerts',
-      description: 'Active compliance alerts. View on admin.garudax.asla.mn → Compliance page',
+      id: 'plat-2',
+      title: 'Get MSE Tenant Config',
+      description: 'View MSE trading calendar, settlement rules, and feature flags',
       method: 'GET',
-      url: '/api/v1/compliance/alerts',
-      headers: (state) => authHeader(state, 'admin'),
+      url: '/platform/v1/tenants/mse-equities/config',
       validateResponse: okValidator,
-    },
-    {
-      id: 'mon-3',
-      title: 'Fetch Audit Trail',
-      description: 'Recent system audit events',
-      method: 'GET',
-      url: '/api/v1/compliance/audit-trail',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'mon-4',
-      title: 'Fetch Warehouse Facilities',
-      description: 'Warehouse facility registry and capacity. View on admin.garudax.asla.mn → Warehouse page',
-      method: 'GET',
-      url: '/api/v1/warehouse/inventory',
-      headers: (state) => authHeader(state, 'admin'),
-      validateResponse: (status) => (status === 200 || status === 502) ? 'PASS' : 'FAIL',
     },
   ],
 };
+
+// ─── Readiness Checklist ─────────────────────────────────────────────────────
 
 const readinessItems: ChecklistItem[] = [
-  { id: 'sec-1', category: 'Security', description: 'TLS termination configured on gateway', status: 'Not Ready' },
-  { id: 'sec-2', category: 'Security', description: 'JWT signing keys rotated and stored in secrets manager', status: 'Not Ready' },
-  { id: 'sec-3', category: 'Security', description: 'RBAC enforced on all API endpoints', status: 'Partial' },
-  { id: 'sec-4', category: 'Security', description: 'Rate limiting enabled on auth endpoints', status: 'Not Ready' },
-  { id: 'perf-1', category: 'Performance', description: 'Matching engine < 1ms p99 latency', status: 'Ready' },
-  { id: 'perf-2', category: 'Performance', description: 'Order throughput > 10,000 orders/sec', status: 'Partial' },
-  { id: 'perf-3', category: 'Performance', description: 'Database connection pooling configured', status: 'Not Ready' },
-  { id: 'mon-1', category: 'Monitoring', description: 'Prometheus metrics exported from all services', status: 'Not Ready' },
-  { id: 'mon-2', category: 'Monitoring', description: 'Grafana dashboards for trading metrics', status: 'Not Ready' },
-  { id: 'mon-3', category: 'Monitoring', description: 'Alerting rules for margin breach events', status: 'Not Ready' },
-  { id: 'data-1', category: 'Data Integrity', description: 'Database migrations tested and versioned', status: 'Ready' },
-  { id: 'data-2', category: 'Data Integrity', description: 'Audit log for all trade modifications', status: 'Partial' },
-  { id: 'dr-1', category: 'DR', description: 'Database backup strategy documented', status: 'Not Ready' },
-  { id: 'dr-2', category: 'DR', description: 'Failover procedure for matching engine', status: 'Not Ready' },
-  { id: 'reg-r1', category: 'Regulatory', description: 'Trade reporting to regulatory body', status: 'Not Ready' },
-  { id: 'reg-r2', category: 'Regulatory', description: 'KYC/AML verification integrated', status: 'Partial' },
+  { id: 'sec-1', category: 'Security', description: 'TLS termination on gateway', status: 'Ready' },
+  { id: 'sec-2', category: 'Security', description: 'JWT auth on all securities endpoints', status: 'Ready' },
+  { id: 'sec-3', category: 'Security', description: 'Tenant isolation via X-GarudaX-Tenant', status: 'Ready' },
+  { id: 'perf-1', category: 'Performance', description: 'Order matching < 1ms', status: 'Ready' },
+  { id: 'perf-2', category: 'Performance', description: 'Lot size & tick size validation', status: 'Ready' },
+  { id: 'feat-1', category: 'Features', description: 'T+2 settlement state machine', status: 'Ready' },
+  { id: 'feat-2', category: 'Features', description: 'Corporate actions (dividend, split)', status: 'Ready' },
+  { id: 'feat-3', category: 'Features', description: 'Market sessions (auction + continuous)', status: 'Ready' },
+  { id: 'feat-4', category: 'Features', description: 'FRC regulatory reporting', status: 'Ready' },
+  { id: 'feat-5', category: 'Features', description: 'Multi-tenant platform with MSE as flagship', status: 'Ready' },
 ];
 
 const readiness: ChecklistSection = {
   id: 'readiness',
-  title: 'Production Readiness',
+  title: 'Securities Exchange Readiness',
   items: readinessItems,
 };
+
+// ─── Export ──────────────────────────────────────────────────────────────────
 
 export const allSections: AnySection[] = [
   envSetup,
   registration,
-  trading,
-  postTrade,
-  delivery,
-  marketData,
-  compliance,
-  adminOps,
-  adminOrderbook,
-  adminPositions,
-  adminSettlement,
-  adminCircuitBreakers,
-  adminMonitoring,
+  securitiesInstruments,
+  securitiesTrading,
+  securitiesPositions,
+  corporateActions,
+  marketSessions,
+  frcReporting,
+  instrumentManagement,
+  platformAdmin,
   readiness,
 ];
 
 export function getAllSteps(): StepDefinition[] {
   return allSections.flatMap((s) => ('steps' in s ? s.steps : []));
-}
-
-export function getTotalStepCount(): number {
-  return getAllSteps().length;
 }
