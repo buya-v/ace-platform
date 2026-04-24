@@ -13,6 +13,11 @@ export class ApiError extends Error {
 
 let accessToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
+let currentTenantId: string | null = null;
+
+export function setApiTenant(tenantId: string | null): void {
+  currentTenantId = tenantId;
+}
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -41,6 +46,10 @@ export async function apiFetch<T>(
 
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
+  if (currentTenantId && !path.startsWith('/platform/')) {
+    headers['X-GarudaX-Tenant'] = currentTenantId;
   }
 
   const response = await fetch(url, {

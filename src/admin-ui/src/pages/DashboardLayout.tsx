@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { KPIProvider, useKPI } from '../contexts/KPIContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { BotProvider } from '../contexts/BotContext';
+import { TenantProvider } from '../contexts/TenantContext';
 import { hasComplianceAccess } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
@@ -61,11 +62,13 @@ export function DashboardLayout() {
 
   return (
     <ToastProvider>
-      <KPIProvider>
-        <BotProvider currentPage={location.pathname}>
-          <DashboardInner />
-        </BotProvider>
-      </KPIProvider>
+      <TenantProvider>
+        <KPIProvider>
+          <BotProvider currentPage={location.pathname}>
+            <DashboardInner />
+          </BotProvider>
+        </KPIProvider>
+      </TenantProvider>
     </ToastProvider>
   );
 }
