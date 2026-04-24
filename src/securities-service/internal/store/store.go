@@ -79,6 +79,75 @@ type SettlementStore interface {
 	UpdateStatus(id string, status types.SettlementStatus) error
 }
 
+// ParticipantStore defines the repository contract for exchange participants.
+type ParticipantStore interface {
+	Get(id string) (*types.ExchangeParticipant, error)
+	List() ([]types.ExchangeParticipant, error)
+	Create(p *types.ExchangeParticipant) error
+	UpdateStatus(id string, status types.ParticipantStatus) error
+}
+
+// InMemoryParticipantStore is a thread-safe, in-memory implementation of ParticipantStore.
+type InMemoryParticipantStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.ExchangeParticipant
+}
+
+// NewInMemoryParticipantStore returns an empty InMemoryParticipantStore.
+func NewInMemoryParticipantStore() *InMemoryParticipantStore {
+	return &InMemoryParticipantStore{
+		data: make(map[string]*types.ExchangeParticipant),
+	}
+}
+
+// Get retrieves a participant by ID.
+func (s *InMemoryParticipantStore) Get(id string) (*types.ExchangeParticipant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copy := *p
+	return &copy, nil
+}
+
+// List returns all participants.
+func (s *InMemoryParticipantStore) List() ([]types.ExchangeParticipant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.ExchangeParticipant, 0, len(s.data))
+	for _, p := range s.data {
+		out = append(out, *p)
+	}
+	return out, nil
+}
+
+// Create stores a new participant.
+func (s *InMemoryParticipantStore) Create(p *types.ExchangeParticipant) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[p.ID]; exists {
+		return fmt.Errorf("participant %s already exists", p.ID)
+	}
+	copy := *p
+	s.data[p.ID] = &copy
+	return nil
+}
+
+// UpdateStatus changes the status of a participant.
+func (s *InMemoryParticipantStore) UpdateStatus(id string, status types.ParticipantStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	p.Status = status
+	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
 // --- InMemoryInstrumentStore ---
 
 // InMemoryInstrumentStore is a thread-safe, in-memory implementation of InstrumentStore.

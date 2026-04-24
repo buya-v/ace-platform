@@ -106,10 +106,12 @@ type SecurityOrder struct {
 	StopPrice      float64     `json:"stop_price"`
 	TimeInForce    TimeInForce `json:"time_in_force"`
 	Status         OrderStatus `json:"status"`
-	FilledQuantity int         `json:"filled_quantity"`
-	AvgFillPrice   float64     `json:"avg_fill_price"`
-	CreatedAt      string      `json:"created_at"`
-	UpdatedAt      string      `json:"updated_at"`
+	FilledQuantity  int         `json:"filled_quantity"`
+	AvgFillPrice    float64     `json:"avg_fill_price"`
+	VisibleQuantity int         `json:"visible_quantity,omitempty"` // Iceberg: visible (displayed) quantity
+	HiddenQuantity  int         `json:"hidden_quantity,omitempty"`  // Iceberg: hidden (reserve) quantity
+	CreatedAt       string      `json:"created_at"`
+	UpdatedAt       string      `json:"updated_at"`
 }
 
 // TradeStatus represents the lifecycle state of a trade.
@@ -272,6 +274,47 @@ type AuctionResult struct {
 	UnmatchedSellVolume int   `json:"unmatched_sell_volume"`
 	TradeCount        int     `json:"trade_count"`
 }
+
+// ── Exchange Participants ────────────────────────────────────────────────────
+
+// ParticipantStatus represents the lifecycle state of an exchange participant.
+type ParticipantStatus string
+
+const (
+	ParticipantActive    ParticipantStatus = "PARTICIPANT_ACTIVE"
+	ParticipantSuspended ParticipantStatus = "PARTICIPANT_SUSPENDED"
+)
+
+// Permission constants for exchange participant capabilities.
+const (
+	PermTradeEquity    = "TRADE_EQUITY"
+	PermTradeBond      = "TRADE_BOND"
+	PermTradeETF       = "TRADE_ETF"
+	PermMarketMaker    = "MARKET_MAKER"
+	PermSponsoredAccess = "SPONSORED_ACCESS"
+)
+
+// ExchangeParticipant represents a registered trading participant on the exchange.
+type ExchangeParticipant struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Status      ParticipantStatus `json:"status"`
+	Permissions []string          `json:"permissions"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+}
+
+// ── Day State ────────────────────────────────────────────────────────────────
+
+// DayState represents the overall trading day lifecycle state.
+type DayState string
+
+const (
+	DayClosed   DayState = "DAY_CLOSED"
+	DayPreOpen  DayState = "DAY_PRE_OPEN"
+	DayTrading  DayState = "DAY_TRADING"
+	DayPostClose DayState = "DAY_POST_CLOSE"
+)
 
 // ErrorDetail carries a machine-readable code and human-readable message.
 type ErrorDetail struct {

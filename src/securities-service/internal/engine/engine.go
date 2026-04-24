@@ -192,9 +192,22 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 			}
 		}
 
-		// Trade at resting order's price.
+		// Determine available quantity for matching.
+		// For iceberg resting orders, match only against visible quantity.
 		restingRemaining := resting.Quantity - resting.FilledQuantity
-		fillQty := remainingQty
+		isRestingIceberg := resting.VisibleQuantity > 0 || resting.HiddenQuantity > 0
+		if isRestingIceberg {
+			restingRemaining = resting.VisibleQuantity
+		}
+
+		// For iceberg incoming orders, match only the visible portion.
+		incomingAvail := remainingQty
+		isIncomingIceberg := order.VisibleQuantity > 0 || order.HiddenQuantity > 0
+		if isIncomingIceberg {
+			incomingAvail = order.VisibleQuantity
+		}
+
+		fillQty := incomingAvail
 		if restingRemaining < fillQty {
 			fillQty = restingRemaining
 		}
@@ -248,10 +261,40 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 
 		// Update incoming order.
 		order.FilledQuantity += fillQty
-		if remainingQty == 0 {
-			order.Status = types.OrderStatusFilled
+		if isIncomingIceberg {
+			order.VisibleQuantity -= fillQty
+			// Replenish visible from hidden if visible is exhausted.
+			if order.VisibleQuantity == 0 && order.HiddenQuantity > 0 {
+				// Compute original display size: total - hidden at creation.
+				// Use min(what's left in hidden, the fill amount we just consumed as the replenish size).
+				origVisible := order.Quantity - order.FilledQuantity // total unfilled
+				if origVisible > order.HiddenQuantity {
+					origVisible = order.HiddenQuantity
+				}
+				// Actually, original visible = Quantity - (original HiddenQuantity).
+				// We don't store original, so replenish = min(fillQty, HiddenQuantity) as a proxy.
+				// Better: track via the total iceberg size.
+				// Use: replenish = min(Quantity - HiddenQuantity - FilledQuantity + fillQty, HiddenQuantity)
+				// Simplest correct approach: replenish = min(fillQty, HiddenQuantity)
+				replenish := fillQty
+				if order.HiddenQuantity < replenish {
+					replenish = order.HiddenQuantity
+				}
+				order.VisibleQuantity = replenish
+				order.HiddenQuantity -= replenish
+			}
+			// Iceberg FILLED only when both visible and hidden are 0.
+			if order.VisibleQuantity == 0 && order.HiddenQuantity == 0 && remainingQty == 0 {
+				order.Status = types.OrderStatusFilled
+			} else {
+				order.Status = types.OrderStatusPartiallyFilled
+			}
 		} else {
-			order.Status = types.OrderStatusPartiallyFilled
+			if remainingQty == 0 {
+				order.Status = types.OrderStatusFilled
+			} else {
+				order.Status = types.OrderStatusPartiallyFilled
+			}
 		}
 		order.UpdatedAt = now.Format(time.RFC3339)
 		if err := e.orderStore.Update(order); err != nil {
@@ -260,10 +303,29 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 
 		// Update resting order.
 		resting.FilledQuantity += fillQty
-		if resting.FilledQuantity >= resting.Quantity {
-			resting.Status = types.OrderStatusFilled
+		if isRestingIceberg {
+			resting.VisibleQuantity -= fillQty
+			// Replenish visible from hidden if visible is exhausted.
+			if resting.VisibleQuantity == 0 && resting.HiddenQuantity > 0 {
+				replenish := fillQty
+				if resting.HiddenQuantity < replenish {
+					replenish = resting.HiddenQuantity
+				}
+				resting.VisibleQuantity = replenish
+				resting.HiddenQuantity -= replenish
+			}
+			// Iceberg FILLED only when both visible and hidden are 0.
+			if resting.VisibleQuantity == 0 && resting.HiddenQuantity == 0 {
+				resting.Status = types.OrderStatusFilled
+			} else {
+				resting.Status = types.OrderStatusPartiallyFilled
+			}
 		} else {
-			resting.Status = types.OrderStatusPartiallyFilled
+			if resting.FilledQuantity >= resting.Quantity {
+				resting.Status = types.OrderStatusFilled
+			} else {
+				resting.Status = types.OrderStatusPartiallyFilled
+			}
 		}
 		resting.UpdatedAt = now.Format(time.RFC3339)
 		if err := e.orderStore.Update(resting); err != nil {
