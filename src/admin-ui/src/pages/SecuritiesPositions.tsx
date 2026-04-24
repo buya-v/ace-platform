@@ -2,6 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { fetchSecuritiesPositions } from '../services/api';
 import { DataGrid, Column } from '../components/DataGrid';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './SecuritiesPositions.module.css';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -59,6 +60,8 @@ export function normalizePositions(raw: unknown): SecuritiesPosition[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SecuritiesPositionsPage() {
+  const { currentTenant } = useTenant();
+
   const positionsResult = usePolling<unknown>(
     useCallback((signal: AbortSignal) => fetchSecuritiesPositions(undefined, signal), []),
     30000,
@@ -123,19 +126,25 @@ export function SecuritiesPositionsPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>Securities Positions</h1>
+      <h1 className={styles.pageTitle}>{`Securities Positions${currentTenant ? ` — ${currentTenant.name}` : ''}`}</h1>
 
-      <div className={styles.section}>
-        <DataGrid
-          columns={columns}
-          data={positions}
-          keyField="_key"
-          emptyMessage="No securities positions yet"
-          exportFilename="securities-positions"
-          stickyHeader
-          loading={positionsResult.isLoading}
-        />
-      </div>
+      {!currentTenant && (
+        <p>Select a tenant from the dropdown above to view securities data</p>
+      )}
+
+      {currentTenant && (
+        <div className={styles.section}>
+          <DataGrid
+            columns={columns}
+            data={positions}
+            keyField="_key"
+            emptyMessage={`No securities positions yet${currentTenant ? ` for ${currentTenant.name}` : ''}`}
+            exportFilename="securities-positions"
+            stickyHeader
+            loading={positionsResult.isLoading}
+          />
+        </div>
+      )}
     </div>
   );
 }

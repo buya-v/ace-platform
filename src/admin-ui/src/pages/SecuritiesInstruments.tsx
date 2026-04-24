@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataGrid, Column } from '../components/DataGrid';
 import { useToast } from '../contexts/ToastContext';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './SecuritiesInstruments.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ export function SecuritiesInstrumentsPage() {
   const [statusTarget, setStatusTarget] = useState<{ instrument: SecuritiesInstrument; action: 'HALTED' | 'TRADING' } | null>(null);
 
   const { showToast } = useToast();
+  const { currentTenant } = useTenant();
 
   const { data, refresh, isLoading } = usePolling(
     (signal) => fetchSecuritiesInstruments(
@@ -223,7 +225,11 @@ export function SecuritiesInstrumentsPage() {
 
   return (
     <div>
-      <h1>Securities Instruments</h1>
+      <h1>{`Securities Instruments${currentTenant ? ` — ${currentTenant.name}` : ''}`}</h1>
+
+      {!currentTenant && (
+        <p>Select a tenant from the dropdown above to view securities data</p>
+      )}
 
       <div className={styles.toolbar}>
         <label className={styles.srOnly} htmlFor="inst-search">Search instruments</label>
@@ -253,14 +259,16 @@ export function SecuritiesInstrumentsPage() {
         </button>
       </div>
 
-      <DataGrid
-        columns={columns}
-        data={filtered}
-        keyField="id"
-        emptyMessage="No instruments found"
-        exportFilename="securities-instruments"
-        loading={isLoading}
-      />
+      {currentTenant && (
+        <DataGrid
+          columns={columns}
+          data={filtered}
+          keyField="id"
+          emptyMessage={`No instruments found${currentTenant ? ` for ${currentTenant.name}` : ''}`}
+          exportFilename="securities-instruments"
+          loading={isLoading}
+        />
+      )}
 
       {/* ─── Create Instrument Modal ─────────────────────────────────────── */}
       {createModalOpen && (

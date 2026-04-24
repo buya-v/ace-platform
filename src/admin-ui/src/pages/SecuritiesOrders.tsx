@@ -9,6 +9,7 @@ import {
 import { DataGrid, Column } from '../components/DataGrid';
 import { StatusBadge } from '../components/StatusBadge';
 import { useToast } from '../contexts/ToastContext';
+import { useTenant } from '../contexts/TenantContext';
 import styles from './SecuritiesOrders.module.css';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -134,6 +135,7 @@ const INITIAL_FORM: OrderForm = {
 
 export function SecuritiesOrdersPage() {
   const { showToast } = useToast();
+  const { currentTenant } = useTenant();
 
   // Instruments for selector
   const [instruments, setInstruments] = useState<SecuritiesInstrument[]>([]);
@@ -298,11 +300,15 @@ export function SecuritiesOrdersPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.pageTitle}>Securities Order Book</h1>
+        <h1 className={styles.pageTitle}>{`Securities Order Book${currentTenant ? ` — ${currentTenant.name}` : ''}`}</h1>
         <button className={styles.submitBtn} onClick={handleOpenModal}>
           Submit Order
         </button>
       </div>
+
+      {!currentTenant && (
+        <p>Select a tenant from the dropdown above to view securities data</p>
+      )}
 
       {/* Instrument selector */}
       <div className={styles.selectorBar}>
@@ -325,17 +331,19 @@ export function SecuritiesOrdersPage() {
       </div>
 
       {/* Orders DataGrid */}
-      <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>Orders</h2>
-        <DataGrid
-          columns={columns}
-          data={orders}
-          keyField="_key"
-          emptyMessage="No orders found for this instrument"
-          stickyHeader
-          loading={ordersResult.isLoading}
-        />
-      </div>
+      {currentTenant && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>Orders</h2>
+          <DataGrid
+            columns={columns}
+            data={orders}
+            keyField="_key"
+            emptyMessage={`No orders found${currentTenant ? ` for ${currentTenant.name}` : ''}`}
+            stickyHeader
+            loading={ordersResult.isLoading}
+          />
+        </div>
+      )}
 
       {/* Recent Trades section */}
       <div className={styles.section}>
