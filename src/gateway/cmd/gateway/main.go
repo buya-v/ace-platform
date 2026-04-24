@@ -135,6 +135,42 @@ func main() {
 	rt.Handle("PUT", "/platform/v1/tenants/{id}/status", platformHandler)
 	logger.Info("platform-service routes registered", slog.String("upstream", platformBaseURL))
 
+	// Register securities-service routes: /api/v1/securities/* → securities-service:8089
+	// Securities-service is HTTP-only (no gRPC), so we use reverse proxy instead of h.forward().
+	securitiesAddr := strings.Replace(cfg.SecuritiesServiceAddr, ":50059", ":8089", 1)
+	securitiesBaseURL := fmt.Sprintf("http://%s", securitiesAddr)
+	securitiesTarget, err := url.Parse(securitiesBaseURL)
+	if err != nil {
+		logger.Error("invalid securities service address", slog.String("addr", securitiesAddr), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	securitiesProxy := httputil.NewSingleHostReverseProxy(securitiesTarget)
+	secHandler := func(w http.ResponseWriter, r *http.Request) {
+		securitiesProxy.ServeHTTP(w, r)
+	}
+	// Override the gRPC-forward handlers with HTTP reverse proxy
+	rt.Handle("GET", "/api/v1/securities/instruments", secHandler)
+	rt.Handle("POST", "/api/v1/securities/instruments", secHandler)
+	rt.Handle("GET", "/api/v1/securities/instruments/{id}", secHandler)
+	rt.Handle("PATCH", "/api/v1/securities/instruments/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/instruments/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/instruments/{id}/status", secHandler)
+	rt.Handle("GET", "/api/v1/securities/orders", secHandler)
+	rt.Handle("POST", "/api/v1/securities/orders", secHandler)
+	rt.Handle("GET", "/api/v1/securities/orders/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/orders/{id}", secHandler)
+	rt.Handle("GET", "/api/v1/securities/positions", secHandler)
+	rt.Handle("GET", "/api/v1/securities/settlements", secHandler)
+	rt.Handle("POST", "/api/v1/securities/settlements/cycle", secHandler)
+	rt.Handle("GET", "/api/v1/securities/corporate-actions", secHandler)
+	rt.Handle("POST", "/api/v1/securities/corporate-actions", secHandler)
+	rt.Handle("GET", "/api/v1/securities/corporate-actions/{id}", secHandler)
+	rt.Handle("POST", "/api/v1/securities/corporate-actions/{id}/process", secHandler)
+	rt.Handle("GET", "/api/v1/securities/sessions", secHandler)
+	rt.Handle("POST", "/api/v1/securities/sessions/{id}/transition", secHandler)
+	rt.Handle("GET", "/api/v1/securities/reports/frc", secHandler)
+	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
+
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{
 		PublicPaths: map[string]bool{
