@@ -1,7 +1,56 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-tenant-ui",
+  "feature": "Tenant-Aware Admin UI",
+  "requirement": "Add tenant selector to admin dashboard, inject X-GarudaX-Tenant header into all API calls, show tenant context in pages",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "TenantContext provider + apiFetch integration",
+      "description": "Create a TenantContext React context that holds the current tenant selection and injects the X-GarudaX-Tenant header into all API calls.\n\nPart A — Create src/admin-ui/src/contexts/TenantContext.tsx:\n- TenantInfo type: { id: string, name: string, status: string, flagship: boolean }\n- TenantContextType: { currentTenant: TenantInfo | null, tenants: TenantInfo[], setCurrentTenant: (id: string) => void, isLoading: boolean }\n- TenantProvider component: fetches tenants from /platform/v1/tenants on mount, stores in state, defaults to first ACTIVE tenant, persists selection to localStorage('garudax-tenant')\n- useTenant() hook: returns TenantContextType\n\nPart B — Update src/admin-ui/src/services/api.ts:\n- Modify the apiFetch helper to read the current tenant from a module-level variable\n- Add setApiTenant(tenantId: string) function that sets the tenant for all subsequent API calls\n- In apiFetch: if tenant is set, add X-GarudaX-Tenant header to every request\n- The TenantProvider calls setApiTenant when tenant changes\n- Platform API calls (/platform/v1/*) should NOT include the tenant header\n\nPart C — Wire TenantProvider into src/admin-ui/src/pages/DashboardLayout.tsx:\n- Wrap the existing providers with <TenantProvider>\n- Place it OUTSIDE KPIProvider so all child components can access tenant context\n\nCX ACCEPTANCE CRITERIA:\n□ Loading state: TenantProvider shows nothing extra while loading tenants\n□ Empty state: if no tenants, show warning but don't block UI\n□ Error state: if tenant fetch fails, fall back to no-tenant mode (platform pages still work)\n□ No raw technical errors visible to user\n□ Consistent styling: N/A (context provider, no UI)\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/contexts/TenantContext.tsx", "src/admin-ui/src/services/api.ts", "src/admin-ui/src/pages/DashboardLayout.tsx"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Tenant selector in TopBar + dashboard indicator",
+      "description": "Add a tenant selector dropdown to the TopBar and a tenant indicator card to DashboardHome.\n\nPart A — TopBar tenant selector (src/admin-ui/src/components/TopBar.tsx + TopBar.module.css):\n- Import useTenant from TenantContext\n- Add a select dropdown (or styled button+menu) showing current tenant name + StatusBadge\n- When user selects a different tenant, call setCurrentTenant(id)\n- Show tenant list as dropdown options: each with name + status badge (ACTIVE green, ONBOARDING yellow)\n- Flagship tenants get a star icon or '(flagship)' suffix\n- Position: left side of TopBar, after any existing elements\n- Style: compact dropdown, max-width 200px, matches existing TopBar styling\n\nPart B — DashboardHome tenant indicator (src/admin-ui/src/pages/DashboardHome.tsx + .module.css):\n- Add a prominent banner/card at the top of the dashboard showing:\n  - Current tenant name (large text)\n  - Tenant status badge\n  - Flagship indicator if applicable\n  - Tenant ID in muted text below\n- If no tenant selected, show 'No tenant selected — choose from the dropdown above'\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: shows skeleton while tenants load in TopBar\n□ Empty state: 'No tenants' message if list is empty\n□ Error state: if fetch fails, TopBar shows 'No tenant' gracefully\n□ Responsive: dropdown works on mobile (375px) — full-width on mobile\n□ Keyboard navigation: select/dropdown reachable via Tab, options via Arrow keys\n□ Accessible: <select> has <label> (visually hidden), aria-label on tenant indicator\n□ Toast/feedback: toast when tenant is switched ('Switched to MSE Equities')\n□ Form validation: N/A\n□ No raw technical errors visible to user\n□ Consistent styling: uses project CSS modules and StatusBadge component\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/components/TopBar.tsx", "src/admin-ui/src/components/TopBar.module.css", "src/admin-ui/src/pages/DashboardHome.tsx", "src/admin-ui/src/pages/DashboardHome.module.css"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Update securities pages to show tenant context",
+      "description": "Update the 3 securities pages to show which tenant's data they're displaying.\n\nRead src/admin-ui/src/pages/SecuritiesInstruments.tsx, SecuritiesOrders.tsx, SecuritiesPositions.tsx.\nImport useTenant from TenantContext.\n\nFor each page:\n1. Get currentTenant from useTenant()\n2. Update the page title to include tenant name: e.g., 'Securities Instruments — MSE Equities' or 'Securities Instruments — ACE Commodities'\n3. If no tenant selected, show a message: 'Select a tenant from the dropdown above to view securities data'\n4. The API calls already include X-GarudaX-Tenant header from T1 — no changes needed to API calls\n\nAlso add tenant_id display in the DataGrid empty message: 'No instruments found for {tenantName}'\n\nCX ACCEPTANCE CRITERIA (all must pass):\n□ Loading state: existing loading states preserved\n□ Empty state: tenant-specific empty message\n□ Error state: existing error handling preserved\n□ Responsive: tenant name in title wraps on mobile\n□ Keyboard navigation: N/A (no new interactive elements)\n□ Accessible: N/A\n□ Toast/feedback: N/A\n□ Form validation: N/A\n□ No raw technical errors visible to user — handle null currentTenant gracefully\n□ Consistent styling: tenant name uses existing heading styles\n\nRun: cd src/admin-ui && npx tsc --noEmit && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/pages/SecuritiesInstruments.tsx", "src/admin-ui/src/pages/SecuritiesOrders.tsx", "src/admin-ui/src/pages/SecuritiesPositions.tsx"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "CX review: tenant-aware admin UI",
+      "description": "Review all tenant-aware UI changes against the CX checklist. Score 10 items. Fix gaps. Target >= 7/10.\n\nVerify:\n1. TenantProvider loads tenants without blocking UI\n2. TopBar selector shows tenant name + status, is keyboard accessible\n3. DashboardHome shows current tenant prominently\n4. Securities pages show tenant name in title\n5. API calls include X-GarudaX-Tenant header (check apiFetch)\n6. localStorage persists tenant selection\n7. No 'undefined' or 'null' when no tenant selected\n8. Responsive: selector works on mobile\n9. Toast on tenant switch\n10. Consistent styling throughout\n\nRun: cd src/admin-ui && npm test -- --run\n\nWrite handoff to .softhouse/handoff/T4.md with CX score and fixes.",
+      "agent_role": "cx_reviewer",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/admin-ui/src/contexts/TenantContext.tsx", "src/admin-ui/src/components/TopBar.tsx", "src/admin-ui/src/pages/DashboardHome.tsx", "src/admin-ui/src/pages/SecuritiesInstruments.tsx"],
+      "dependencies": ["T2", "T3"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
