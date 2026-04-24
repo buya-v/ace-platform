@@ -130,7 +130,7 @@ type setFirmStatusRequest struct {
 var validFirmStatuses = map[types.FirmStatus]bool{
 	types.FirmActive:    true,
 	types.FirmSuspended: true,
-	types.FirmRevoked:   true,
+	types.FirmDeactivated: true,
 }
 
 // handleUpdateFirmStatus handles PUT /api/v1/securities/firms/{id}/status.

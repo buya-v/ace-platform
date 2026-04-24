@@ -275,9 +275,27 @@ type AuctionResult struct {
 	TradeCount        int     `json:"trade_count"`
 }
 
+// ── Firms ────────────────────────────────────────────────────────────────────
+
+type FirmStatus string
+
+const (
+	FirmActive      FirmStatus = "FIRM_ACTIVE"
+	FirmSuspended   FirmStatus = "FIRM_SUSPENDED"
+	FirmDeactivated FirmStatus = "FIRM_DEACTIVATED"
+)
+
+type Firm struct {
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Status         FirmStatus `json:"status"`
+	ClearingFirmID string     `json:"clearing_firm_id,omitempty"`
+	CreatedAt      string     `json:"created_at"`
+	UpdatedAt      string     `json:"updated_at"`
+}
+
 // ── Exchange Participants ────────────────────────────────────────────────────
 
-// ParticipantStatus represents the lifecycle state of an exchange participant.
 type ParticipantStatus string
 
 const (
@@ -297,7 +315,9 @@ const (
 // ExchangeParticipant represents a registered trading participant on the exchange.
 type ExchangeParticipant struct {
 	ID          string            `json:"id"`
+	FirmID      string            `json:"firm_id"`
 	Name        string            `json:"name"`
+	Role        string            `json:"role,omitempty"`
 	Status      ParticipantStatus `json:"status"`
 	Permissions []string          `json:"permissions"`
 	CreatedAt   string            `json:"created_at"`
