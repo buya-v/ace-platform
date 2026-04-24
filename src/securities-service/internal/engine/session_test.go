@@ -40,7 +40,7 @@ func setupSessionTest(t *testing.T) *sessionTestEnv {
 	// Register the test instrument.
 	createInstrument(t, &testStores{inst: inst, ord: ord, trd: trd, pos: pos}, sessionInstID, types.TradingStatusActive)
 
-	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil)
+	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil, nil)
 	ae := engine.NewAuctionEngine(ord, trd, pos, nil)
 	sm := engine.NewSessionManager(ae, me)
 
@@ -150,7 +150,7 @@ func TestSession_InvalidTransition_All(t *testing.T) {
 		trd2 := store.NewInMemoryTradeStore()
 		pos2 := store.NewInMemoryPositionStore()
 		createInstrument(t, &testStores{inst: inst2, ord: ord2, trd: trd2, pos: pos2}, instrID, types.TradingStatusActive)
-		me2 := engine.NewMatchingEngine(inst2, ord2, trd2, pos2, nil, nil)
+		me2 := engine.NewMatchingEngine(inst2, ord2, trd2, pos2, nil, nil, nil)
 		ae2 := engine.NewAuctionEngine(ord2, trd2, pos2, nil)
 		sm2 := engine.NewSessionManager(ae2, me2)
 		_ = env
@@ -258,7 +258,7 @@ func TestSession_ContinuousMatches(t *testing.T) {
 	pos := store.NewInMemoryPositionStore()
 	createInstrument(t, &testStores{inst: inst, ord: ord, trd: trd, pos: pos}, sessionInstID, types.TradingStatusActive)
 
-	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil)
+	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil, nil)
 	ae := engine.NewAuctionEngine(ord, trd, pos, nil)
 	sm := engine.NewSessionManager(ae, me)
 
@@ -329,7 +329,7 @@ func TestSession_GetAllSessions(t *testing.T) {
 		createInstrument(t, &testStores{inst: inst, ord: ord, trd: trd, pos: pos}, id, types.TradingStatusActive)
 	}
 
-	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil)
+	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil, nil)
 	ae := engine.NewAuctionEngine(ord, trd, pos, nil)
 	sm := engine.NewSessionManager(ae, me)
 
@@ -358,7 +358,7 @@ func TestSession_TransitionRunsOpeningAuction(t *testing.T) {
 	pos := store.NewInMemoryPositionStore()
 	createInstrument(t, &testStores{inst: inst, ord: ord, trd: trd, pos: pos}, sessionInstID, types.TradingStatusActive)
 
-	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil)
+	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil, nil)
 	ae := engine.NewAuctionEngine(ord, trd, pos, nil)
 	sm := engine.NewSessionManager(ae, me)
 
@@ -403,7 +403,7 @@ func TestSession_TransitionRunsClosingAuction(t *testing.T) {
 	pos := store.NewInMemoryPositionStore()
 	createInstrument(t, &testStores{inst: inst, ord: ord, trd: trd, pos: pos}, sessionInstID, types.TradingStatusActive)
 
-	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil)
+	me := engine.NewMatchingEngine(inst, ord, trd, pos, nil, nil, nil)
 	ae := engine.NewAuctionEngine(ord, trd, pos, nil)
 	sm := engine.NewSessionManager(ae, me)
 

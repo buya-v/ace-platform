@@ -15,17 +15,19 @@ import (
 
 // MatchingEngine matches incoming orders against resting orders using price-time priority.
 type MatchingEngine struct {
-	instrumentStore  store.InstrumentStore
-	orderStore       store.OrderStore
-	tradeStore       store.TradeStore
-	positionStore    store.PositionStore
-	producer         kafka.Producer
-	settlementEngine *settlement.SettlementEngine
+	instrumentStore      store.InstrumentStore
+	orderStore           store.OrderStore
+	tradeStore           store.TradeStore
+	positionStore        store.PositionStore
+	producer             kafka.Producer
+	settlementEngine     *settlement.SettlementEngine
+	circuitBreakerEngine *CircuitBreakerEngine
 }
 
 // NewMatchingEngine creates a new MatchingEngine with the given stores.
 // producer may be nil; if so, trade events are not published.
 // settlementEngine may be nil; if so, settlement obligations are not created.
+// circuitBreakerEngine may be nil; if so, circuit breaker checks are skipped.
 func NewMatchingEngine(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -33,14 +35,16 @@ func NewMatchingEngine(
 	positionStore store.PositionStore,
 	producer kafka.Producer,
 	settlementEngine *settlement.SettlementEngine,
+	circuitBreakerEngine *CircuitBreakerEngine,
 ) *MatchingEngine {
 	return &MatchingEngine{
-		instrumentStore:  instrumentStore,
-		orderStore:       orderStore,
-		tradeStore:       tradeStore,
-		positionStore:    positionStore,
-		producer:         producer,
-		settlementEngine: settlementEngine,
+		instrumentStore:      instrumentStore,
+		orderStore:           orderStore,
+		tradeStore:           tradeStore,
+		positionStore:        positionStore,
+		producer:             producer,
+		settlementEngine:     settlementEngine,
+		circuitBreakerEngine: circuitBreakerEngine,
 	}
 }
 
@@ -67,6 +71,17 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 	}
 	if inst.TradingStatus != types.TradingStatusActive {
 		return nil, fmt.Errorf("instrument %s is not active for trading", inst.ID)
+	}
+
+	// 1b. Circuit breaker validation for LIMIT orders.
+	if order.OrderType == types.OrderTypeLimit && e.circuitBreakerEngine != nil {
+		allowed, event, cbErr := e.circuitBreakerEngine.ValidatePrice(order.InstrumentID, order.Price)
+		if cbErr != nil {
+			return nil, fmt.Errorf("circuit breaker check failed: %w", cbErr)
+		}
+		if !allowed {
+			return nil, fmt.Errorf("circuit breaker triggered: %s", event.Type)
+		}
 	}
 
 	// 2. Determine opposite side.
@@ -130,8 +145,9 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 	now := time.Now().UTC()
 
 	// 5. Match against each resting order.
+	stpCancelIncoming := false
 	for i := range candidates {
-		if remainingQty <= 0 {
+		if remainingQty <= 0 || stpCancelIncoming {
 			break
 		}
 		resting := &candidates[i]
@@ -139,6 +155,41 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 		// Check if prices cross.
 		if !pricesCross(order, resting) {
 			break // No more crosses possible (sorted by price priority).
+		}
+
+		// 5a. Self-trade prevention: check if incoming and resting share same participant.
+		if order.ParticipantID == resting.ParticipantID {
+			stpMode := inst.STPMode
+			if stpMode == "" {
+				stpMode = types.STPCancelNewest
+			}
+			switch stpMode {
+			case types.STPCancelNewest:
+				// Skip this resting order; incoming may match other resting orders.
+				continue
+			case types.STPCancelOldest:
+				// Cancel the resting order and continue matching against others.
+				resting.Status = types.OrderStatusCancelled
+				resting.UpdatedAt = now.Format(time.RFC3339)
+				if err := e.orderStore.Update(resting); err != nil {
+					return trades, fmt.Errorf("failed to cancel resting order (STP): %w", err)
+				}
+				continue
+			case types.STPCancelBoth:
+				// Cancel both orders and stop matching.
+				resting.Status = types.OrderStatusCancelled
+				resting.UpdatedAt = now.Format(time.RFC3339)
+				if err := e.orderStore.Update(resting); err != nil {
+					return trades, fmt.Errorf("failed to cancel resting order (STP): %w", err)
+				}
+				order.Status = types.OrderStatusCancelled
+				order.UpdatedAt = now.Format(time.RFC3339)
+				if err := e.orderStore.Update(order); err != nil {
+					return trades, fmt.Errorf("failed to cancel incoming order (STP): %w", err)
+				}
+				stpCancelIncoming = true
+				continue
+			}
 		}
 
 		// Trade at resting order's price.
@@ -185,6 +236,11 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 		if err := kafka.PublishTradeExecuted(e.producer, tenantID, &trade); err != nil {
 			// Non-fatal: log the error but continue matching.
 			_ = err
+		}
+
+		// Update circuit breaker last traded price after each trade.
+		if e.circuitBreakerEngine != nil {
+			_ = e.circuitBreakerEngine.OnTrade(order.InstrumentID, trade.Price)
 		}
 
 		// 7. Update matched orders.

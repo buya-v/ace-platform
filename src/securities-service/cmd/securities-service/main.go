@@ -88,7 +88,8 @@ func main() {
 	// Settlement engine processes T+2 obligations from trades.
 	settlementEngine := settlement.NewSettlementEngine(orderStore, settlementStore)
 
-	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine)
+	cbEngine := engine.NewCircuitBreakerEngine(store.NewInMemoryCircuitBreakerStore())
+	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine, cbEngine)
 
 	// Auction engine collects orders during pre-open and closing auction phases.
 	auctionEngine := engine.NewAuctionEngine(orderStore, tradeStore, positionStore, settlementEngine)

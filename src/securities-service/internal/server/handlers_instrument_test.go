@@ -39,7 +39,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 	cfg := DefaultConfig()
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
-	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil)
+	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil, nil)
 	srv := New(instrStore, orderStore, tradeStore, positionStore, nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), me, nil, nil, nil, cfg)
 	srv.SetReady()
 

@@ -44,7 +44,7 @@ func newFRCStores() frcStores {
 func newFRCServer(t *testing.T, s frcStores) *httptest.Server {
 	t.Helper()
 	cfg := DefaultConfig()
-	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil)
+	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil, nil)
 	srv := New(s.instrument, s.order, s.trade, s.position, nil,
 		s.caStore, s.entStore, me, nil, nil, nil, cfg)
 	srv.SetReady()

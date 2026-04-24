@@ -46,7 +46,7 @@ func newCAStores() caStores {
 func newTestServerWithCA(t *testing.T, s caStores) *httptest.Server {
 	t.Helper()
 	cfg := DefaultConfig()
-	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil)
+	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil, nil)
 	srv := New(s.instrument, s.order, s.trade, s.position, nil,
 		s.corporateAct, s.entitlement, me, nil, nil, nil, cfg)
 	srv.SetReady()

@@ -56,7 +56,7 @@ func createInstrument(t *testing.T, s *testStores, id string, status types.Tradi
 
 // newEngine creates a MatchingEngine backed by the given stores and an optional producer.
 func newEngine(s *testStores, p kafka.Producer) *engine.MatchingEngine {
-	return engine.NewMatchingEngine(s.inst, s.ord, s.trd, s.pos, p, nil)
+	return engine.NewMatchingEngine(s.inst, s.ord, s.trd, s.pos, p, nil, nil)
 }
 
 // setup creates stores + ACTIVE instrument + engine with nil producer.
