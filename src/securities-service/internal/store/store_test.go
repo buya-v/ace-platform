@@ -748,3 +748,327 @@ func TestOrderStore_Update_NotFound(t *testing.T) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
+
+// ============================================================
+// CorporateActionStore tests
+// ============================================================
+
+func newCorporateAction(id, instrID string, actionType types.CorporateActionType) *types.CorporateAction {
+	return &types.CorporateAction{
+		ID:           id,
+		InstrumentID: instrID,
+		ActionType:   actionType,
+		Status:       types.CAStatusAnnounced,
+		Details:      map[string]interface{}{"dividend_amount": 1.0},
+		CreatedAt:    "2026-04-24T00:00:00Z",
+		UpdatedAt:    "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestCorporateActionStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryCorporateActionStore()
+	ca := newCorporateAction("ca-1", "inst-abc", types.CA_DIVIDEND)
+
+	if err := s.Create(ca); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("ca-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "ca-1" {
+		t.Errorf("ID: want ca-1, got %s", got.ID)
+	}
+	if got.InstrumentID != "inst-abc" {
+		t.Errorf("InstrumentID: want inst-abc, got %s", got.InstrumentID)
+	}
+	if got.ActionType != types.CA_DIVIDEND {
+		t.Errorf("ActionType: want CA_DIVIDEND, got %s", got.ActionType)
+	}
+	if got.Status != types.CAStatusAnnounced {
+		t.Errorf("Status: want ANNOUNCED, got %s", got.Status)
+	}
+
+	t.Run("get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-such-ca")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(ca); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestCorporateActionStore_List_WithFilters(t *testing.T) {
+	s := store.NewInMemoryCorporateActionStore()
+
+	s.Create(newCorporateAction("ca-d1", "inst-X", types.CA_DIVIDEND))
+	s.Create(newCorporateAction("ca-d2", "inst-X", types.CA_DIVIDEND))
+	s.Create(newCorporateAction("ca-s1", "inst-X", types.CA_STOCK_SPLIT))
+	s.Create(newCorporateAction("ca-m1", "inst-Y", types.CA_MERGER))
+
+	t.Run("list all returns 4", func(t *testing.T) {
+		all, err := s.List(store.CorporateActionFilters{})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(all) != 4 {
+			t.Errorf("expected 4, got %d", len(all))
+		}
+	})
+
+	t.Run("filter by InstrumentID=inst-X returns 3", func(t *testing.T) {
+		res, err := s.List(store.CorporateActionFilters{InstrumentID: "inst-X"})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(res) != 3 {
+			t.Errorf("expected 3, got %d", len(res))
+		}
+	})
+
+	t.Run("filter by ActionType=CA_DIVIDEND returns 2", func(t *testing.T) {
+		res, err := s.List(store.CorporateActionFilters{ActionType: types.CA_DIVIDEND})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(res) != 2 {
+			t.Errorf("expected 2, got %d", len(res))
+		}
+	})
+
+	t.Run("filter by ActionType=CA_STOCK_SPLIT returns 1", func(t *testing.T) {
+		res, err := s.List(store.CorporateActionFilters{ActionType: types.CA_STOCK_SPLIT})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(res) != 1 {
+			t.Errorf("expected 1, got %d", len(res))
+		}
+	})
+
+	t.Run("filter by InstrumentID=inst-Y and ActionType=CA_MERGER returns 1", func(t *testing.T) {
+		res, err := s.List(store.CorporateActionFilters{
+			InstrumentID: "inst-Y",
+			ActionType:   types.CA_MERGER,
+		})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(res) != 1 {
+			t.Errorf("expected 1, got %d", len(res))
+		}
+		if res[0].ID != "ca-m1" {
+			t.Errorf("expected ca-m1, got %s", res[0].ID)
+		}
+	})
+
+	t.Run("filter by non-existent instrument returns 0", func(t *testing.T) {
+		res, err := s.List(store.CorporateActionFilters{InstrumentID: "inst-MISSING"})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(res) != 0 {
+			t.Errorf("expected 0, got %d", len(res))
+		}
+	})
+}
+
+func TestCorporateActionStore_UpdateStatus(t *testing.T) {
+	s := store.NewInMemoryCorporateActionStore()
+	s.Create(newCorporateAction("ca-upd", "inst-abc", types.CA_DIVIDEND))
+
+	t.Run("ANNOUNCED → PROCESSING", func(t *testing.T) {
+		if err := s.UpdateStatus("ca-upd", types.CAStatusProcessing); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("ca-upd")
+		if got.Status != types.CAStatusProcessing {
+			t.Errorf("expected PROCESSING, got %s", got.Status)
+		}
+	})
+
+	t.Run("PROCESSING → COMPLETED", func(t *testing.T) {
+		if err := s.UpdateStatus("ca-upd", types.CAStatusCompleted); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("ca-upd")
+		if got.Status != types.CAStatusCompleted {
+			t.Errorf("expected COMPLETED, got %s", got.Status)
+		}
+	})
+
+	t.Run("non-existent ID returns ErrNotFound", func(t *testing.T) {
+		if err := s.UpdateStatus("no-such-ca", types.CAStatusCompleted); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// ============================================================
+// EntitlementStore tests
+// ============================================================
+
+func newEntitlement(id, caID, participantID, instrID string, qty int, value float64) *types.Entitlement {
+	return &types.Entitlement{
+		ID:                id,
+		CorporateActionID: caID,
+		ParticipantID:     participantID,
+		InstrumentID:      instrID,
+		Quantity:          qty,
+		EntitlementValue:  value,
+		Status:            types.EntitlementStatusPending,
+		CreatedAt:         "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestEntitlementStore_Create_ListByAction(t *testing.T) {
+	s := store.NewInMemoryEntitlementStore()
+
+	// Two entitlements for the same CA.
+	e1 := newEntitlement("ent-1", "ca-abc", "participant-A", "inst-X", 100, 500.0)
+	e2 := newEntitlement("ent-2", "ca-abc", "participant-B", "inst-X", 200, 1000.0)
+	// One entitlement for a different CA.
+	e3 := newEntitlement("ent-3", "ca-other", "participant-A", "inst-X", 50, 250.0)
+
+	for _, e := range []*types.Entitlement{e1, e2, e3} {
+		if err := s.Create(e); err != nil {
+			t.Fatalf("Create %s: %v", e.ID, err)
+		}
+	}
+
+	t.Run("ListByAction ca-abc returns 2", func(t *testing.T) {
+		result, err := s.ListByAction("ca-abc")
+		if err != nil {
+			t.Fatalf("ListByAction: %v", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("expected 2, got %d", len(result))
+		}
+	})
+
+	t.Run("ListByAction ca-other returns 1", func(t *testing.T) {
+		result, err := s.ListByAction("ca-other")
+		if err != nil {
+			t.Fatalf("ListByAction: %v", err)
+		}
+		if len(result) != 1 {
+			t.Errorf("expected 1, got %d", len(result))
+		}
+		if result[0].ID != "ent-3" {
+			t.Errorf("expected ent-3, got %s", result[0].ID)
+		}
+	})
+
+	t.Run("ListByAction non-existent CA returns empty", func(t *testing.T) {
+		result, err := s.ListByAction("ca-missing")
+		if err != nil {
+			t.Fatalf("ListByAction: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("expected 0, got %d", len(result))
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(e1); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestEntitlementStore_ListByParticipant(t *testing.T) {
+	s := store.NewInMemoryEntitlementStore()
+
+	// participant-A has 2 entitlements (from different CAs).
+	s.Create(newEntitlement("ent-p1", "ca-1", "participant-A", "inst-X", 100, 500.0))
+	s.Create(newEntitlement("ent-p2", "ca-2", "participant-A", "inst-Y", 50, 250.0))
+	// participant-B has 1 entitlement.
+	s.Create(newEntitlement("ent-p3", "ca-1", "participant-B", "inst-X", 200, 1000.0))
+
+	t.Run("participant-A returns 2", func(t *testing.T) {
+		result, err := s.ListByParticipant("participant-A")
+		if err != nil {
+			t.Fatalf("ListByParticipant: %v", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("expected 2, got %d", len(result))
+		}
+		// Verify all belong to participant-A.
+		for _, e := range result {
+			if e.ParticipantID != "participant-A" {
+				t.Errorf("unexpected participant_id %s", e.ParticipantID)
+			}
+		}
+	})
+
+	t.Run("participant-B returns 1", func(t *testing.T) {
+		result, err := s.ListByParticipant("participant-B")
+		if err != nil {
+			t.Fatalf("ListByParticipant: %v", err)
+		}
+		if len(result) != 1 {
+			t.Errorf("expected 1, got %d", len(result))
+		}
+		if result[0].ID != "ent-p3" {
+			t.Errorf("expected ent-p3, got %s", result[0].ID)
+		}
+		if result[0].Quantity != 200 {
+			t.Errorf("expected quantity 200, got %d", result[0].Quantity)
+		}
+		if result[0].EntitlementValue != 1000.0 {
+			t.Errorf("expected value 1000.0, got %v", result[0].EntitlementValue)
+		}
+	})
+
+	t.Run("unknown participant returns empty", func(t *testing.T) {
+		result, err := s.ListByParticipant("participant-MISSING")
+		if err != nil {
+			t.Fatalf("ListByParticipant: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("expected 0, got %d", len(result))
+		}
+	})
+}
+
+// ============================================================
+// CorporateActionStore concurrent access test
+// ============================================================
+
+func TestConcurrentAccess_CorporateActionStore(t *testing.T) {
+	s := store.NewInMemoryCorporateActionStore()
+
+	const goroutines = 10
+	done := make(chan struct{}, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		i := i
+		go func() {
+			defer func() { done <- struct{}{} }()
+			id := "conc-ca-" + string(rune('A'+i))
+			ca := newCorporateAction(id, "inst-conc", types.CA_DIVIDEND)
+			_ = s.Create(ca)
+			_, _ = s.Get(id)
+			_, _ = s.List(store.CorporateActionFilters{InstrumentID: "inst-conc"})
+			_ = s.UpdateStatus(id, types.CAStatusCompleted)
+		}()
+	}
+
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+
+	all, err := s.List(store.CorporateActionFilters{})
+	if err != nil {
+		t.Fatalf("List after concurrent access: %v", err)
+	}
+	if len(all) != goroutines {
+		t.Errorf("expected %d corporate actions, got %d", goroutines, len(all))
+	}
+}
