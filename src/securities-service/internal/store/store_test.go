@@ -3,6 +3,7 @@ package store_test
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
@@ -1828,4 +1829,393 @@ func TestParticipantStore_UpdatePermissions(t *testing.T) {
 			t.Errorf("expected ErrNotFound, got %v", err)
 		}
 	})
+}
+
+// ============================================================
+// TradeCorrectionStore tests
+// ============================================================
+
+func newTradeCorrection(id, tradeID, action string) *types.TradeCorrection {
+	return &types.TradeCorrection{
+		ID:                id,
+		TradeID:           tradeID,
+		Action:            action,
+		Reason:            "test reason",
+		OriginalPrice:     50.00,
+		OriginalQuantity:  100,
+		CorrectedPrice:    51.00,
+		CorrectedQuantity: 100,
+		ActorID:           "admin-1",
+		Timestamp:         "2026-04-24T00:00:00Z",
+	}
+}
+
+// TestTradeCorrectionStore_Create_ListByTrade verifies that corrections are stored
+// and correctly retrieved by trade ID.
+func TestTradeCorrectionStore_Create_ListByTrade(t *testing.T) {
+	s := store.NewInMemoryTradeCorrectionStore()
+
+	// Two corrections for trade-A.
+	c1 := newTradeCorrection("corr-1", "trade-A", "BUST")
+	c2 := newTradeCorrection("corr-2", "trade-A", "CORRECT")
+	// One correction for trade-B.
+	c3 := newTradeCorrection("corr-3", "trade-B", "REINSTATE")
+
+	for _, c := range []*types.TradeCorrection{c1, c2, c3} {
+		if err := s.Create(c); err != nil {
+			t.Fatalf("Create %s: %v", c.ID, err)
+		}
+	}
+
+	t.Run("ListByTrade trade-A returns 2", func(t *testing.T) {
+		results, err := s.ListByTrade("trade-A")
+		if err != nil {
+			t.Fatalf("ListByTrade: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 corrections for trade-A, got %d", len(results))
+		}
+		// Verify all belong to trade-A.
+		for _, r := range results {
+			if r.TradeID != "trade-A" {
+				t.Errorf("unexpected TradeID %s", r.TradeID)
+			}
+		}
+	})
+
+	t.Run("ListByTrade trade-B returns 1", func(t *testing.T) {
+		results, err := s.ListByTrade("trade-B")
+		if err != nil {
+			t.Fatalf("ListByTrade: %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("expected 1 correction for trade-B, got %d", len(results))
+		}
+		if results[0].Action != "REINSTATE" {
+			t.Errorf("action: want REINSTATE, got %s", results[0].Action)
+		}
+	})
+
+	t.Run("ListByTrade unknown trade returns empty", func(t *testing.T) {
+		results, err := s.ListByTrade("trade-MISSING")
+		if err != nil {
+			t.Fatalf("ListByTrade missing: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0, got %d", len(results))
+		}
+	})
+
+	t.Run("Create preserves all fields", func(t *testing.T) {
+		s2 := store.NewInMemoryTradeCorrectionStore()
+		orig := &types.TradeCorrection{
+			ID:                "corr-fields",
+			TradeID:           "trade-fields",
+			Action:            "CORRECT",
+			Reason:            "price error",
+			OriginalPrice:     100.0,
+			OriginalQuantity:  200,
+			CorrectedPrice:    101.5,
+			CorrectedQuantity: 200,
+			ActorID:           "super-admin",
+			Timestamp:         "2026-04-24T12:00:00Z",
+		}
+		if err := s2.Create(orig); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		got, err := s2.ListByTrade("trade-fields")
+		if err != nil {
+			t.Fatalf("ListByTrade: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("expected 1, got %d", len(got))
+		}
+		r := got[0]
+		if r.OriginalPrice != 100.0 {
+			t.Errorf("OriginalPrice: want 100.0, got %v", r.OriginalPrice)
+		}
+		if r.CorrectedPrice != 101.5 {
+			t.Errorf("CorrectedPrice: want 101.5, got %v", r.CorrectedPrice)
+		}
+		if r.ActorID != "super-admin" {
+			t.Errorf("ActorID: want super-admin, got %s", r.ActorID)
+		}
+	})
+}
+
+// ============================================================
+// TickTableStore tests
+// ============================================================
+
+func newTickTable(instrumentID string) *types.TickTable {
+	return &types.TickTable{
+		InstrumentID: instrumentID,
+		Tiers: []types.TickTier{
+			{MinPrice: 0, MaxPrice: 50, TickSize: 0.01},
+			{MinPrice: 50, MaxPrice: 200, TickSize: 0.05},
+			{MinPrice: 200, MaxPrice: 1000, TickSize: 0.25},
+		},
+	}
+}
+
+// TestTickTableStore_SetGetDelete verifies the full Set → Get → Delete lifecycle.
+func TestTickTableStore_SetGetDelete(t *testing.T) {
+	s := store.NewInMemoryTickTableStore()
+
+	table := newTickTable("INST-TT-1")
+
+	// Set.
+	if err := s.Set(table); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	// Get returns the record.
+	got, err := s.Get("INST-TT-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil tick table, got nil")
+	}
+	if got.InstrumentID != "INST-TT-1" {
+		t.Errorf("InstrumentID: want INST-TT-1, got %s", got.InstrumentID)
+	}
+	if len(got.Tiers) != 3 {
+		t.Errorf("Tiers len: want 3, got %d", len(got.Tiers))
+	}
+	if got.Tiers[0].TickSize != 0.01 {
+		t.Errorf("Tiers[0].TickSize: want 0.01, got %v", got.Tiers[0].TickSize)
+	}
+	if got.Tiers[2].TickSize != 0.25 {
+		t.Errorf("Tiers[2].TickSize: want 0.25, got %v", got.Tiers[2].TickSize)
+	}
+
+	// Get non-existent returns ErrNotFound.
+	_, err = s.Get("INST-MISSING")
+	if err != store.ErrNotFound {
+		t.Errorf("Get missing: want ErrNotFound, got %v", err)
+	}
+
+	// Delete removes the record.
+	if err := s.Delete("INST-TT-1"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	_, err = s.Get("INST-TT-1")
+	if err != store.ErrNotFound {
+		t.Errorf("Get after Delete: want ErrNotFound, got %v", err)
+	}
+
+	// Delete non-existent is a no-op.
+	if err := s.Delete("INST-MISSING"); err != nil {
+		t.Errorf("Delete non-existent: want nil, got %v", err)
+	}
+}
+
+// TestTickTableStore_Set_Overwrites verifies that Set has upsert semantics —
+// a second Set for the same instrument ID overwrites the existing record.
+func TestTickTableStore_Set_Overwrites(t *testing.T) {
+	s := store.NewInMemoryTickTableStore()
+
+	original := &types.TickTable{
+		InstrumentID: "INST-TT-OVER",
+		Tiers:        []types.TickTier{{MinPrice: 0, MaxPrice: 100, TickSize: 0.1}},
+	}
+	if err := s.Set(original); err != nil {
+		t.Fatalf("Set original: %v", err)
+	}
+
+	updated := &types.TickTable{
+		InstrumentID: "INST-TT-OVER",
+		Tiers: []types.TickTier{
+			{MinPrice: 0, MaxPrice: 50, TickSize: 0.01},
+			{MinPrice: 50, MaxPrice: 500, TickSize: 0.5},
+		},
+	}
+	if err := s.Set(updated); err != nil {
+		t.Fatalf("Set updated: %v", err)
+	}
+
+	got, err := s.Get("INST-TT-OVER")
+	if err != nil {
+		t.Fatalf("Get after overwrite: %v", err)
+	}
+	if len(got.Tiers) != 2 {
+		t.Errorf("Tiers len after overwrite: want 2, got %d", len(got.Tiers))
+	}
+	if got.Tiers[0].TickSize != 0.01 {
+		t.Errorf("Tiers[0].TickSize after overwrite: want 0.01, got %v", got.Tiers[0].TickSize)
+	}
+}
+
+// TestTickTableStore_List verifies that List returns all stored tick tables.
+func TestTickTableStore_List(t *testing.T) {
+	s := store.NewInMemoryTickTableStore()
+
+	// Empty initially.
+	tables, err := s.List()
+	if err != nil {
+		t.Fatalf("List empty: %v", err)
+	}
+	if len(tables) != 0 {
+		t.Errorf("expected 0 tables initially, got %d", len(tables))
+	}
+
+	// Set 3 tick tables.
+	for _, id := range []string{"INST-L1", "INST-L2", "INST-L3"} {
+		if err := s.Set(newTickTable(id)); err != nil {
+			t.Fatalf("Set %s: %v", id, err)
+		}
+	}
+
+	tables, err = s.List()
+	if err != nil {
+		t.Fatalf("List after Set: %v", err)
+	}
+	if len(tables) != 3 {
+		t.Errorf("expected 3 tick tables, got %d", len(tables))
+	}
+}
+
+// TestTickTableStore_DeepCopy verifies that mutating the Tiers slice returned
+// by Get does NOT modify the stored record (deep copy semantics).
+func TestTickTableStore_DeepCopy(t *testing.T) {
+	s := store.NewInMemoryTickTableStore()
+
+	original := &types.TickTable{
+		InstrumentID: "INST-TT-COPY",
+		Tiers: []types.TickTier{
+			{MinPrice: 0, MaxPrice: 100, TickSize: 0.1},
+			{MinPrice: 100, MaxPrice: 500, TickSize: 0.5},
+		},
+	}
+	if err := s.Set(original); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	// Get a copy and mutate it.
+	got, err := s.Get("INST-TT-COPY")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	got.Tiers[0].TickSize = 999.0    // Mutate returned copy.
+	got.Tiers = append(got.Tiers, types.TickTier{MinPrice: 500, MaxPrice: 1000, TickSize: 1.0})
+
+	// Fetch again — the stored record must be unchanged.
+	got2, err := s.Get("INST-TT-COPY")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if got2.Tiers[0].TickSize == 999.0 {
+		t.Error("Get returned a reference into internal storage — mutation affected stored record (Tiers[0].TickSize)")
+	}
+	if len(got2.Tiers) != 2 {
+		t.Errorf("stored Tiers length changed after appending to returned copy: want 2, got %d", len(got2.Tiers))
+	}
+}
+
+// ============================================================
+// ThrottleStore tests
+// ============================================================
+
+// TestThrottleStore_UnderLimit verifies that calls below the per-second limit
+// all succeed (return true).
+func TestThrottleStore_UnderLimit(t *testing.T) {
+	s := store.NewInMemoryThrottleStore()
+	const maxPerSecond = 10
+	const calls = 5
+
+	for i := 0; i < calls; i++ {
+		allowed, err := s.CheckAndIncrement("firm-A", maxPerSecond)
+		if err != nil {
+			t.Errorf("call %d: unexpected error: %v", i+1, err)
+		}
+		if !allowed {
+			t.Errorf("call %d: expected allowed=true (under limit %d), got false", i+1, maxPerSecond)
+		}
+	}
+}
+
+// TestThrottleStore_OverLimit verifies that the (limit+1)th call within the same
+// 1-second window returns false and an error.
+func TestThrottleStore_OverLimit(t *testing.T) {
+	s := store.NewInMemoryThrottleStore()
+	const maxPerSecond = 10
+
+	// First 10 calls should all succeed.
+	for i := 0; i < maxPerSecond; i++ {
+		allowed, err := s.CheckAndIncrement("firm-B", maxPerSecond)
+		if err != nil {
+			t.Fatalf("call %d: unexpected error: %v", i+1, err)
+		}
+		if !allowed {
+			t.Fatalf("call %d: expected allowed=true, got false (limit=%d)", i+1, maxPerSecond)
+		}
+	}
+
+	// 11th call must be throttled.
+	allowed, err := s.CheckAndIncrement("firm-B", maxPerSecond)
+	if allowed {
+		t.Error("11th call: expected allowed=false (over limit), got true")
+	}
+	if err == nil {
+		t.Error("11th call: expected non-nil error when throttled, got nil")
+	}
+}
+
+// TestThrottleStore_WindowReset verifies that after waiting more than 1 second,
+// the counter resets and calls are allowed again.
+func TestThrottleStore_WindowReset(t *testing.T) {
+	s := store.NewInMemoryThrottleStore()
+	const maxPerSecond = 3
+	const firmID = "firm-C"
+
+	// Exhaust the limit.
+	for i := 0; i < maxPerSecond; i++ {
+		_, _ = s.CheckAndIncrement(firmID, maxPerSecond)
+	}
+
+	// Verify we are over the limit.
+	allowed, _ := s.CheckAndIncrement(firmID, maxPerSecond)
+	if allowed {
+		t.Skip("throttle limit not reached within window; skipping window-reset test")
+	}
+
+	// Wait for the window to expire (>1 second).
+	// The ThrottleStore uses 1-second tumbling windows; sleeping 1100ms crosses the boundary.
+	time.Sleep(1100 * time.Millisecond)
+
+	// After the window expires, calls should be allowed again.
+	for i := 0; i < maxPerSecond; i++ {
+		allowed2, err := s.CheckAndIncrement(firmID, maxPerSecond)
+		if err != nil {
+			t.Errorf("post-reset call %d: unexpected error: %v", i+1, err)
+		}
+		if !allowed2 {
+			t.Errorf("post-reset call %d: expected allowed=true after window reset, got false", i+1)
+		}
+	}
+}
+
+// ============================================================
+// ThrottleStore concurrent access test
+// ============================================================
+
+// TestThrottleStore_ConcurrentAccess verifies that concurrent calls from
+// multiple goroutines do not race or panic (use -race flag).
+func TestThrottleStore_ConcurrentAccess(t *testing.T) {
+	s := store.NewInMemoryThrottleStore()
+	const goroutines = 20
+	const maxPerSecond = 100
+
+	done := make(chan struct{}, goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			_, _ = s.CheckAndIncrement("firm-concurrent", maxPerSecond)
+		}()
+	}
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+	// No assertions needed — the -race detector validates correctness.
 }

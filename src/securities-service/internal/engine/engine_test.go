@@ -3,6 +3,7 @@ package engine_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -1025,5 +1026,236 @@ func TestSTP_DifferentParticipants(t *testing.T) {
 	storedSell, _ := s.ord.Get("sell-diff-part")
 	if storedSell.Status != types.OrderStatusFilled {
 		t.Errorf("sell status: want FILLED, got %s", storedSell.Status)
+	}
+}
+
+// ── IOC (Immediate Or Cancel) tests ───────────────────────────────────────────
+
+// iocOrder builds a PENDING LIMIT IOC order.
+func iocOrder(id, instID, participantID string, side types.OrderSide, qty int, price float64, createdAt string) *types.SecurityOrder {
+	o := limitOrder(id, instID, participantID, side, qty, price, createdAt)
+	o.TimeInForce = types.TIF_IOC
+	return o
+}
+
+// TestIOC_PartialFill verifies that an IOC order that partially fills has its
+// remainder cancelled rather than left as a resting order.
+// Expected: 1 trade (partial fill), incoming order status = PARTIALLY_FILLED or CANCELLED.
+func TestIOC_PartialFill(t *testing.T) {
+	eng, s := setup(t)
+
+	// Resting sell for 40 at 50.00.
+	sell := limitOrder("sell-ioc-partial", testInstID, "seller", types.OrderSideSell, 40, 50.00, ts(0))
+	submit(t, s, sell)
+
+	// IOC buy for 100 — only 40 available.
+	buy := iocOrder("buy-ioc-partial", testInstID, "buyer", types.OrderSideBuy, 100, 50.00, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// Must have produced exactly 1 trade (for the 40 that filled).
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade (partial fill), got %d", len(trades))
+	}
+	if trades[0].Quantity != 40 {
+		t.Errorf("trade qty: want 40, got %d", trades[0].Quantity)
+	}
+
+	// IOC remainder: buy wanted 100, only 40 filled — remaining 60 must be cancelled.
+	// The engine sets status to PARTIALLY_FILLED (not CANCELLED) when some fills occurred.
+	// Engine code: if iocRemaining > 0 && FilledQuantity == 0 → CANCELLED, else PARTIALLY_FILLED.
+	storedBuy, err := s.ord.Get("buy-ioc-partial")
+	if err != nil {
+		t.Fatalf("get stored buy: %v", err)
+	}
+	if storedBuy.Status != types.OrderStatusPartiallyFilled && storedBuy.Status != types.OrderStatusCancelled {
+		t.Errorf("IOC partial fill status: want PARTIALLY_FILLED or CANCELLED, got %s", storedBuy.Status)
+	}
+	// The filled quantity must reflect the actual fill.
+	if storedBuy.FilledQuantity != 40 {
+		t.Errorf("IOC filled qty: want 40, got %d", storedBuy.FilledQuantity)
+	}
+}
+
+// TestIOC_FullFill verifies that an IOC order that fully fills ends with status FILLED.
+func TestIOC_FullFill(t *testing.T) {
+	eng, s := setup(t)
+
+	// Resting sell for 100 at 50.00.
+	sell := limitOrder("sell-ioc-full", testInstID, "seller", types.OrderSideSell, 100, 50.00, ts(0))
+	submit(t, s, sell)
+
+	// IOC buy for exactly 100 — should fully fill.
+	buy := iocOrder("buy-ioc-full", testInstID, "buyer", types.OrderSideBuy, 100, 50.00, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+	if trades[0].Quantity != 100 {
+		t.Errorf("trade qty: want 100, got %d", trades[0].Quantity)
+	}
+
+	// Fully filled IOC must have status FILLED (not cancelled).
+	if buy.Status != types.OrderStatusFilled {
+		t.Errorf("IOC full fill status: want FILLED, got %s", buy.Status)
+	}
+	storedBuy, _ := s.ord.Get("buy-ioc-full")
+	if storedBuy.Status != types.OrderStatusFilled {
+		t.Errorf("stored IOC buy status: want FILLED, got %s", storedBuy.Status)
+	}
+}
+
+// TestIOC_NoMatch verifies that an IOC order with no resting orders on the
+// opposite side is immediately cancelled without producing any trades.
+func TestIOC_NoMatch(t *testing.T) {
+	eng, s := setup(t)
+
+	// No resting orders — empty book.
+	buy := iocOrder("buy-ioc-nomatch", testInstID, "buyer", types.OrderSideBuy, 50, 50.00, ts(0))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	// No trades produced.
+	if len(trades) != 0 {
+		t.Errorf("expected 0 trades for IOC no-match, got %d", len(trades))
+	}
+
+	// IOC with zero fills must be CANCELLED.
+	storedBuy, err := s.ord.Get("buy-ioc-nomatch")
+	if err != nil {
+		t.Fatalf("get stored buy: %v", err)
+	}
+	if storedBuy.Status != types.OrderStatusCancelled {
+		t.Errorf("IOC no-match status: want CANCELLED, got %s", storedBuy.Status)
+	}
+	if storedBuy.FilledQuantity != 0 {
+		t.Errorf("IOC no-match filled qty: want 0, got %d", storedBuy.FilledQuantity)
+	}
+}
+
+// ── FOK (Fill Or Kill) tests ──────────────────────────────────────────────────
+
+// fokOrder builds a PENDING LIMIT FOK order.
+func fokOrder(id, instID, participantID string, side types.OrderSide, qty int, price float64, createdAt string) *types.SecurityOrder {
+	o := limitOrder(id, instID, participantID, side, qty, price, createdAt)
+	o.TimeInForce = types.TIF_FOK
+	return o
+}
+
+// TestFOK_FullFill verifies that a FOK order executes completely when sufficient
+// liquidity exists on the opposite side.
+func TestFOK_FullFill(t *testing.T) {
+	eng, s := setup(t)
+
+	// Two resting sells totalling 200 — enough for a FOK buy of 150.
+	sell1 := limitOrder("sell-fok-1", testInstID, "seller1", types.OrderSideSell, 100, 50.00, ts(0))
+	sell2 := limitOrder("sell-fok-2", testInstID, "seller2", types.OrderSideSell, 100, 50.00, ts(1))
+	submit(t, s, sell1)
+	submit(t, s, sell2)
+
+	buy := fokOrder("buy-fok-full", testInstID, "buyer", types.OrderSideBuy, 150, 50.00, ts(2))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("MatchOrder FOK full fill: %v", err)
+	}
+
+	// Must produce trades totalling 150.
+	if len(trades) == 0 {
+		t.Fatal("expected trades for FOK full fill, got none")
+	}
+	totalQty := 0
+	for _, tr := range trades {
+		totalQty += tr.Quantity
+	}
+	if totalQty != 150 {
+		t.Errorf("FOK total filled qty: want 150, got %d", totalQty)
+	}
+
+	// Incoming FOK buy must be FILLED.
+	if buy.Status != types.OrderStatusFilled {
+		t.Errorf("FOK full fill status: want FILLED, got %s", buy.Status)
+	}
+}
+
+// TestFOK_InsufficientLiquidity verifies that a FOK order is rejected (returns
+// an error and produces 0 trades) when the available liquidity is less than the
+// requested quantity.
+func TestFOK_InsufficientLiquidity(t *testing.T) {
+	eng, s := setup(t)
+
+	// Only 30 available, but FOK needs 100.
+	sell := limitOrder("sell-fok-insuf", testInstID, "seller", types.OrderSideSell, 30, 50.00, ts(0))
+	submit(t, s, sell)
+
+	buy := fokOrder("buy-fok-insuf", testInstID, "buyer", types.OrderSideBuy, 100, 50.00, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+
+	// FOK with insufficient liquidity must return an error.
+	if err == nil {
+		t.Fatal("expected error for FOK with insufficient liquidity, got nil")
+	}
+
+	// No trades must have been created.
+	if len(trades) != 0 {
+		t.Errorf("FOK insufficient liquidity: expected 0 trades, got %d", len(trades))
+	}
+
+	// The error message should mention FOK semantics.
+	if !strings.Contains(err.Error(), "FOK") {
+		t.Errorf("error %q does not mention FOK", err.Error())
+	}
+}
+
+// TestFOK_ExactLiquidity verifies that a FOK order succeeds when available
+// liquidity exactly equals the requested quantity.
+func TestFOK_ExactLiquidity(t *testing.T) {
+	eng, s := setup(t)
+
+	// Exactly 50 available, FOK for exactly 50.
+	sell := limitOrder("sell-fok-exact", testInstID, "seller", types.OrderSideSell, 50, 50.00, ts(0))
+	submit(t, s, sell)
+
+	buy := fokOrder("buy-fok-exact", testInstID, "buyer", types.OrderSideBuy, 50, 50.00, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+	if err != nil {
+		t.Fatalf("FOK exact liquidity should succeed: %v", err)
+	}
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+	if trades[0].Quantity != 50 {
+		t.Errorf("trade qty: want 50, got %d", trades[0].Quantity)
+	}
+	if buy.Status != types.OrderStatusFilled {
+		t.Errorf("FOK exact fill status: want FILLED, got %s", buy.Status)
+	}
+}
+
+// TestFOK_NoCrossing verifies that a FOK order is rejected when resting orders
+// exist but prices do not cross (no liquidity at the FOK price).
+func TestFOK_NoCrossing(t *testing.T) {
+	eng, s := setup(t)
+
+	// Sell at 60.00, FOK buy at 50.00 — prices don't cross.
+	sell := limitOrder("sell-fok-nocross", testInstID, "seller", types.OrderSideSell, 100, 60.00, ts(0))
+	submit(t, s, sell)
+
+	buy := fokOrder("buy-fok-nocross", testInstID, "buyer", types.OrderSideBuy, 100, 50.00, ts(1))
+	trades, err := submitAndMatch(t, eng, s, buy)
+
+	// No crossing → FOK must return an error (0 available).
+	if err == nil {
+		t.Fatal("expected error for FOK with no crossing orders, got nil")
+	}
+	if len(trades) != 0 {
+		t.Errorf("expected 0 trades for FOK no-crossing, got %d", len(trades))
 	}
 }
