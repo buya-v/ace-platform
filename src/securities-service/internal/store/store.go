@@ -79,12 +79,26 @@ type SettlementStore interface {
 	UpdateStatus(id string, status types.SettlementStatus) error
 }
 
+// FirmStore defines the repository contract for member firms.
+type FirmStore interface {
+	Get(id string) (*types.Firm, error)
+	List() ([]types.Firm, error)
+	Create(f *types.Firm) error
+	UpdateStatus(id string, status types.FirmStatus) error
+}
+
+// ParticipantFilters carries optional filter parameters for listing participants.
+type ParticipantFilters struct {
+	FirmID string
+}
+
 // ParticipantStore defines the repository contract for exchange participants.
 type ParticipantStore interface {
 	Get(id string) (*types.ExchangeParticipant, error)
-	List() ([]types.ExchangeParticipant, error)
+	List(filters ParticipantFilters) ([]types.ExchangeParticipant, error)
 	Create(p *types.ExchangeParticipant) error
 	UpdateStatus(id string, status types.ParticipantStatus) error
+	UpdatePermissions(id string, permissions []string) error
 }
 
 // InMemoryParticipantStore is a thread-safe, in-memory implementation of ParticipantStore.
@@ -112,12 +126,15 @@ func (s *InMemoryParticipantStore) Get(id string) (*types.ExchangeParticipant, e
 	return &copy, nil
 }
 
-// List returns all participants.
-func (s *InMemoryParticipantStore) List() ([]types.ExchangeParticipant, error) {
+// List returns participants, optionally filtered by FirmID.
+func (s *InMemoryParticipantStore) List(filters ParticipantFilters) ([]types.ExchangeParticipant, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]types.ExchangeParticipant, 0, len(s.data))
 	for _, p := range s.data {
+		if filters.FirmID != "" && p.FirmID != filters.FirmID {
+			continue
+		}
 		out = append(out, *p)
 	}
 	return out, nil
@@ -145,6 +162,84 @@ func (s *InMemoryParticipantStore) UpdateStatus(id string, status types.Particip
 	}
 	p.Status = status
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// UpdatePermissions replaces the permissions slice of a participant.
+func (s *InMemoryParticipantStore) UpdatePermissions(id string, permissions []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	perms := make([]string, len(permissions))
+	copy(perms, permissions)
+	p.Permissions = perms
+	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// --- InMemoryFirmStore ---
+
+// InMemoryFirmStore is a thread-safe, in-memory implementation of FirmStore.
+type InMemoryFirmStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Firm
+}
+
+// NewInMemoryFirmStore returns an empty InMemoryFirmStore.
+func NewInMemoryFirmStore() *InMemoryFirmStore {
+	return &InMemoryFirmStore{
+		data: make(map[string]*types.Firm),
+	}
+}
+
+// Get retrieves a firm by ID.
+func (s *InMemoryFirmStore) Get(id string) (*types.Firm, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	c := *f
+	return &c, nil
+}
+
+// List returns all firms.
+func (s *InMemoryFirmStore) List() ([]types.Firm, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Firm, 0, len(s.data))
+	for _, f := range s.data {
+		out = append(out, *f)
+	}
+	return out, nil
+}
+
+// Create stores a new firm.
+func (s *InMemoryFirmStore) Create(f *types.Firm) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[f.ID]; exists {
+		return fmt.Errorf("firm %s already exists", f.ID)
+	}
+	c := *f
+	s.data[f.ID] = &c
+	return nil
+}
+
+// UpdateStatus changes the status of a firm.
+func (s *InMemoryFirmStore) UpdateStatus(id string, status types.FirmStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	f.Status = status
+	f.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return nil
 }
 

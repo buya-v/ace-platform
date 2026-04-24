@@ -48,6 +48,9 @@ type Server struct {
 	marketStore          store.MarketStore
 	segmentStore         store.SegmentStore
 	circuitBreakerStore  store.CircuitBreakerStore
+	firmStore            store.FirmStore
+	participantStore     store.ParticipantStore
+	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
 	settlementEngine     *settlement.SettlementEngine
@@ -60,6 +63,7 @@ type Server struct {
 // settlementEngine and settlementStore may be nil; if so, settlement endpoints return 503.
 // marketStore, segmentStore, and circuitBreakerStore may be nil; if so, those endpoints
 // return 503.
+// firmStore, participantStore, and dayManager may be nil; if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -71,6 +75,9 @@ func New(
 	marketStore store.MarketStore,
 	segmentStore store.SegmentStore,
 	circuitBreakerStore store.CircuitBreakerStore,
+	firmStore store.FirmStore,
+	participantStore store.ParticipantStore,
+	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
 	settlementEngine *settlement.SettlementEngine,
@@ -89,6 +96,9 @@ func New(
 		marketStore:          marketStore,
 		segmentStore:         segmentStore,
 		circuitBreakerStore:  circuitBreakerStore,
+		firmStore:            firmStore,
+		participantStore:     participantStore,
+		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
 		settlementEngine:     settlementEngine,
@@ -167,6 +177,21 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Circuit Breakers (MillenniumIT P1)
 	mux.HandleFunc("/api/v1/securities/circuit-breakers", s.handleCircuitBreakers)
 	mux.HandleFunc("/api/v1/securities/circuit-breakers/", s.handleCircuitBreaker)
+
+	// Firms
+	mux.HandleFunc("/api/v1/securities/firms", s.handleFirms)
+	mux.HandleFunc("/api/v1/securities/firms/", s.handleFirm)
+
+	// Participants
+	mux.HandleFunc("/api/v1/securities/participants", s.handleParticipants)
+	mux.HandleFunc("/api/v1/securities/participants/", s.handleParticipant)
+
+	// Day lifecycle
+	mux.HandleFunc("/api/v1/securities/day/status", s.handleDayStatus)
+	mux.HandleFunc("/api/v1/securities/day/start", s.handleDayStart)
+	mux.HandleFunc("/api/v1/securities/day/trading", s.handleDayTrading)
+	mux.HandleFunc("/api/v1/securities/day/end-trading", s.handleDayEndTrading)
+	mux.HandleFunc("/api/v1/securities/day/end", s.handleDayEnd)
 }
 
 // --- Health endpoints ---

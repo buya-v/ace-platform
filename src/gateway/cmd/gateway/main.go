@@ -183,6 +183,22 @@ func main() {
 	rt.Handle("DELETE", "/api/v1/securities/circuit-breakers/{id}", secHandler)
 	// Mass Cancel
 	rt.Handle("POST", "/api/v1/securities/orders/mass-cancel", secHandler)
+	// Firms
+	rt.Handle("GET", "/api/v1/securities/firms", secHandler)
+	rt.Handle("POST", "/api/v1/securities/firms", secHandler)
+	rt.Handle("GET", "/api/v1/securities/firms/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/firms/{id}/status", secHandler)
+	// Participants
+	rt.Handle("GET", "/api/v1/securities/participants", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants", secHandler)
+	rt.Handle("GET", "/api/v1/securities/participants/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/participants/{id}/permissions", secHandler)
+	// Day lifecycle
+	rt.Handle("GET", "/api/v1/securities/day/status", secHandler)
+	rt.Handle("POST", "/api/v1/securities/day/start", secHandler)
+	rt.Handle("POST", "/api/v1/securities/day/trading", secHandler)
+	rt.Handle("POST", "/api/v1/securities/day/end-trading", secHandler)
+	rt.Handle("POST", "/api/v1/securities/day/end", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Configure public paths (no auth required)

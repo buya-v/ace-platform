@@ -77,6 +77,10 @@ func main() {
 	segmentStore := store.NewInMemorySegmentStore()
 	circuitBreakerStore := store.NewInMemoryCircuitBreakerStore()
 
+	// Firm and participant stores.
+	firmStore := store.NewInMemoryFirmStore()
+	participantStore := store.NewInMemoryParticipantStore()
+
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
@@ -103,6 +107,9 @@ func main() {
 	// Session manager routes orders to the correct engine based on market phase.
 	sessionManager := engine.NewSessionManager(auctionEngine, matchingEngine)
 
+	// Day manager controls the overall trading day lifecycle.
+	dayManager := engine.NewDayManager(sessionManager, instrumentStore)
+
 	srv := server.New(
 		instrumentStore,
 		orderStore,
@@ -114,6 +121,9 @@ func main() {
 		marketStore,
 		segmentStore,
 		circuitBreakerStore,
+		firmStore,
+		participantStore,
+		dayManager,
 		matchingEngine,
 		sessionManager,
 		settlementEngine,
