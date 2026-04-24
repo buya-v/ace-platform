@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -2218,4 +2219,496 @@ func TestThrottleStore_ConcurrentAccess(t *testing.T) {
 		<-done
 	}
 	// No assertions needed — the -race detector validates correctness.
+}
+
+// ============================================================
+// AnnouncementStore tests
+// ============================================================
+
+func TestAnnouncementStore_Create_List(t *testing.T) {
+	s := store.NewInMemoryAnnouncementStore()
+
+	a1 := &types.Announcement{
+		ID:       "ann-1",
+		TenantID: "tenant-alpha",
+		Title:    "Alpha Notice",
+		Body:     "Body for alpha",
+		Audience: types.AudiencePublic,
+	}
+	a2 := &types.Announcement{
+		ID:       "ann-2",
+		TenantID: "tenant-beta",
+		Title:    "Beta Notice",
+		Body:     "Body for beta",
+		Audience: types.AudienceInternal,
+	}
+	a3 := &types.Announcement{
+		ID:       "ann-3",
+		TenantID: "tenant-alpha",
+		Title:    "Alpha Notice 2",
+		Body:     "Second alpha body",
+		Audience: types.AudienceParticipant,
+	}
+
+	if err := s.Create(a1); err != nil {
+		t.Fatalf("Create a1: %v", err)
+	}
+	if err := s.Create(a2); err != nil {
+		t.Fatalf("Create a2: %v", err)
+	}
+	if err := s.Create(a3); err != nil {
+		t.Fatalf("Create a3: %v", err)
+	}
+
+	// List for tenant-alpha should return exactly 2.
+	alphaList, err := s.ListByTenant("tenant-alpha")
+	if err != nil {
+		t.Fatalf("ListByTenant tenant-alpha: %v", err)
+	}
+	if len(alphaList) != 2 {
+		t.Errorf("expected 2 announcements for tenant-alpha, got %d", len(alphaList))
+	}
+	for _, a := range alphaList {
+		if a.TenantID != "tenant-alpha" {
+			t.Errorf("expected tenant-alpha, got %q", a.TenantID)
+		}
+	}
+
+	// List for tenant-beta should return exactly 1.
+	betaList, err := s.ListByTenant("tenant-beta")
+	if err != nil {
+		t.Fatalf("ListByTenant tenant-beta: %v", err)
+	}
+	if len(betaList) != 1 {
+		t.Errorf("expected 1 announcement for tenant-beta, got %d", len(betaList))
+	}
+	if betaList[0].ID != "ann-2" {
+		t.Errorf("expected ann-2, got %q", betaList[0].ID)
+	}
+}
+
+func TestAnnouncementStore_ListEmpty(t *testing.T) {
+	s := store.NewInMemoryAnnouncementStore()
+
+	list, err := s.ListByTenant("no-such-tenant")
+	if err != nil {
+		t.Fatalf("ListByTenant on empty store: %v", err)
+	}
+	if list == nil {
+		t.Fatal("expected non-nil slice, got nil")
+	}
+	if len(list) != 0 {
+		t.Errorf("expected 0 announcements, got %d", len(list))
+	}
+}
+
+// ============================================================
+// AuditStore tests
+// ============================================================
+
+func TestAuditStore_Log_ListByEntityType(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	entries := []types.AuditEntry{
+		{ID: "a1", EntityType: "ORDER", EntityID: "o1", Action: "CREATE", ActorID: "actor-1", Timestamp: now},
+		{ID: "a2", EntityType: "TRADE", EntityID: "t1", Action: "UPDATE", ActorID: "actor-2", Timestamp: now},
+		{ID: "a3", EntityType: "ORDER", EntityID: "o2", Action: "CANCEL", ActorID: "actor-1", Timestamp: now},
+		{ID: "a4", EntityType: "INSTRUMENT", EntityID: "i1", Action: "UPDATE", ActorID: "actor-3", Timestamp: now},
+	}
+	for _, e := range entries {
+		if err := s.Log(e); err != nil {
+			t.Fatalf("Log entry %s: %v", e.ID, err)
+		}
+	}
+
+	// Filter by entity_type=ORDER — expect 2 results.
+	orders, err := s.List(types.AuditFilters{EntityType: "ORDER"})
+	if err != nil {
+		t.Fatalf("List by entity_type ORDER: %v", err)
+	}
+	if len(orders) != 2 {
+		t.Errorf("expected 2 ORDER entries, got %d", len(orders))
+	}
+	for _, e := range orders {
+		if e.EntityType != "ORDER" {
+			t.Errorf("unexpected entity_type %q in ORDER filter result", e.EntityType)
+		}
+	}
+
+	// Filter by entity_type=TRADE — expect 1 result.
+	trades, err := s.List(types.AuditFilters{EntityType: "TRADE"})
+	if err != nil {
+		t.Fatalf("List by entity_type TRADE: %v", err)
+	}
+	if len(trades) != 1 {
+		t.Errorf("expected 1 TRADE entry, got %d", len(trades))
+	}
+
+	// No filter — expect all 4.
+	all, err := s.List(types.AuditFilters{})
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(all) != 4 {
+		t.Errorf("expected 4 entries total, got %d", len(all))
+	}
+}
+
+func TestAuditStore_Log_ListByActorID(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_ = s.Log(types.AuditEntry{ID: "b1", EntityType: "ORDER", EntityID: "o1", Action: "CREATE", ActorID: "alice", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "b2", EntityType: "TRADE", EntityID: "t1", Action: "UPDATE", ActorID: "bob", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "b3", EntityType: "ORDER", EntityID: "o2", Action: "CANCEL", ActorID: "alice", Timestamp: now})
+
+	aliceEntries, err := s.List(types.AuditFilters{ActorID: "alice"})
+	if err != nil {
+		t.Fatalf("List by actor_id alice: %v", err)
+	}
+	if len(aliceEntries) != 2 {
+		t.Errorf("expected 2 entries for alice, got %d", len(aliceEntries))
+	}
+	for _, e := range aliceEntries {
+		if e.ActorID != "alice" {
+			t.Errorf("unexpected actor_id %q", e.ActorID)
+		}
+	}
+
+	bobEntries, err := s.List(types.AuditFilters{ActorID: "bob"})
+	if err != nil {
+		t.Fatalf("List by actor_id bob: %v", err)
+	}
+	if len(bobEntries) != 1 {
+		t.Errorf("expected 1 entry for bob, got %d", len(bobEntries))
+	}
+}
+
+func TestAuditStore_Log_ListByDateRange(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+
+	// Use fixed timestamps so filter logic is deterministic.
+	ts1 := "2026-01-01T10:00:00Z"
+	ts2 := "2026-01-01T12:00:00Z"
+	ts3 := "2026-01-01T14:00:00Z"
+	ts4 := "2026-01-01T16:00:00Z"
+
+	_ = s.Log(types.AuditEntry{ID: "d1", EntityType: "ORDER", Action: "CREATE", ActorID: "u1", Timestamp: ts1})
+	_ = s.Log(types.AuditEntry{ID: "d2", EntityType: "ORDER", Action: "CANCEL", ActorID: "u1", Timestamp: ts2})
+	_ = s.Log(types.AuditEntry{ID: "d3", EntityType: "TRADE", Action: "UPDATE", ActorID: "u2", Timestamp: ts3})
+	_ = s.Log(types.AuditEntry{ID: "d4", EntityType: "TRADE", Action: "BUST", ActorID: "u2", Timestamp: ts4})
+
+	// start_date=ts2, end_date=ts3 → entries d2 and d3 (inclusive).
+	rangeResult, err := s.List(types.AuditFilters{StartDate: ts2, EndDate: ts3})
+	if err != nil {
+		t.Fatalf("List by date range: %v", err)
+	}
+	if len(rangeResult) != 2 {
+		t.Errorf("expected 2 entries in range [%s, %s], got %d", ts2, ts3, len(rangeResult))
+	}
+
+	// start_date only — entries from ts3 onwards: d3 and d4.
+	afterResult, err := s.List(types.AuditFilters{StartDate: ts3})
+	if err != nil {
+		t.Fatalf("List by start_date: %v", err)
+	}
+	if len(afterResult) != 2 {
+		t.Errorf("expected 2 entries from start_date=%s, got %d", ts3, len(afterResult))
+	}
+
+	// end_date only — entries up to and including ts2: d1 and d2.
+	beforeResult, err := s.List(types.AuditFilters{EndDate: ts2})
+	if err != nil {
+		t.Fatalf("List by end_date: %v", err)
+	}
+	if len(beforeResult) != 2 {
+		t.Errorf("expected 2 entries up to end_date=%s, got %d", ts2, len(beforeResult))
+	}
+}
+
+func TestAuditStore_AppendOnly(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	original := types.AuditEntry{
+		ID:         "immutable-1",
+		EntityType: "ORDER",
+		EntityID:   "o99",
+		Action:     "CREATE",
+		ActorID:    "user-x",
+		Timestamp:  now,
+	}
+	if err := s.Log(original); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+
+	// Mutate the local copy after logging.
+	original.Action = "MUTATED"
+	original.ActorID = "hacker"
+
+	// The stored entry must be unchanged.
+	entries, err := s.List(types.AuditFilters{EntityType: "ORDER"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Action == "MUTATED" {
+		t.Error("audit store returned mutated action — store is not append-only")
+	}
+	if entries[0].ActorID == "hacker" {
+		t.Error("audit store returned mutated actor_id — store is not append-only")
+	}
+
+	// Mutating the returned slice entry must also not affect the stored record.
+	entries[0].Action = "PATCHED_FROM_READ"
+	entries2, _ := s.List(types.AuditFilters{EntityType: "ORDER"})
+	if entries2[0].Action == "PATCHED_FROM_READ" {
+		t.Error("List returned a reference into internal storage rather than a copy")
+	}
+}
+
+func TestAuditStore_ConcurrentLog(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+	const goroutines = 50
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			_ = s.Log(types.AuditEntry{
+				ID:         fmt.Sprintf("concurrent-%d", i),
+				EntityType: "ORDER",
+				Action:     "CREATE",
+				ActorID:    "stress-test",
+				Timestamp:  now,
+			})
+		}()
+	}
+	wg.Wait()
+
+	all, err := s.List(types.AuditFilters{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != goroutines {
+		t.Errorf("expected %d entries after concurrent log, got %d", goroutines, len(all))
+	}
+}
+
+// ============================================================
+// T3 — named test cases required by the test-writer task
+// ============================================================
+
+// TestAnnouncementStore_Create_List_Two verifies that creating 2 announcements
+// and listing by a shared tenant returns exactly 2 items.
+func TestAnnouncementStore_Create_List_Two(t *testing.T) {
+	s := store.NewInMemoryAnnouncementStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := s.Create(&types.Announcement{
+		ID: "t3-ann-1", TenantID: "t3-tenant", Title: "First", Body: "Body A",
+		Audience: types.AudiencePublic, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("Create a1: %v", err)
+	}
+	if err := s.Create(&types.Announcement{
+		ID: "t3-ann-2", TenantID: "t3-tenant", Title: "Second", Body: "Body B",
+		Audience: types.AudiencePublic, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("Create a2: %v", err)
+	}
+
+	list, err := s.ListByTenant("t3-tenant")
+	if err != nil {
+		t.Fatalf("ListByTenant: %v", err)
+	}
+	if len(list) != 2 {
+		t.Errorf("expected 2 announcements, got %d", len(list))
+	}
+}
+
+// TestAnnouncementStore_ListByTenant verifies per-tenant filtering across 2 tenants.
+func TestAnnouncementStore_ListByTenant(t *testing.T) {
+	s := store.NewInMemoryAnnouncementStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	tenants := []string{"tenant-A", "tenant-B"}
+	ids := []string{"lt-1", "lt-2", "lt-3"}
+	// a1 and a2 belong to tenant-A; a3 belongs to tenant-B.
+	anns := []*types.Announcement{
+		{ID: ids[0], TenantID: tenants[0], Title: "A1", Body: "b", Audience: types.AudiencePublic, CreatedAt: now, UpdatedAt: now},
+		{ID: ids[1], TenantID: tenants[0], Title: "A2", Body: "b", Audience: types.AudiencePublic, CreatedAt: now, UpdatedAt: now},
+		{ID: ids[2], TenantID: tenants[1], Title: "B1", Body: "b", Audience: types.AudienceInternal, CreatedAt: now, UpdatedAt: now},
+	}
+	for _, a := range anns {
+		if err := s.Create(a); err != nil {
+			t.Fatalf("Create %s: %v", a.ID, err)
+		}
+	}
+
+	t.Run("tenant-A returns 2", func(t *testing.T) {
+		list, err := s.ListByTenant(tenants[0])
+		if err != nil {
+			t.Fatalf("ListByTenant tenant-A: %v", err)
+		}
+		if len(list) != 2 {
+			t.Errorf("expected 2, got %d", len(list))
+		}
+		for _, a := range list {
+			if a.TenantID != tenants[0] {
+				t.Errorf("unexpected tenant_id %q", a.TenantID)
+			}
+		}
+	})
+
+	t.Run("tenant-B returns 1", func(t *testing.T) {
+		list, err := s.ListByTenant(tenants[1])
+		if err != nil {
+			t.Fatalf("ListByTenant tenant-B: %v", err)
+		}
+		if len(list) != 1 {
+			t.Errorf("expected 1, got %d", len(list))
+		}
+		if list[0].ID != ids[2] {
+			t.Errorf("expected %s, got %s", ids[2], list[0].ID)
+		}
+	})
+
+	t.Run("unknown tenant returns empty slice", func(t *testing.T) {
+		list, err := s.ListByTenant("no-such-tenant")
+		if err != nil {
+			t.Fatalf("ListByTenant unknown: %v", err)
+		}
+		if len(list) != 0 {
+			t.Errorf("expected 0, got %d", len(list))
+		}
+	})
+}
+
+// TestAuditStore_Log_List logs 3 entries and expects List to return all 3.
+func TestAuditStore_Log_List(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	entries := []types.AuditEntry{
+		{ID: "ll-1", EntityType: "ORDER", EntityID: "o1", Action: "CREATE", ActorID: "u1", Timestamp: now},
+		{ID: "ll-2", EntityType: "TRADE", EntityID: "t1", Action: "UPDATE", ActorID: "u2", Timestamp: now},
+		{ID: "ll-3", EntityType: "INSTRUMENT", EntityID: "i1", Action: "UPDATE", ActorID: "u3", Timestamp: now},
+	}
+	for _, e := range entries {
+		if err := s.Log(e); err != nil {
+			t.Fatalf("Log %s: %v", e.ID, err)
+		}
+	}
+
+	all, err := s.List(types.AuditFilters{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3 entries, got %d", len(all))
+	}
+}
+
+// TestAuditStore_FilterByEntityType logs entries of mixed types and verifies
+// that filtering by entity_type=ORDER returns exactly 1.
+func TestAuditStore_FilterByEntityType(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_ = s.Log(types.AuditEntry{ID: "fe-1", EntityType: "ORDER", EntityID: "o1", Action: "CREATE", ActorID: "u1", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "fe-2", EntityType: "TRADE", EntityID: "t1", Action: "UPDATE", ActorID: "u1", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "fe-3", EntityType: "INSTRUMENT", EntityID: "i1", Action: "UPDATE", ActorID: "u1", Timestamp: now})
+
+	result, err := s.List(types.AuditFilters{EntityType: "ORDER"})
+	if err != nil {
+		t.Fatalf("List by entity_type ORDER: %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("expected 1 ORDER entry, got %d", len(result))
+	}
+	if result[0].EntityType != "ORDER" {
+		t.Errorf("expected entity_type ORDER, got %q", result[0].EntityType)
+	}
+}
+
+// TestAuditStore_FilterByActorID verifies that filtering by actor_id returns
+// only entries logged by that actor.
+func TestAuditStore_FilterByActorID(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_ = s.Log(types.AuditEntry{ID: "fa-1", EntityType: "ORDER", EntityID: "o1", Action: "CREATE", ActorID: "admin", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "fa-2", EntityType: "ORDER", EntityID: "o2", Action: "CANCEL", ActorID: "trader", Timestamp: now})
+	_ = s.Log(types.AuditEntry{ID: "fa-3", EntityType: "TRADE", EntityID: "t1", Action: "UPDATE", ActorID: "admin", Timestamp: now})
+
+	adminEntries, err := s.List(types.AuditFilters{ActorID: "admin"})
+	if err != nil {
+		t.Fatalf("List by actor admin: %v", err)
+	}
+	if len(adminEntries) != 2 {
+		t.Errorf("expected 2 entries for admin, got %d", len(adminEntries))
+	}
+	for _, e := range adminEntries {
+		if e.ActorID != "admin" {
+			t.Errorf("unexpected actor_id %q in admin result", e.ActorID)
+		}
+	}
+
+	traderEntries, err := s.List(types.AuditFilters{ActorID: "trader"})
+	if err != nil {
+		t.Fatalf("List by actor trader: %v", err)
+	}
+	if len(traderEntries) != 1 {
+		t.Errorf("expected 1 entry for trader, got %d", len(traderEntries))
+	}
+}
+
+// TestAuditStore_AppendOnly_Copy verifies that modifying a returned AuditEntry does
+// not affect the value stored inside the store (append-only / copy semantics).
+func TestAuditStore_AppendOnly_Copy(t *testing.T) {
+	s := store.NewInMemoryAuditStore()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	original := types.AuditEntry{
+		ID:         "ao-1",
+		EntityType: "ORDER",
+		EntityID:   "o1",
+		Action:     "CREATE",
+		ActorID:    "actor-original",
+		Timestamp:  now,
+	}
+	if err := s.Log(original); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+
+	// Retrieve the stored list and mutate the returned entry.
+	list, err := s.List(types.AuditFilters{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(list))
+	}
+
+	// Mutate the returned slice element — the store must remain unchanged.
+	list[0].ActorID = "mutated-actor"
+
+	// Retrieve again and verify the stored value is unchanged.
+	list2, err := s.List(types.AuditFilters{})
+	if err != nil {
+		t.Fatalf("second List: %v", err)
+	}
+	if list2[0].ActorID == "mutated-actor" {
+		t.Error("AuditStore is not append-only: mutation of returned entry affected stored state")
+	}
+	if list2[0].ActorID != "actor-original" {
+		t.Errorf("expected actor-original, got %q", list2[0].ActorID)
+	}
 }
