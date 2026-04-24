@@ -2712,3 +2712,232 @@ func TestAuditStore_AppendOnly_Copy(t *testing.T) {
 		t.Errorf("expected actor-original, got %q", list2[0].ActorID)
 	}
 }
+
+// ============================================================
+// PendingChangeStore tests (P2c)
+// ============================================================
+
+func newPendingChange(id, entityType, submittedBy string) *types.PendingChange {
+	return &types.PendingChange{
+		ID:          id,
+		EntityType:  entityType,
+		EntityID:    "e-" + id,
+		ChangeType:  "UPDATE",
+		Payload:     map[string]interface{}{"field": "value"},
+		SubmittedBy: submittedBy,
+		Status:      "PENDING_APPROVAL",
+		SubmittedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func TestPendingChangeStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryPendingChangeStore()
+	change := newPendingChange("pc-1", "INSTRUMENT", "maker-1")
+
+	if err := s.Create(change); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("pc-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ID != "pc-1" {
+		t.Errorf("expected ID pc-1, got %q", got.ID)
+	}
+	if got.EntityType != "INSTRUMENT" {
+		t.Errorf("expected EntityType INSTRUMENT, got %q", got.EntityType)
+	}
+	if got.Status != "PENDING_APPROVAL" {
+		t.Errorf("expected status PENDING_APPROVAL, got %q", got.Status)
+	}
+	if got.SubmittedBy != "maker-1" {
+		t.Errorf("expected submittedBy maker-1, got %q", got.SubmittedBy)
+	}
+
+	_, err = s.Get("nonexistent")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound for missing ID, got %v", err)
+	}
+}
+
+func TestPendingChangeStore_ListByStatus(t *testing.T) {
+	s := store.NewInMemoryPendingChangeStore()
+
+	pending := newPendingChange("pc-pending", "INSTRUMENT", "maker-1")
+	approved := newPendingChange("pc-approved", "INSTRUMENT", "maker-2")
+	approved.Status = "APPROVED"
+
+	s.Create(pending)
+	s.Create(approved)
+
+	results, err := s.ListByStatus("PENDING_APPROVAL")
+	if err != nil {
+		t.Fatalf("ListByStatus: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 PENDING_APPROVAL result, got %d", len(results))
+	}
+	if results[0].ID != "pc-pending" {
+		t.Errorf("expected pc-pending, got %q", results[0].ID)
+	}
+
+	// Listing with empty status returns all.
+	all, err := s.ListByStatus("")
+	if err != nil {
+		t.Fatalf("ListByStatus empty: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 results with empty status filter, got %d", len(all))
+	}
+}
+
+func TestPendingChangeStore_Approve(t *testing.T) {
+	s := store.NewInMemoryPendingChangeStore()
+	change := newPendingChange("pc-app", "FIRM", "maker-1")
+	s.Create(change)
+
+	if err := s.Approve("pc-app", "reviewer-1"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+
+	got, err := s.Get("pc-app")
+	if err != nil {
+		t.Fatalf("Get after Approve: %v", err)
+	}
+	if got.Status != "APPROVED" {
+		t.Errorf("expected status APPROVED, got %q", got.Status)
+	}
+	if got.ReviewedBy != "reviewer-1" {
+		t.Errorf("expected ReviewedBy reviewer-1, got %q", got.ReviewedBy)
+	}
+	if got.ReviewedAt == "" {
+		t.Error("expected ReviewedAt to be set after approval")
+	}
+}
+
+func TestPendingChangeStore_Reject(t *testing.T) {
+	s := store.NewInMemoryPendingChangeStore()
+	change := newPendingChange("pc-rej", "PARTICIPANT", "maker-1")
+	s.Create(change)
+
+	if err := s.Reject("pc-rej", "reviewer-2", "policy violation"); err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+
+	got, err := s.Get("pc-rej")
+	if err != nil {
+		t.Fatalf("Get after Reject: %v", err)
+	}
+	if got.Status != "REJECTED" {
+		t.Errorf("expected status REJECTED, got %q", got.Status)
+	}
+	if got.ReviewedBy != "reviewer-2" {
+		t.Errorf("expected ReviewedBy reviewer-2, got %q", got.ReviewedBy)
+	}
+	if got.ReviewComment != "policy violation" {
+		t.Errorf("expected ReviewComment 'policy violation', got %q", got.ReviewComment)
+	}
+	if got.ReviewedAt == "" {
+		t.Error("expected ReviewedAt to be set after rejection")
+	}
+}
+
+func TestPendingChangeStore_ApproveNonPending(t *testing.T) {
+	s := store.NewInMemoryPendingChangeStore()
+	change := newPendingChange("pc-already", "INSTRUMENT", "maker-1")
+	change.Status = "APPROVED"
+	s.Create(change)
+
+	err := s.Approve("pc-already", "reviewer-1")
+	if err == nil {
+		t.Fatal("expected error when approving non-PENDING_APPROVAL change, got nil")
+	}
+
+	// Also verify Reject on non-pending returns error.
+	change2 := newPendingChange("pc-rejected-already", "INSTRUMENT", "maker-1")
+	change2.Status = "REJECTED"
+	s.Create(change2)
+
+	err2 := s.Reject("pc-rejected-already", "reviewer-1", "comment")
+	if err2 == nil {
+		t.Fatal("expected error when rejecting non-PENDING_APPROVAL change, got nil")
+	}
+}
+
+// ============================================================
+// ReferencePriceStore tests (P2c)
+// ============================================================
+
+func TestReferencePriceStore_SetGet(t *testing.T) {
+	s := store.NewInMemoryReferencePriceStore()
+
+	rp := &types.ReferencePrice{
+		InstrumentID:          "INST-1",
+		Price:                 100.50,
+		SetBy:                 "admin",
+		SetAt:                 time.Now().UTC().Format(time.RFC3339),
+		StaleThresholdMinutes: 60,
+	}
+
+	if err := s.Set(rp); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	got, err := s.Get("INST-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.InstrumentID != "INST-1" {
+		t.Errorf("expected InstrumentID INST-1, got %q", got.InstrumentID)
+	}
+	if got.Price != 100.50 {
+		t.Errorf("expected Price 100.50, got %f", got.Price)
+	}
+	if got.SetBy != "admin" {
+		t.Errorf("expected SetBy admin, got %q", got.SetBy)
+	}
+	if got.StaleThresholdMinutes != 60 {
+		t.Errorf("expected StaleThresholdMinutes 60, got %d", got.StaleThresholdMinutes)
+	}
+
+	_, err = s.Get("nonexistent")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestReferencePriceStore_Overwrite(t *testing.T) {
+	s := store.NewInMemoryReferencePriceStore()
+
+	first := &types.ReferencePrice{
+		InstrumentID: "INST-OW",
+		Price:        50.00,
+		SetBy:        "admin",
+		SetAt:        time.Now().UTC().Format(time.RFC3339),
+	}
+	second := &types.ReferencePrice{
+		InstrumentID: "INST-OW",
+		Price:        75.25,
+		SetBy:        "supervisor",
+		SetAt:        time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := s.Set(first); err != nil {
+		t.Fatalf("Set first: %v", err)
+	}
+	if err := s.Set(second); err != nil {
+		t.Fatalf("Set second: %v", err)
+	}
+
+	got, err := s.Get("INST-OW")
+	if err != nil {
+		t.Fatalf("Get after overwrite: %v", err)
+	}
+	if got.Price != 75.25 {
+		t.Errorf("expected overwritten price 75.25, got %f", got.Price)
+	}
+	if got.SetBy != "supervisor" {
+		t.Errorf("expected SetBy supervisor after overwrite, got %q", got.SetBy)
+	}
+}
