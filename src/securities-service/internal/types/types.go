@@ -78,6 +78,8 @@ type Instrument struct {
 	ListingDate       string        `json:"listing_date"`
 	TradingStatus     TradingStatus `json:"trading_status"`
 	OutstandingShares int64         `json:"outstanding_shares"`
+	SegmentID         string        `json:"segment_id,omitempty"`
+	STPMode           STPMode       `json:"stp_mode,omitempty"`
 	CreatedAt         string        `json:"created_at"`
 	UpdatedAt         string        `json:"updated_at"`
 }
@@ -282,3 +284,80 @@ type ErrorDetail struct {
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
+
+// ── Market/Segment Hierarchy (MillenniumIT P1) ──────────────────────────────
+
+const (
+	MarketActive    = "MARKET_ACTIVE"
+	MarketSuspended = "MARKET_SUSPENDED"
+	MarketClosed    = "MARKET_CLOSED"
+)
+
+const (
+	SegActive    = "SEG_ACTIVE"
+	SegSuspended = "SEG_SUSPENDED"
+)
+
+type Market struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	Timezone  string `json:"timezone"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type Segment struct {
+	ID        string `json:"id"`
+	MarketID  string `json:"market_id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// ── Circuit Breakers (MillenniumIT P1) ───────────────────────────────────────
+
+const (
+	CBActive    = "CB_ACTIVE"
+	CBTriggered = "CB_TRIGGERED"
+	CBCooldown  = "CB_COOLDOWN"
+)
+
+const (
+	CBStaticUpper  = "CB_STATIC_UPPER"
+	CBStaticLower  = "CB_STATIC_LOWER"
+	CBDynamicUpper = "CB_DYNAMIC_UPPER"
+	CBDynamicLower = "CB_DYNAMIC_LOWER"
+)
+
+type CircuitBreaker struct {
+	InstrumentID    string  `json:"instrument_id"`
+	StaticUpperPct  float64 `json:"static_upper_pct"`
+	StaticLowerPct  float64 `json:"static_lower_pct"`
+	DynamicUpperPct float64 `json:"dynamic_upper_pct"`
+	DynamicLowerPct float64 `json:"dynamic_lower_pct"`
+	ReferencePrice  float64 `json:"reference_price"`
+	LastTradedPrice float64 `json:"last_traded_price"`
+	Status          string  `json:"status"`
+	CooldownMinutes int     `json:"cooldown_minutes"`
+	TriggeredAt     string  `json:"triggered_at,omitempty"`
+}
+
+type CircuitBreakerEvent struct {
+	InstrumentID   string  `json:"instrument_id"`
+	Type           string  `json:"type"`
+	TriggerPrice   float64 `json:"trigger_price"`
+	ReferencePrice float64 `json:"reference_price"`
+	Timestamp      string  `json:"timestamp"`
+}
+
+// ── Self-Trade Prevention (MillenniumIT P1) ──────────────────────────────────
+
+type STPMode = string
+
+const (
+	STPCancelNewest STPMode = "STP_CANCEL_NEWEST"
+	STPCancelOldest STPMode = "STP_CANCEL_OLDEST"
+	STPCancelBoth   STPMode = "STP_CANCEL_BOTH"
+)

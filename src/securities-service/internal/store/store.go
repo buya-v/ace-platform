@@ -4,7 +4,9 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -636,4 +638,173 @@ func (s *InMemoryEntitlementStore) ListByParticipant(participantID string) ([]ty
 		}
 	}
 	return result, nil
+}
+
+// ── Market Store (MillenniumIT P1) ───────────────────────────────────────────
+
+type MarketStore interface {
+	Create(m *types.Market) error
+	Get(id string) (*types.Market, error)
+	List() ([]types.Market, error)
+	UpdateStatus(id, status string) error
+}
+
+type InMemoryMarketStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Market
+}
+
+func NewInMemoryMarketStore() *InMemoryMarketStore {
+	s := &InMemoryMarketStore{data: make(map[string]*types.Market)}
+	now := time.Now().UTC().Format(time.RFC3339)
+	s.data["MSE"] = &types.Market{ID: "MSE", Name: "Mongolian Stock Exchange", Status: types.MarketActive, Timezone: "Asia/Ulaanbaatar", CreatedAt: now, UpdatedAt: now}
+	return s
+}
+
+func (s *InMemoryMarketStore) Create(m *types.Market) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[m.ID]; exists { return fmt.Errorf("market %s already exists", m.ID) }
+	s.data[m.ID] = m
+	return nil
+}
+
+func (s *InMemoryMarketStore) Get(id string) (*types.Market, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, ok := s.data[id]
+	if !ok { return nil, fmt.Errorf("market %s not found", id) }
+	c := *m; return &c, nil
+}
+
+func (s *InMemoryMarketStore) List() ([]types.Market, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Market, 0, len(s.data))
+	for _, m := range s.data { out = append(out, *m) }
+	return out, nil
+}
+
+func (s *InMemoryMarketStore) UpdateStatus(id, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.data[id]
+	if !ok { return fmt.Errorf("market %s not found", id) }
+	m.Status = status; m.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// ── Segment Store (MillenniumIT P1) ──────────────────────────────────────────
+
+type SegmentStore interface {
+	Create(seg *types.Segment) error
+	Get(id string) (*types.Segment, error)
+	ListByMarket(marketID string) ([]types.Segment, error)
+}
+
+type InMemorySegmentStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Segment
+}
+
+func NewInMemorySegmentStore() *InMemorySegmentStore {
+	s := &InMemorySegmentStore{data: make(map[string]*types.Segment)}
+	now := time.Now().UTC().Format(time.RFC3339)
+	s.data["EQUITY"] = &types.Segment{ID: "EQUITY", MarketID: "MSE", Name: "Equities", Status: types.SegActive, CreatedAt: now, UpdatedAt: now}
+	return s
+}
+
+func (s *InMemorySegmentStore) Create(seg *types.Segment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[seg.ID]; exists { return fmt.Errorf("segment %s already exists", seg.ID) }
+	s.data[seg.ID] = seg
+	return nil
+}
+
+func (s *InMemorySegmentStore) Get(id string) (*types.Segment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seg, ok := s.data[id]
+	if !ok { return nil, fmt.Errorf("segment %s not found", id) }
+	c := *seg; return &c, nil
+}
+
+func (s *InMemorySegmentStore) ListByMarket(marketID string) ([]types.Segment, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []types.Segment
+	for _, seg := range s.data {
+		if marketID == "" || seg.MarketID == marketID { out = append(out, *seg) }
+	}
+	return out, nil
+}
+
+// ── Circuit Breaker Store (MillenniumIT P1) ──────────────────────────────────
+
+type CircuitBreakerStore interface {
+	Get(instrumentID string) (*types.CircuitBreaker, error)
+	Set(cb *types.CircuitBreaker) error
+	List() ([]types.CircuitBreaker, error)
+	UpdateStatus(instrumentID, status string) error
+	UpdateLastPrice(instrumentID string, price float64) error
+	Delete(instrumentID string) error
+}
+
+type InMemoryCircuitBreakerStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.CircuitBreaker
+}
+
+func NewInMemoryCircuitBreakerStore() *InMemoryCircuitBreakerStore {
+	return &InMemoryCircuitBreakerStore{data: make(map[string]*types.CircuitBreaker)}
+}
+
+func (s *InMemoryCircuitBreakerStore) Get(instrumentID string) (*types.CircuitBreaker, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cb, ok := s.data[instrumentID]
+	if !ok { return nil, nil }
+	c := *cb; return &c, nil
+}
+
+func (s *InMemoryCircuitBreakerStore) Set(cb *types.CircuitBreaker) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[cb.InstrumentID] = cb
+	return nil
+}
+
+func (s *InMemoryCircuitBreakerStore) List() ([]types.CircuitBreaker, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.CircuitBreaker, 0, len(s.data))
+	for _, cb := range s.data { out = append(out, *cb) }
+	return out, nil
+}
+
+func (s *InMemoryCircuitBreakerStore) UpdateStatus(instrumentID, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cb, ok := s.data[instrumentID]
+	if !ok { return fmt.Errorf("circuit breaker for %s not found", instrumentID) }
+	cb.Status = status
+	if status == types.CBTriggered { cb.TriggeredAt = time.Now().UTC().Format(time.RFC3339) }
+	return nil
+}
+
+func (s *InMemoryCircuitBreakerStore) UpdateLastPrice(instrumentID string, price float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cb, ok := s.data[instrumentID]
+	if !ok { return nil }
+	cb.LastTradedPrice = price
+	return nil
+}
+
+func (s *InMemoryCircuitBreakerStore) Delete(instrumentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, instrumentID)
+	return nil
 }
