@@ -73,7 +73,7 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/api/v1/apikey/revoke", s.handler.RevokeAPIKey)
 	mux.HandleFunc("/api/v1/users", s.handler.ListUsers)
 
-	// Demo reset — clears all in-memory data
+	// Demo reset — selectively clears transactional data, preserves admin accounts
 	mux.HandleFunc("/api/v1/demo/reset", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -84,7 +84,7 @@ func (s *Server) StartHealthServer() error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{"status":"reset","message":"All demo data cleared"}`)
+		fmt.Fprintln(w, `{"status":"reset","message":"Demo data cleared. Admin accounts preserved, lockouts reset.","preserved":["admin accounts"],"cleared":["trader accounts","sessions","api keys","lockouts"]}`)
 	})
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)

@@ -408,3 +408,21 @@ func isUniqueViolation(err error) bool {
 func (s *PostgresStore) Close() error {
 	return s.db.Close()
 }
+
+// Reset selectively clears demo data from the database.
+// Preserves admin/super_admin users, clears all others + sessions + lockouts.
+func (s *PostgresStore) Reset() {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return
+	}
+	// Clear all sessions
+	tx.Exec("DELETE FROM auth.sessions")
+	// Clear all API keys
+	tx.Exec("DELETE FROM auth.api_keys")
+	// Reset lockouts on admin accounts
+	tx.Exec("UPDATE auth.users SET failed_attempts = 0, locked_until = NULL WHERE role IN ('admin', 'super_admin')")
+	// Delete non-admin users
+	tx.Exec("DELETE FROM auth.users WHERE role NOT IN ('admin', 'super_admin')")
+	tx.Commit()
+}

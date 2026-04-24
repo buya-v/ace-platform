@@ -93,9 +93,12 @@ func main() {
 		BindAddress: cfg.BindAddress,
 	})
 
-	// Wire demo reset — only works with in-memory store
-	if memStore, ok := repo.(*store.InMemoryStore); ok {
-		srv.SetResetter(memStore)
+	// Wire demo reset — works with both in-memory and PostgreSQL stores
+	switch s := repo.(type) {
+	case *store.InMemoryStore:
+		srv.SetResetter(s)
+	case *store.PostgresStore:
+		srv.SetResetter(s)
 	}
 
 	go func() {

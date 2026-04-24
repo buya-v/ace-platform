@@ -565,6 +565,19 @@ func (h *Handler) UpdateOrderLimits(w http.ResponseWriter, r *http.Request) {
 }
 
 // DemoReset clears all in-memory auth data for demo reset.
+// Direct HTTP proxy to auth-service (not gRPC forward).
 func (h *Handler) DemoReset(w http.ResponseWriter, r *http.Request) {
-	h.forward(w, r, "auth-service", "DemoService/Reset")
+	resp, err := http.Post("http://auth-service:8085/api/v1/demo/reset", "application/json", nil)
+	if err != nil {
+		types.WriteError(w, http.StatusBadGateway, "RESET_FAILED",
+			"Failed to reach auth-service: "+err.Error(),
+			middleware.RequestIDFromContext(r.Context()))
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	var body json.RawMessage
+	json.NewDecoder(resp.Body).Decode(&body)
+	w.Write(body)
 }

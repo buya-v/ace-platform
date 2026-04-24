@@ -201,12 +201,29 @@ func (s *InMemoryStore) ListUsers() []*types.User {
 	return users
 }
 
-// Reset clears all data — used by demo reset endpoint.
+// Reset selectively clears demo data while preserving master data.
+// Kept: admin accounts (role=admin), reference data
+// Cleared: trader accounts, sessions, lockouts, API keys, PKCE challenges
 func (s *InMemoryStore) Reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.users = make(map[string]*types.User)
-	s.emails = make(map[string]string)
+
+	// Preserve admin users, clear everyone else
+	preservedUsers := make(map[string]*types.User)
+	preservedEmails := make(map[string]string)
+	for id, user := range s.users {
+		if user.Role == types.RoleAdmin || user.Role == types.RoleSuperAdmin {
+			// Reset lockout state on preserved accounts
+			user.FailedAttempts = 0
+			user.LockedUntil = time.Time{}
+			preservedUsers[id] = user
+			preservedEmails[user.Email] = id
+		}
+	}
+
+	s.users = preservedUsers
+	s.emails = preservedEmails
+	// Always clear transactional data
 	s.sessions = make(map[string]*types.Session)
 	s.apiKeys = make(map[string]*types.APIKey)
 	s.keyHash = make(map[string]string)

@@ -150,6 +150,8 @@ func main() {
 			"/api/v1/instruments/",
 			"/api/v1/market-data/",
 			"/api/v1/ws/",
+			"/api/v1/admin/demo/",
+			"/platform/",
 		},
 		// Wire the router as a RouteChecker so unknown paths get 404 before auth runs.
 		RouteChecker: rt,
