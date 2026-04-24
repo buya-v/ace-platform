@@ -1,7 +1,56 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260424-p1b-participant-model",
+  "feature": "MillenniumIT P1b — Participant Model + Privileges + Day Lifecycle + Iceberg",
+  "requirement": "Firm/Participant hierarchy, granular privileges, start/end day lifecycle, iceberg orders",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Firm/Participant types + privilege system + iceberg order type",
+      "description": "Add participant model, privilege system, and iceberg order support to securities-service types and stores.\n\nRead src/securities-service/internal/types/types.go for existing types.\nRead src/securities-service/internal/store/store.go for store patterns.\n\nPart A — Firm/Participant types (add to types.go):\n- Firm struct: ID, Name, Status (FIRM_ACTIVE/FIRM_SUSPENDED/FIRM_DEACTIVATED), ClearingFirmID, CreatedAt, UpdatedAt — json tags\n- ExchangeParticipant struct: ID, FirmID, Name, Role string, Status (PARTICIPANT_ACTIVE/PARTICIPANT_SUSPENDED), Permissions []string, CreatedAt, UpdatedAt — json tags\n- Permission constants: PERM_LOGIN, PERM_TRADE_EXECUTE, PERM_TRADE_READ, PERM_ORDER_CREATE, PERM_ORDER_CANCEL, PERM_ORDER_READ, PERM_ADMIN_MANAGE, PERM_MARKET_MANAGE, PERM_MASS_CANCEL\n\nPart B — DayState type:\n- DayState: DAY_PRE_OPEN, DAY_TRADING, DAY_POST_CLOSE, DAY_CLOSED\n\nPart C — Iceberg order fields (add to SecurityOrder):\n- HiddenQuantity int `json:\"hidden_quantity,omitempty\"` — total hidden portion\n- VisibleQuantity int `json:\"visible_quantity,omitempty\"` — currently visible in book\n- IsIceberg bool `json:\"is_iceberg,omitempty\"`\n\nPart D — Stores (add to store.go):\n- FirmStore interface: Create, Get, List, UpdateStatus\n- ParticipantStore interface: Create, Get, GetByFirmID, List, UpdateStatus, UpdatePermissions\n- InMemoryFirmStore, InMemoryParticipantStore\n- Seed: one firm 'MSE-BROKER-1' (ACTIVE), one participant 'TRADER-1' (firm: MSE-BROKER-1, permissions: [TRADE_EXECUTE, ORDER_CREATE, ORDER_CANCEL, ORDER_READ])\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Permission checks + iceberg matching + day lifecycle engine",
+      "description": "Add permission validation to order submission, iceberg order matching logic, and day lifecycle management.\n\nRead .softhouse/handoff/T1.md for new types.\nRead src/securities-service/internal/engine/engine.go for MatchOrder.\nRead src/securities-service/internal/engine/session.go for SessionManager.\n\nPart A — Permission checks (add to engine.go or new file engine/permissions.go):\n- CheckOrderPermission(participantID string, action string, participantStore ParticipantStore) error\n  - Get participant, check status is ACTIVE\n  - Check action permission exists in participant's Permissions list\n  - For ORDER_CREATE: verify PERM_ORDER_CREATE\n  - For ORDER_CANCEL: verify PERM_ORDER_CANCEL\n  - Return error if denied: 'participant lacks permission: ORDER_CREATE'\n- Wire into handleSubmitOrder: check permission before processing order\n- Wire into handleCancelOrder: check PERM_ORDER_CANCEL\n\nPart B — Iceberg order matching (modify engine.go MatchOrder):\n- When an iceberg order is submitted: set VisibleQuantity = min(order.Quantity, order.VisibleQuantity if set, else order.Quantity)\n- During matching: only match against VisibleQuantity, not full Quantity\n- After each fill: if remaining hidden > 0, replenish VisibleQuantity from HiddenQuantity\n  - HiddenQuantity -= fill_qty (if fill came from hidden)\n  - VisibleQuantity = min(original_visible_size, remaining_total)\n- Iceberg orders appear in the book with only VisibleQuantity shown\n- When all hidden quantity is exhausted, order behaves normally\n\nPart C — Day lifecycle (new: src/securities-service/internal/engine/day_manager.go):\n- DayManager struct with sessionManager, instrumentStore, currentDayState\n- StartDay() error: transition from DAY_CLOSED → DAY_PRE_OPEN, transition all ACTIVE instruments to PRE_OPEN session\n- StartTrading() error: transition from DAY_PRE_OPEN → DAY_TRADING, transition all instruments to CONTINUOUS (triggers opening auctions)\n- EndTrading() error: transition from DAY_TRADING → DAY_POST_CLOSE, transition all instruments to CLOSING_AUCTION then CLOSED\n- EndDay() error: transition from DAY_POST_CLOSE → DAY_CLOSED\n- GetDayState() DayState\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/engine/engine.go", "src/securities-service/internal/engine/day_manager.go", "src/securities-service/internal/server/handlers_order.go"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "HTTP handlers + gateway routes for P1b features",
+      "description": "Add HTTP endpoints for firms, participants, day lifecycle, and wire to gateway.\n\nRead .softhouse/handoff/T1.md, T2.md.\n\nPart A — Firm/Participant handlers (new: handlers_participant.go):\n- GET /api/v1/securities/firms — list firms\n- POST /api/v1/securities/firms — create firm\n- GET /api/v1/securities/firms/{id} — get firm\n- PUT /api/v1/securities/firms/{id}/status — suspend/activate\n- GET /api/v1/securities/participants — list participants (?firm_id= filter)\n- POST /api/v1/securities/participants — create participant (validate: firm_id exists, permissions array)\n- PUT /api/v1/securities/participants/{id}/permissions — update permissions\n\nPart B — Day lifecycle handlers (new: handlers_day.go):\n- POST /api/v1/securities/day/start — start day (DAY_CLOSED → DAY_PRE_OPEN)\n- POST /api/v1/securities/day/trading — start trading (DAY_PRE_OPEN → DAY_TRADING)\n- POST /api/v1/securities/day/end-trading — end trading (DAY_TRADING → DAY_POST_CLOSE)\n- POST /api/v1/securities/day/end — end day (DAY_POST_CLOSE → DAY_CLOSED)\n- GET /api/v1/securities/day/status — get current day state\n\nPart C — Wire into server.go + main.go + gateway routes.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/handlers_participant.go", "src/securities-service/internal/server/handlers_day.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": ["T2"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Unit tests for P1b features",
+      "description": "Write tests for firm/participant, permissions, iceberg orders, and day lifecycle.\n\nTests:\n\n1. store_test.go additions:\n- TestFirmStore_CRUD, TestParticipantStore_CRUD, TestParticipantStore_UpdatePermissions\n\n2. engine_test.go additions:\n- TestIceberg_BasicMatch — iceberg 100 total (20 visible), sell 20 → fills visible, replenishes\n- TestIceberg_FullDrain — iceberg fully matched across multiple fills\n- TestIceberg_RegularVsIceberg — regular order matched against iceberg's visible qty only\n- TestPermission_Allowed — participant with ORDER_CREATE can submit\n- TestPermission_Denied — participant without ORDER_CREATE gets rejected\n- TestPermission_SuspendedParticipant — suspended participant gets rejected\n\n3. engine/day_manager_test.go:\n- TestDayManager_StartDay — CLOSED → PRE_OPEN\n- TestDayManager_StartTrading — PRE_OPEN → TRADING (instruments go CONTINUOUS)\n- TestDayManager_EndTrading — TRADING → POST_CLOSE\n- TestDayManager_InvalidTransition — CLOSED → TRADING → error\n- TestDayManager_GetState\n\nTarget: 70%+ on new code.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/engine/engine_test.go", "src/securities-service/internal/engine/day_manager_test.go"],
+      "dependencies": ["T3"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
