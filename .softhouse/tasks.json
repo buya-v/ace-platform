@@ -1,56 +1,7 @@
 {
-  "run_id": "20260423-mse-bootstrap",
-  "feature": "MSE Tenant Bootstrap",
-  "requirement": "Phase 0.8a: venues config, tenant config API, tenant-aware securities-service, platform MCP tools",
-  "status": "planning",
-  "tasks": [
-    {
-      "id": "T1",
-      "title": "Venues config files + tenant config API",
-      "description": "Create the venues/ directory with per-tenant config files and add a config endpoint to platform-service.\n\nPart A — Create venue config files:\n\nvenues/ace-commodities/config.json:\n```json\n{\n  \"tenant_id\": \"ace-commodities\",\n  \"name\": \"ACE Commodity Exchange\",\n  \"trading_calendar\": {\n    \"timezone\": \"Asia/Ulaanbaatar\",\n    \"trading_hours\": {\"open\": \"10:00\", \"close\": \"15:00\"},\n    \"holidays\": [\"2026-01-01\", \"2026-02-10\", \"2026-02-11\", \"2026-07-11\", \"2026-07-12\", \"2026-07-13\"]\n  },\n  \"settlement\": {\"default_cycle\": \"T+0\", \"delivery\": \"physical\"},\n  \"circuit_breakers\": {\"upper_limit_pct\": 10.0, \"lower_limit_pct\": 10.0, \"cooldown_minutes\": 5},\n  \"compliance\": {\"kyc_required\": true, \"aml_screening\": true},\n  \"features\": {\"short_selling\": false, \"auctions\": false, \"frc_reporting\": false}\n}\n```\n\nvenues/mse-equities/config.json:\n```json\n{\n  \"tenant_id\": \"mse-equities\",\n  \"name\": \"Mongolian Stock Exchange\",\n  \"trading_calendar\": {\n    \"timezone\": \"Asia/Ulaanbaatar\",\n    \"trading_hours\": {\"open\": \"10:00\", \"close\": \"13:00\"},\n    \"pre_open_auction\": {\"start\": \"09:30\", \"end\": \"10:00\"},\n    \"closing_auction\": {\"start\": \"12:50\", \"end\": \"13:00\"},\n    \"holidays\": [\"2026-01-01\", \"2026-02-10\", \"2026-02-11\", \"2026-07-11\", \"2026-07-12\", \"2026-07-13\"]\n  },\n  \"settlement\": {\"default_cycle\": \"T+2\", \"csd\": \"MCSD\", \"delivery\": \"book-entry\"},\n  \"circuit_breakers\": {\"upper_limit_pct\": 15.0, \"lower_limit_pct\": 15.0, \"cooldown_minutes\": 10},\n  \"compliance\": {\"kyc_required\": true, \"aml_screening\": true, \"frc_reporting\": true},\n  \"features\": {\"short_selling\": true, \"auctions\": true, \"corporate_actions\": true, \"frc_reporting\": true}\n}\n```\n\nPart B — Add config endpoint to platform-service:\n- Read .softhouse/handoff/T1.md from the Phase 0.7 run for platform-service context\n- Read src/platform-service/internal/server/handlers.go for handler pattern\n- Add GET /platform/v1/tenants/{id}/config handler that reads venues/{id}/config.json\n- If file not found, return 404\n- Add a TenantConfig loader in src/platform-service/internal/config/loader.go that reads JSON files from a configurable venues directory (default: ./venues/)\n- Wire into server.go route registration\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/platform-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["venues/ace-commodities/config.json", "venues/mse-equities/config.json", "src/platform-service/internal/config/", "src/platform-service/internal/server/"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T2",
-      "title": "Tenant-aware securities-service (dynamic tenant from header)",
-      "description": "Update the securities-service to be fully tenant-aware — read tenant_id from X-GarudaX-Tenant header and use it dynamically.\n\nRead src/securities-service/internal/server/server.go for current server setup.\nRead src/securities-service/internal/kafka/topics.go for hardcoded ace-commodities topic names.\nRead src/gateway/internal/middleware/tenant.go for the TenantMiddleware and TenantFromContext pattern.\n\nChanges:\n\n1. Add tenant middleware to securities-service (src/securities-service/internal/server/server.go):\n   - Copy the same TenantMiddleware pattern from gateway (extract header, validate, store in context)\n   - Valid tenants: read from VALID_TENANTS env var (comma-separated, default \"ace-commodities,mse-equities\")\n   - Skip for /healthz, /readyz, /metrics\n\n2. Update Kafka topic names to be dynamic (src/securities-service/internal/kafka/topics.go):\n   - Change from constants to functions: TopicTradeExecuted(tenantID string) string { return tenantID + \".securities.trade.executed\" }\n   - Same for OrderCreated and OrderCancelled\n   - Update wiring.go to pass tenant_id from context\n\n3. Update engine to pass tenant context:\n   - In handlers_order.go: extract tenant from context, pass to engine.MatchOrder\n   - In engine.go: accept tenant_id parameter, pass to kafka publish calls\n   - Keep store calls tenant-agnostic for now (in-memory store is single-tenant)\n\n4. Update handlers to include tenant_id in responses:\n   - All JSON responses should include \"tenant_id\" field\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/server/", "src/securities-service/internal/kafka/", "src/securities-service/internal/engine/"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T3",
-      "title": "Platform MCP tools for admin-bot",
-      "description": "Add platform administration MCP tools to the admin-bot.\n\nRead src/admin-bot/mcp-server/src/tools/securities.ts for the existing MCP tool pattern.\nRead src/admin-bot/mcp-server/src/index.ts for tool registration.\n\nCreate src/admin-bot/mcp-server/src/tools/platform.ts:\n\n1. list_tenants — GET /platform/v1/tenants\n   Format as table: ID | Name | Status | Flagship | Tier\n\n2. get_tenant — GET /platform/v1/tenants/{id}\n   Params: tenant_id (required)\n\n3. create_tenant — POST /platform/v1/tenants\n   Params: id (slug), name, governance_tier (optional, default STANDARD)\n   Returns tenant + provisioning result\n\n4. update_tenant_status — PUT /platform/v1/tenants/{id}/status\n   Params: tenant_id, status (ACTIVE/SUSPENDED/ONBOARDING)\n\n5. get_tenant_config — GET /platform/v1/tenants/{id}/config\n   Params: tenant_id\n   Format config as readable YAML-like text\n\n6. provision_tenant — POST /platform/v1/tenants/{id}/provision (if endpoint exists, else use create which auto-provisions)\n   Params: tenant_id\n\nRegister in index.ts: import { registerPlatformTools } from './tools/platform.js'; registerPlatformTools(server, client);\n\nRun: cd src/admin-bot/mcp-server && npx tsc --noEmit\n\nWrite handoff to .softhouse/handoff/T3.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/admin-bot/mcp-server/src/tools/platform.ts", "src/admin-bot/mcp-server/src/index.ts"],
-      "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T4",
-      "title": "Verify all tests pass",
-      "description": "Run full test suite.\n\nIMPORTANT: Go at /usr/local/go/bin/go — set PATH first.\n\n1. cd src/platform-service && go test ./... -cover\n2. cd src/securities-service && go test ./... -race -cover\n3. cd src/gateway && go test ./...\n4. cd src/admin-ui && npm test -- --run\n5. cd src/admin-bot/mcp-server && npx tsc --noEmit\n6. Verify venues/ config files are valid JSON\n7. Report pass/fail per service\n\nWrite handoff to .softhouse/handoff/T4.md",
-      "agent_role": "test_writer",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/"],
-      "dependencies": ["T1", "T2", "T3"],
-      "status": "pending",
-      "attempts": 0
-    }
-  ]
+  "run_id": null,
+  "feature": null,
+  "requirement": null,
+  "status": "idle",
+  "tasks": []
 }
