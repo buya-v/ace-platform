@@ -69,6 +69,8 @@ func main() {
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
 	settlementStore := store.NewInMemorySettlementStore()
+	corporateActionStore := store.NewInMemoryCorporateActionStore()
+	entitlementStore := store.NewInMemoryEntitlementStore()
 
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
@@ -88,7 +90,7 @@ func main() {
 
 	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine)
 
-	srv := server.New(instrumentStore, orderStore, settlementStore, matchingEngine, settlementEngine, producer, cfg)
+	srv := server.New(instrumentStore, orderStore, tradeStore, positionStore, settlementStore, corporateActionStore, entitlementStore, matchingEngine, settlementEngine, producer, cfg)
 
 	// Start health server on port 9089.
 	go func() {

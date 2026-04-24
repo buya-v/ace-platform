@@ -40,7 +40,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 	tradeStore := store.NewInMemoryTradeStore()
 	positionStore := store.NewInMemoryPositionStore()
 	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil)
-	srv := New(instrStore, orderStore, nil, me, nil, nil, cfg)
+	srv := New(instrStore, orderStore, tradeStore, positionStore, nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), me, nil, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()
@@ -564,7 +564,7 @@ func TestMethodNotAllowed_Instrument(t *testing.T) {
 
 func TestHealthzEndpoint(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, nil, nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), nil, nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()
@@ -586,7 +586,7 @@ func TestHealthzEndpoint(t *testing.T) {
 
 func TestReadyzEndpoint_NotReady(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, nil, nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), nil, nil, nil, cfg)
 	// NOT calling SetReady()
 
 	w := httptest.NewRecorder()
@@ -600,7 +600,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 
 func TestReadyzEndpoint_Ready(t *testing.T) {
 	cfg := DefaultConfig()
-	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), nil, nil, nil, nil, cfg)
+	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), nil, nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()

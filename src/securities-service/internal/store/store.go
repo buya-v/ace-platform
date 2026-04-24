@@ -388,15 +388,17 @@ func (s *InMemoryPositionStore) Update(position *types.Position) error {
 }
 
 // List returns all positions for a given participant.
+// If participantID is empty, all positions are returned.
 func (s *InMemoryPositionStore) List(participantID string) ([]types.Position, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	result := make([]types.Position, 0)
 	for _, pos := range s.data {
-		if pos.ParticipantID == participantID {
-			result = append(result, *pos)
+		if participantID != "" && pos.ParticipantID != participantID {
+			continue
 		}
+		result = append(result, *pos)
 	}
 	return result, nil
 }
@@ -481,4 +483,157 @@ func (s *InMemorySettlementStore) UpdateStatus(id string, status types.Settlemen
 	}
 	ob.Status = status
 	return nil
+}
+
+// --- CorporateActionStore ---
+
+// CorporateActionFilters carries optional filter parameters for listing corporate actions.
+type CorporateActionFilters struct {
+	InstrumentID string
+	ActionType   types.CorporateActionType
+}
+
+// CorporateActionStore defines the repository contract for corporate actions.
+type CorporateActionStore interface {
+	Create(ca *types.CorporateAction) error
+	Get(id string) (*types.CorporateAction, error)
+	List(filters CorporateActionFilters) ([]types.CorporateAction, error)
+	UpdateStatus(id string, status types.CorporateActionStatus) error
+}
+
+// --- EntitlementStore ---
+
+// EntitlementStore defines the repository contract for corporate action entitlements.
+type EntitlementStore interface {
+	Create(e *types.Entitlement) error
+	ListByAction(corporateActionID string) ([]types.Entitlement, error)
+	ListByParticipant(participantID string) ([]types.Entitlement, error)
+}
+
+// --- InMemoryCorporateActionStore ---
+
+// InMemoryCorporateActionStore is a thread-safe, in-memory implementation of CorporateActionStore.
+type InMemoryCorporateActionStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.CorporateAction
+}
+
+// NewInMemoryCorporateActionStore returns an empty InMemoryCorporateActionStore.
+func NewInMemoryCorporateActionStore() *InMemoryCorporateActionStore {
+	return &InMemoryCorporateActionStore{
+		data: make(map[string]*types.CorporateAction),
+	}
+}
+
+// Create stores a new corporate action.
+func (s *InMemoryCorporateActionStore) Create(ca *types.CorporateAction) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[ca.ID]; exists {
+		return errors.New("corporate action already exists: " + ca.ID)
+	}
+	copy := *ca
+	s.data[ca.ID] = &copy
+	return nil
+}
+
+// Get retrieves a corporate action by its ID.
+func (s *InMemoryCorporateActionStore) Get(id string) (*types.CorporateAction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ca, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	copy := *ca
+	return &copy, nil
+}
+
+// List returns all corporate actions that match the given filters.
+func (s *InMemoryCorporateActionStore) List(filters CorporateActionFilters) ([]types.CorporateAction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.CorporateAction, 0, len(s.data))
+	for _, ca := range s.data {
+		if filters.InstrumentID != "" && ca.InstrumentID != filters.InstrumentID {
+			continue
+		}
+		if filters.ActionType != "" && ca.ActionType != filters.ActionType {
+			continue
+		}
+		result = append(result, *ca)
+	}
+	return result, nil
+}
+
+// UpdateStatus changes the status of a corporate action.
+func (s *InMemoryCorporateActionStore) UpdateStatus(id string, status types.CorporateActionStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ca, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	ca.Status = status
+	return nil
+}
+
+// --- InMemoryEntitlementStore ---
+
+// InMemoryEntitlementStore is a thread-safe, in-memory implementation of EntitlementStore.
+type InMemoryEntitlementStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Entitlement
+}
+
+// NewInMemoryEntitlementStore returns an empty InMemoryEntitlementStore.
+func NewInMemoryEntitlementStore() *InMemoryEntitlementStore {
+	return &InMemoryEntitlementStore{
+		data: make(map[string]*types.Entitlement),
+	}
+}
+
+// Create stores a new entitlement.
+func (s *InMemoryEntitlementStore) Create(e *types.Entitlement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.data[e.ID]; exists {
+		return errors.New("entitlement already exists: " + e.ID)
+	}
+	copy := *e
+	s.data[e.ID] = &copy
+	return nil
+}
+
+// ListByAction returns all entitlements for a given corporate action.
+func (s *InMemoryEntitlementStore) ListByAction(corporateActionID string) ([]types.Entitlement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.Entitlement, 0)
+	for _, e := range s.data {
+		if e.CorporateActionID == corporateActionID {
+			result = append(result, *e)
+		}
+	}
+	return result, nil
+}
+
+// ListByParticipant returns all entitlements for a given participant.
+func (s *InMemoryEntitlementStore) ListByParticipant(participantID string) ([]types.Entitlement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.Entitlement, 0)
+	for _, e := range s.data {
+		if e.ParticipantID == participantID {
+			result = append(result, *e)
+		}
+	}
+	return result, nil
 }

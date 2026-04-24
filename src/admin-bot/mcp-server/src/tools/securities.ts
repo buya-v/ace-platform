@@ -8,6 +8,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "list_securities_instruments",
     "List all securities instruments with optional filters by asset class and trading status",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       asset_class: z
         .enum(["EQUITY", "BOND", "ETF"])
         .optional()
@@ -17,13 +18,14 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
         .optional()
         .describe("Filter by trading status (e.g. ACTIVE, HALTED)"),
     },
-    async ({ asset_class, trading_status }) => {
+    async ({ tenant_id, asset_class, trading_status }) => {
       const params = new URLSearchParams();
       if (asset_class) params.set("asset_class", asset_class);
       if (trading_status) params.set("trading_status", trading_status);
       const qs = params.toString();
       const path = `/api/v1/securities/instruments${qs ? `?${qs}` : ""}`;
-      const data = await client.request("GET", path);
+      const data = await client.request("GET", path, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
 
       const items = Array.isArray(data) ? data : (data as Record<string, unknown[]>).instruments ?? [];
       if (items.length === 0) {
@@ -54,12 +56,15 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "get_securities_instrument",
     "Get details of a specific securities instrument by ID",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       instrument_id: z.string().describe("Instrument ID (e.g., MNGL-001)"),
     },
-    async ({ instrument_id }) => {
+    async ({ tenant_id, instrument_id }) => {
       const data = await client.request(
         "GET",
         `/api/v1/securities/instruments/${instrument_id}`,
+        undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' },
       );
       const i = data as Record<string, unknown>;
       const lines = [
@@ -83,6 +88,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "create_securities_instrument",
     "Create a new securities instrument (equity, bond, or ETF)",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       ticker: z.string().describe("Ticker symbol (e.g., MNT-001)"),
       name: z.string().describe("Full name of the instrument"),
       asset_class: z
@@ -98,12 +104,13 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
         .default("MNT")
         .describe("Settlement currency (default: MNT)"),
     },
-    async ({ ticker, name, asset_class, lot_size, tick_size, currency }) => {
+    async ({ tenant_id, ticker, name, asset_class, lot_size, tick_size, currency }) => {
       const body = { ticker, name, asset_class, lot_size, tick_size, currency };
       const data = await client.request(
         "POST",
         "/api/v1/securities/instruments",
         body,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' },
       );
       const i = data as Record<string, unknown>;
       const lines = [
@@ -127,6 +134,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "submit_securities_order",
     "Submit a buy or sell order for a securities instrument",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       instrument_id: z
         .string()
         .describe("Instrument ID to trade (e.g., MNGL-001)"),
@@ -141,7 +149,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
         .optional()
         .describe("Limit price (required for LIMIT orders, omit for MARKET)"),
     },
-    async ({ instrument_id, side, order_type, quantity, price }) => {
+    async ({ tenant_id, instrument_id, side, order_type, quantity, price }) => {
       const body: Record<string, unknown> = {
         instrument_id,
         side,
@@ -153,6 +161,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
         "POST",
         "/api/v1/securities/orders",
         body,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' },
       );
       const o = data as Record<string, unknown>;
       const lines = [
@@ -176,17 +185,19 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "list_securities_positions",
     "List securities positions, optionally filtered by participant",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       participant_id: z
         .string()
         .optional()
         .describe("Filter by participant ID"),
     },
-    async ({ participant_id }) => {
+    async ({ tenant_id, participant_id }) => {
       const params = new URLSearchParams();
       if (participant_id) params.set("participant_id", participant_id);
       const qs = params.toString();
       const path = `/api/v1/securities/positions${qs ? `?${qs}` : ""}`;
-      const data = await client.request("GET", path);
+      const data = await client.request("GET", path, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
 
       const items = Array.isArray(data)
         ? data
@@ -217,6 +228,7 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "list_securities_orders",
     "List securities orders with optional filters by instrument and status",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       instrument_id: z
         .string()
         .optional()
@@ -228,13 +240,14 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
           "Filter by order status (e.g. PENDING, FILLED, CANCELLED, PARTIAL)",
         ),
     },
-    async ({ instrument_id, status }) => {
+    async ({ tenant_id, instrument_id, status }) => {
       const params = new URLSearchParams();
       if (instrument_id) params.set("instrument_id", instrument_id);
       if (status) params.set("status", status);
       const qs = params.toString();
       const path = `/api/v1/securities/orders${qs ? `?${qs}` : ""}`;
-      const data = await client.request("GET", path);
+      const data = await client.request("GET", path, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
 
       const items = Array.isArray(data)
         ? data
@@ -267,12 +280,15 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "cancel_securities_order",
     "Cancel an open securities order by its ID",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       order_id: z.string().describe("Order ID to cancel"),
     },
-    async ({ order_id }) => {
+    async ({ tenant_id, order_id }) => {
       const data = await client.request(
         "DELETE",
         `/api/v1/securities/orders/${order_id}`,
+        undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' },
       );
       const result = data as Record<string, unknown>;
       const lines = [
@@ -291,15 +307,17 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "list_settlement_obligations",
     "List settlement obligations with optional date and status filters",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       date: z.string().optional().describe("Settlement date (YYYY-MM-DD)"),
       status: z.string().optional().describe("Status filter (PENDING/AFFIRMED/NETTED/SETTLED/FAILED)"),
     },
-    async ({ date, status }) => {
+    async ({ tenant_id, date, status }) => {
       const params = new URLSearchParams();
       if (date) params.set("date", date);
       if (status) params.set("status", status);
       const qs = params.toString();
-      const result = await client.request("GET", `/api/v1/securities/settlements${qs ? "?" + qs : ""}`);
+      const result = await client.request("GET", `/api/v1/securities/settlements${qs ? "?" + qs : ""}`, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
       const items = Array.isArray(result) ? result : (result as any).data ?? [];
       if (items.length === 0) return { content: [{ type: "text" as const, text: "No settlement obligations found." }] };
       const header = "Trade ID".padEnd(38) + "Instrument".padEnd(14) + "Qty".padStart(8) + "  " + "Amount".padStart(14) + "  " + "Status".padEnd(10) + "Date";
@@ -321,10 +339,12 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
     "trigger_settlement_cycle",
     "Trigger a settlement cycle for a specific date — processes all pending obligations",
     {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
       date: z.string().describe("Settlement date to process (YYYY-MM-DD)"),
     },
-    async ({ date }) => {
-      const result = await client.request("POST", "/api/v1/securities/settlements/cycle", { date });
+    async ({ tenant_id, date }) => {
+      const result = await client.request("POST", "/api/v1/securities/settlements/cycle", { date },
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
       const r = result as any;
       const lines = [
         `Settlement Cycle — ${date}`,
@@ -336,6 +356,176 @@ export function registerSecuritiesTools(server: McpServer, client: GatewayClient
         `Failed    : ${r.failed ?? 0}`,
       ];
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    },
+  );
+
+  // ── 10. List corporate actions ───────────────────────────────────────────
+  server.tool(
+    "list_corporate_actions",
+    "List corporate actions with optional filters by instrument and action type",
+    {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
+      instrument_id: z.string().optional().describe("Filter by instrument ID"),
+      action_type: z
+        .enum(["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "MERGER"])
+        .optional()
+        .describe("Filter by corporate action type"),
+    },
+    async ({ tenant_id, instrument_id, action_type }) => {
+      const params = new URLSearchParams();
+      if (instrument_id) params.set("instrument_id", instrument_id);
+      if (action_type) params.set("action_type", action_type);
+      const qs = params.toString();
+      const path = `/api/v1/securities/corporate-actions${qs ? `?${qs}` : ""}`;
+      const data = await client.request("GET", path, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
+
+      const items = Array.isArray(data)
+        ? data
+        : (data as Record<string, unknown[]>).corporate_actions ?? [];
+      if (items.length === 0) {
+        return { content: [{ type: "text" as const, text: "No corporate actions found." }] };
+      }
+
+      const header = "ID".padEnd(36) + "  " + "Instrument".padEnd(14) + "Type".padEnd(14) + "Status".padEnd(12) + "Record Date";
+      const divider = "─".repeat(header.length);
+      const rows = (items as Record<string, unknown>[]).map((a) =>
+        String(a.id ?? "—").padEnd(36) + "  " +
+        String(a.instrument_id ?? "—").padEnd(14) +
+        String(a.action_type ?? a.type ?? "—").padEnd(14) +
+        String(a.status ?? "—").padEnd(12) +
+        String(a.record_date ?? "—")
+      );
+
+      const text = [header, divider, ...rows].join("\n");
+      return { content: [{ type: "text" as const, text }] };
+    },
+  );
+
+  // ── 11. Announce corporate action ────────────────────────────────────────
+  server.tool(
+    "announce_corporate_action",
+    "Announce a new corporate action (dividend, stock split, rights issue, or merger)",
+    {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
+      instrument_id: z.string().describe("Instrument ID the action applies to"),
+      action_type: z
+        .enum(["DIVIDEND", "STOCK_SPLIT", "RIGHTS_ISSUE", "MERGER"])
+        .describe("Type of corporate action"),
+      details: z
+        .string()
+        .describe("JSON string with action-specific details (e.g. {\"amount\":0.5,\"record_date\":\"2026-05-01\"})"),
+    },
+    async ({ tenant_id, instrument_id, action_type, details }) => {
+      let parsedDetails: unknown;
+      try {
+        parsedDetails = JSON.parse(details);
+      } catch {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Error: 'details' is not valid JSON. Received: ${details}`,
+          }],
+        };
+      }
+
+      const body = { instrument_id, action_type, details: parsedDetails };
+      const data = await client.request(
+        "POST",
+        "/api/v1/securities/corporate-actions",
+        body,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' },
+      );
+      const a = data as Record<string, unknown>;
+      const lines = [
+        `Corporate action announced.`,
+        ``,
+        `ID          : ${a.id ?? "—"}`,
+        `Instrument  : ${a.instrument_id ?? instrument_id}`,
+        `Type        : ${a.action_type ?? action_type}`,
+        `Status      : ${a.status ?? "ANNOUNCED"}`,
+        `Record Date : ${(a.details as Record<string, unknown>)?.record_date ?? (parsedDetails as Record<string, unknown>)?.record_date ?? "—"}`,
+      ];
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    },
+  );
+
+  // ── 12. Generate FRC report ──────────────────────────────────────────────
+  server.tool(
+    "generate_frc_report",
+    "Generate a Financial Regulatory Commission (FRC) report for a given date and report type",
+    {
+      tenant_id: z.string().optional().describe("Tenant ID (default: ace-commodities)"),
+      report_type: z
+        .enum(["DAILY_SUMMARY", "LARGE_TRADER", "SUSPICIOUS_ACTIVITY"])
+        .describe("FRC report type: DAILY_SUMMARY, LARGE_TRADER, or SUSPICIOUS_ACTIVITY"),
+      date: z.string().describe("Report date (YYYY-MM-DD)"),
+    },
+    async ({ tenant_id, report_type, date }) => {
+      const params = new URLSearchParams({ report_type, date });
+      const path = `/api/v1/securities/reports/frc?${params.toString()}`;
+      const data = await client.request("GET", path, undefined,
+        { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' });
+
+      const r = data as Record<string, unknown>;
+
+      // Format as readable text sections
+      const sections: string[] = [
+        `FRC Report — ${report_type}`,
+        `Date    : ${date}`,
+        `Tenant  : ${tenant_id ?? 'ace-commodities'}`,
+        `─────────────────────────────────────────────`,
+      ];
+
+      if (report_type === "DAILY_SUMMARY") {
+        sections.push(
+          `Total Trades    : ${r.total_trades ?? r.trade_count ?? "—"}`,
+          `Total Volume    : ${r.total_volume ?? "—"}`,
+          `Total Turnover  : ${r.total_turnover ?? "—"}`,
+          `Active Instruments : ${r.active_instruments ?? "—"}`,
+          `Market Status   : ${r.market_status ?? "—"}`,
+        );
+      } else if (report_type === "LARGE_TRADER") {
+        const traders = Array.isArray(r.traders) ? r.traders : Array.isArray(r) ? r : [];
+        if (traders.length === 0) {
+          sections.push("No large trader activity on this date.");
+        } else {
+          sections.push("PARTICIPANT".padEnd(36) + "  " + "INSTRUMENT".padEnd(14) + "  " + "VOLUME".padStart(16) + "  THRESHOLD");
+          sections.push("─".repeat(80));
+          for (const t of traders as Record<string, unknown>[]) {
+            sections.push(
+              String(t.participant_id ?? "—").padEnd(36) + "  " +
+              String(t.instrument_id ?? "—").padEnd(14) + "  " +
+              String(t.volume ?? "—").padStart(16) + "  " +
+              String(t.threshold ?? "—"),
+            );
+          }
+        }
+      } else if (report_type === "SUSPICIOUS_ACTIVITY") {
+        const alerts = Array.isArray(r.alerts) ? r.alerts : Array.isArray(r) ? r : [];
+        if (alerts.length === 0) {
+          sections.push("No suspicious activity detected on this date.");
+        } else {
+          sections.push(`Alert Count : ${alerts.length}`);
+          sections.push("");
+          for (const alert of alerts as Record<string, unknown>[]) {
+            sections.push(`Alert ID    : ${alert.id ?? "—"}`);
+            sections.push(`Type        : ${alert.alert_type ?? alert.type ?? "—"}`);
+            sections.push(`Participant : ${alert.participant_id ?? "—"}`);
+            sections.push(`Instrument  : ${alert.instrument_id ?? "—"}`);
+            sections.push(`Severity    : ${alert.severity ?? "—"}`);
+            sections.push(`Description : ${alert.description ?? "—"}`);
+            sections.push("─".repeat(50));
+          }
+        }
+      } else {
+        // Fallback: dump all keys
+        for (const [key, value] of Object.entries(r)) {
+          sections.push(`${key.padEnd(20)}: ${JSON.stringify(value)}`);
+        }
+      }
+
+      return { content: [{ type: "text" as const, text: sections.join("\n") }] };
     },
   );
 }

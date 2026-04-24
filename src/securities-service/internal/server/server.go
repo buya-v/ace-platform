@@ -37,14 +37,18 @@ func DefaultConfig() Config {
 
 // Server is the HTTP server for the securities-service.
 type Server struct {
-	cfg              Config
-	instrumentStore  store.InstrumentStore
-	orderStore       store.OrderStore
-	settlementStore  store.SettlementStore
-	engine           *engine.MatchingEngine
-	settlementEngine *settlement.SettlementEngine
-	producer         kafka.Producer
-	ready            atomic.Int32
+	cfg                  Config
+	instrumentStore      store.InstrumentStore
+	orderStore           store.OrderStore
+	tradeStore           store.TradeStore
+	positionStore        store.PositionStore
+	settlementStore      store.SettlementStore
+	corporateActionStore store.CorporateActionStore
+	entitlementStore     store.EntitlementStore
+	engine               *engine.MatchingEngine
+	settlementEngine     *settlement.SettlementEngine
+	producer             kafka.Producer
+	ready                atomic.Int32
 }
 
 // New creates a new Server with the given stores, matching engine, and configuration.
@@ -53,20 +57,28 @@ type Server struct {
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
+	tradeStore store.TradeStore,
+	positionStore store.PositionStore,
 	settlementStore store.SettlementStore,
+	corporateActionStore store.CorporateActionStore,
+	entitlementStore store.EntitlementStore,
 	matchingEngine *engine.MatchingEngine,
 	settlementEngine *settlement.SettlementEngine,
 	producer kafka.Producer,
 	cfg Config,
 ) *Server {
 	return &Server{
-		cfg:              cfg,
-		instrumentStore:  instrumentStore,
-		orderStore:       orderStore,
-		settlementStore:  settlementStore,
-		engine:           matchingEngine,
-		settlementEngine: settlementEngine,
-		producer:         producer,
+		cfg:                  cfg,
+		instrumentStore:      instrumentStore,
+		orderStore:           orderStore,
+		tradeStore:           tradeStore,
+		positionStore:        positionStore,
+		settlementStore:      settlementStore,
+		corporateActionStore: corporateActionStore,
+		entitlementStore:     entitlementStore,
+		engine:               matchingEngine,
+		settlementEngine:     settlementEngine,
+		producer:             producer,
 	}
 }
 
@@ -120,6 +132,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Settlements
 	mux.HandleFunc("/api/v1/securities/settlements", s.handleSettlements)
 	mux.HandleFunc("/api/v1/securities/settlements/cycle", s.handleSettlementCycle)
+
+	// Corporate Actions
+	mux.HandleFunc("/api/v1/securities/corporate-actions", s.handleCorporateActions)
+	mux.HandleFunc("/api/v1/securities/corporate-actions/", s.handleCorporateAction)
+
+	// FRC Reports
+	mux.HandleFunc("/api/v1/securities/reports/frc", s.handleFRCReport)
 }
 
 // --- Health endpoints ---

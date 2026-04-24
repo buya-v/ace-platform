@@ -185,6 +185,72 @@ type SettlementResult struct {
 	Failed    int    `json:"failed"`
 }
 
+// CorporateActionType represents the type of a corporate action event.
+type CorporateActionType string
+
+const (
+	CA_DIVIDEND    CorporateActionType = "CA_DIVIDEND"
+	CA_STOCK_SPLIT CorporateActionType = "CA_STOCK_SPLIT"
+	CA_RIGHTS_ISSUE CorporateActionType = "CA_RIGHTS_ISSUE"
+	CA_MERGER      CorporateActionType = "CA_MERGER"
+)
+
+// CorporateActionStatus represents the lifecycle state of a corporate action.
+type CorporateActionStatus string
+
+const (
+	CAStatusAnnounced  CorporateActionStatus = "ANNOUNCED"
+	CAStatusProcessing CorporateActionStatus = "PROCESSING"
+	CAStatusCompleted  CorporateActionStatus = "COMPLETED"
+	CAStatusCancelled  CorporateActionStatus = "CANCELLED"
+)
+
+// CorporateAction represents a declared corporate action for an instrument.
+type CorporateAction struct {
+	ID               string                 `json:"id"`
+	InstrumentID     string                 `json:"instrument_id"`
+	ActionType       CorporateActionType    `json:"action_type"`
+	AnnouncementDate string                 `json:"announcement_date"`
+	ExDate           string                 `json:"ex_date"`
+	RecordDate       string                 `json:"record_date"`
+	PaymentDate      string                 `json:"payment_date"`
+	Details          map[string]interface{} `json:"details"`
+	Status           CorporateActionStatus  `json:"status"`
+	TenantID         string                 `json:"tenant_id"`
+	CreatedAt        string                 `json:"created_at"`
+	UpdatedAt        string                 `json:"updated_at"`
+}
+
+// EntitlementStatus represents the lifecycle state of an entitlement.
+type EntitlementStatus string
+
+const (
+	EntitlementStatusPending EntitlementStatus = "PENDING"
+	EntitlementStatusPaid    EntitlementStatus = "PAID"
+)
+
+// Entitlement represents a participant's entitlement from a corporate action.
+type Entitlement struct {
+	ID                string            `json:"id"`
+	CorporateActionID string            `json:"corporate_action_id"`
+	ParticipantID     string            `json:"participant_id"`
+	InstrumentID      string            `json:"instrument_id"`
+	Quantity          int               `json:"quantity"`
+	EntitlementValue  float64           `json:"entitlement_value"`
+	Status            EntitlementStatus `json:"status"`
+	CreatedAt         string            `json:"created_at"`
+}
+
+// FRCReport represents a regulatory report submitted to the FRC.
+type FRCReport struct {
+	ID          string                 `json:"id"`
+	TenantID    string                 `json:"tenant_id"`
+	ReportType  string                 `json:"report_type"`
+	ReportDate  string                 `json:"report_date"`
+	Data        map[string]interface{} `json:"data"`
+	GeneratedAt string                 `json:"generated_at"`
+}
+
 // ErrorDetail carries a machine-readable code and human-readable message.
 type ErrorDetail struct {
 	Code    string   `json:"code"`

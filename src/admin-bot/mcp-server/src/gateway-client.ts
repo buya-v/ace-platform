@@ -59,11 +59,14 @@ export class GatewayClient {
   /**
    * Send an authenticated request to the gateway.
    * Auto-logs-in on the first call if credentials were provided via env.
+   * Optional `extraHeaders` are merged into the request headers after
+   * Authorization is set, allowing callers to inject tenant context etc.
    */
   async request(
     method: string,
     path: string,
     body?: unknown,
+    extraHeaders?: Record<string, string>,
   ): Promise<unknown> {
     // Auto-login once if we have credentials but no token yet
     if (!this.token && this.email && this.password) {
@@ -76,6 +79,9 @@ export class GatewayClient {
     };
     if (this.token) {
       headers["Authorization"] = `Bearer ${this.token}`;
+    }
+    if (extraHeaders) {
+      Object.assign(headers, extraHeaders);
     }
 
     const init: RequestInit = { method, headers };
