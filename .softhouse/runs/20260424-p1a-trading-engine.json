@@ -1,0 +1,79 @@
+{
+  "run_id": "20260424-p1a-trading-engine",
+  "feature": "MillenniumIT P1a \u2014 Core Trading Engine",
+  "requirement": "Market/Segment hierarchy, circuit breakers, self-trade prevention, mass cancel",
+  "status": "complete",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Market/Segment hierarchy + circuit breakers types + stores",
+      "description": "Add Market/Segment hierarchy and circuit breaker types to the securities-service.\n\nRead src/securities-service/internal/types/types.go for existing types.\nRead src/securities-service/internal/store/store.go for store patterns.\nRead docs/millenniumit-gap-analysis.md for requirements context.\n\nPart A \u2014 Market/Segment types (add to types.go):\n- Market struct: ID, Name, Status (ACTIVE/SUSPENDED/CLOSED), Timezone, CreatedAt, UpdatedAt \u2014 json tags\n- Segment struct: ID, MarketID, Name, Status (ACTIVE/SUSPENDED), CreatedAt, UpdatedAt \u2014 json tags\n- Update Instrument to add SegmentID string field (optional, empty = unassigned)\n\nPart B \u2014 Circuit breaker types:\n- CircuitBreaker struct: InstrumentID, StaticUpperPct float64, StaticLowerPct float64, DynamicUpperPct float64, DynamicLowerPct float64, ReferencePrice float64, LastTradedPrice float64, Status (ACTIVE/TRIGGERED/COOLDOWN), CooldownMinutes int, TriggeredAt string \u2014 json tags\n- CircuitBreakerEvent struct: InstrumentID, Type (STATIC_UPPER/STATIC_LOWER/DYNAMIC_UPPER/DYNAMIC_LOWER), TriggerPrice float64, ReferencePrice float64, Timestamp \u2014 json tags\n\nPart C \u2014 Self-trade prevention types:\n- STPMode: STP_CANCEL_NEWEST, STP_CANCEL_OLDEST, STP_CANCEL_BOTH\n- Add STPMode field to Instrument struct (default STP_CANCEL_NEWEST)\n\nPart D \u2014 Stores (add to store.go):\n- MarketStore interface: Create, Get, List, Update, UpdateStatus\n- SegmentStore interface: Create, Get, List(marketID), Update\n- CircuitBreakerStore interface: Get(instrumentID), Set, List, UpdateStatus\n- InMemoryMarketStore, InMemorySegmentStore, InMemoryCircuitBreakerStore\n- Seed: one default market 'MSE' (ACTIVE, Asia/Ulaanbaatar), one segment 'EQUITY' (market: MSE)\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/types/types.go",
+        "src/securities-service/internal/store/store.go"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T2",
+      "title": "Circuit breaker engine + self-trade prevention in matching",
+      "description": "Implement circuit breaker price validation and self-trade prevention in the matching engine.\n\nRead .softhouse/handoff/T1.md for types.\nRead src/securities-service/internal/engine/engine.go for MatchOrder logic.\n\nPart A \u2014 Circuit breaker validation (new file: src/securities-service/internal/engine/circuit_breaker.go):\n- CircuitBreakerEngine struct with circuitBreakerStore\n- ValidatePrice(instrumentID string, price float64) (bool, *CircuitBreakerEvent, error):\n  1. Get circuit breaker config for instrument\n  2. If no config, allow (no breaker set)\n  3. Check static bands: if price > referencePrice * (1 + staticUpperPct/100) \u2192 STATIC_UPPER breach\n  4. Check static bands: if price < referencePrice * (1 - staticLowerPct/100) \u2192 STATIC_LOWER breach\n  5. Check dynamic bands: same logic against lastTradedPrice with dynamicPcts\n  6. If breach: return false + CircuitBreakerEvent\n  7. If no breach: return true\n- OnTrade(instrumentID string, price float64) \u2014 update lastTradedPrice in circuit breaker store\n\nPart B \u2014 Wire into MatchOrder (engine.go):\n- Before matching: validate incoming order price against circuit breaker\n- If breaker triggered: reject order with 422 'circuit breaker triggered', auto-halt instrument\n- After each trade: call OnTrade to update lastTradedPrice\n\nPart C \u2014 Self-trade prevention (add to engine.go MatchOrder):\n- Before creating a trade, check if buyer participant_id == seller participant_id\n- Get STP mode from instrument\n- STP_CANCEL_NEWEST: cancel the incoming order, keep resting\n- STP_CANCEL_OLDEST: cancel the resting order, keep incoming\n- STP_CANCEL_BOTH: cancel both\n- Log STP event, continue matching with next resting order\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/engine/circuit_breaker.go",
+        "src/securities-service/internal/engine/engine.go"
+      ],
+      "dependencies": [
+        "T1"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T3",
+      "title": "HTTP handlers \u2014 markets, segments, circuit breakers, mass cancel",
+      "description": "Add HTTP endpoints for markets, segments, circuit breakers, and mass cancel.\n\nRead .softhouse/handoff/T1.md and T2.md for types and engine.\nRead src/securities-service/internal/server/server.go for route registration.\n\nPart A \u2014 Market/Segment handlers (new: src/securities-service/internal/server/handlers_market.go):\n- GET /api/v1/securities/markets \u2014 list markets\n- POST /api/v1/securities/markets \u2014 create market\n- GET /api/v1/securities/markets/{id} \u2014 get market\n- PUT /api/v1/securities/markets/{id}/status \u2014 update status\n- GET /api/v1/securities/segments \u2014 list segments (optional ?market_id= filter)\n- POST /api/v1/securities/segments \u2014 create segment\n\nPart B \u2014 Circuit breaker handlers (new: src/securities-service/internal/server/handlers_circuit_breaker.go):\n- GET /api/v1/securities/circuit-breakers \u2014 list all circuit breaker configs\n- GET /api/v1/securities/circuit-breakers/{instrument_id} \u2014 get for instrument\n- PUT /api/v1/securities/circuit-breakers/{instrument_id} \u2014 set/update config (static_upper_pct, static_lower_pct, dynamic_upper_pct, dynamic_lower_pct, reference_price, cooldown_minutes)\n- DELETE /api/v1/securities/circuit-breakers/{instrument_id} \u2014 remove config\n\nPart C \u2014 Mass cancel handler (add to handlers_order.go):\n- POST /api/v1/securities/orders/mass-cancel \u2014 body: {instrument_id?, participant_id?, side?}\n  1. List all PENDING orders matching filters\n  2. Cancel each one\n  3. Return {cancelled_count: N, orders: [...]}\n\nPart D \u2014 Wire all routes in server.go + update main.go with new stores.\n\nPart E \u2014 Add gateway reverse proxy routes in src/gateway/cmd/gateway/main.go for:\n- /api/v1/securities/markets, /markets/{id}, /markets/{id}/status\n- /api/v1/securities/segments\n- /api/v1/securities/circuit-breakers, /circuit-breakers/{id}\n- /api/v1/securities/orders/mass-cancel\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/server/handlers_market.go",
+        "src/securities-service/internal/server/handlers_circuit_breaker.go",
+        "src/securities-service/internal/server/handlers_order.go",
+        "src/securities-service/internal/server/server.go",
+        "src/securities-service/cmd/securities-service/main.go",
+        "src/gateway/cmd/gateway/main.go"
+      ],
+      "dependencies": [
+        "T2"
+      ],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T4",
+      "title": "Unit tests for all P1a features",
+      "description": "Write unit tests for market hierarchy, circuit breakers, STP, and mass cancel.\n\nRead .softhouse/handoff/T1.md, T2.md, T3.md.\n\nTests:\n\n1. src/securities-service/internal/engine/circuit_breaker_test.go:\n- TestCircuitBreaker_PriceWithinBands \u2014 allow\n- TestCircuitBreaker_StaticUpperBreach \u2014 reject\n- TestCircuitBreaker_StaticLowerBreach \u2014 reject\n- TestCircuitBreaker_DynamicBreach \u2014 reject based on last traded price\n- TestCircuitBreaker_NoBreakerSet \u2014 allow (no config)\n- TestCircuitBreaker_OnTrade \u2014 lastTradedPrice updated\n\n2. engine_test.go additions:\n- TestSTP_CancelNewest \u2014 same participant, incoming cancelled\n- TestSTP_CancelOldest \u2014 same participant, resting cancelled\n- TestSTP_CancelBoth \u2014 both cancelled\n- TestSTP_DifferentParticipants \u2014 no STP, trade executes\n\n3. store_test.go additions:\n- TestMarketStore_CRUD\n- TestSegmentStore_CRUD\n- TestCircuitBreakerStore_SetGet\n\n4. handlers_market_test.go:\n- TestCreateMarket, TestListMarkets\n- TestCreateSegment, TestListSegments\n\n5. handlers_circuit_breaker_test.go:\n- TestSetCircuitBreaker, TestGetCircuitBreaker\n\nTarget: 70%+ on new code.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/engine/circuit_breaker_test.go",
+        "src/securities-service/internal/engine/engine_test.go",
+        "src/securities-service/internal/store/store_test.go"
+      ],
+      "dependencies": [
+        "T3"
+      ],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
