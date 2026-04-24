@@ -50,6 +50,8 @@ type Server struct {
 	circuitBreakerStore  store.CircuitBreakerStore
 	firmStore            store.FirmStore
 	participantStore     store.ParticipantStore
+	tickTableStore       store.TickTableStore
+	throttleStore        store.ThrottleStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -77,6 +79,8 @@ func New(
 	circuitBreakerStore store.CircuitBreakerStore,
 	firmStore store.FirmStore,
 	participantStore store.ParticipantStore,
+	tickTableStore store.TickTableStore,
+	throttleStore store.ThrottleStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -98,6 +102,8 @@ func New(
 		circuitBreakerStore:  circuitBreakerStore,
 		firmStore:            firmStore,
 		participantStore:     participantStore,
+		tickTableStore:       tickTableStore,
+		throttleStore:        throttleStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,

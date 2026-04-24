@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -62,6 +63,16 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
 		return
+	}
+
+	// Part C: Order throttle — check rate limit before any validation.
+	if s.throttleStore != nil && order.ParticipantID != "" {
+		allowed, _ := s.throttleStore.CheckAndIncrement(order.ParticipantID, 100)
+		if !allowed {
+			s.writeError(w, http.StatusTooManyRequests, "THROTTLED",
+				"rate limit exceeded: max 100 orders/sec", nil)
+			return
+		}
 	}
 
 	// (a) instrument_id is required and must exist.
@@ -129,7 +140,22 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 				"price must be greater than 0 for LIMIT and STOP_LIMIT orders", nil)
 			return
 		}
-		if inst.TickSize > 0 {
+
+		// Part A: Try tiered tick table first, fall back to instrument default.
+		tickValidated := false
+		if s.tickTableStore != nil {
+			tickTable, ttErr := s.tickTableStore.Get(order.InstrumentID)
+			if ttErr == nil && tickTable != nil {
+				if err := engine.ValidateTickSize(order.Price, tickTable, inst.TickSize); err != nil {
+					s.writeError(w, http.StatusUnprocessableEntity, "INVALID_TICK_SIZE", err.Error(), nil)
+					return
+				}
+				tickValidated = true
+			}
+			// If ErrNotFound or other error, fall through to default tick size check.
+		}
+
+		if !tickValidated && inst.TickSize > 0 {
 			remainder := math.Remainder(order.Price, inst.TickSize)
 			if math.Abs(remainder) > 1e-9 {
 				s.writeError(w, http.StatusUnprocessableEntity, "INVALID_TICK_SIZE",

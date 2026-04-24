@@ -144,6 +144,26 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 	var trades []types.SecurityTrade
 	now := time.Now().UTC()
 
+	// 4b. FOK pre-check: calculate total available crossing volume. If insufficient, reject.
+	if order.TimeInForce == types.TIF_FOK {
+		availableVol := 0
+		for i := range candidates {
+			c := &candidates[i]
+			if !pricesCross(order, c) {
+				break
+			}
+			cRemaining := c.Quantity - c.FilledQuantity
+			isIceberg := c.VisibleQuantity > 0 || c.HiddenQuantity > 0
+			if isIceberg {
+				cRemaining = c.VisibleQuantity
+			}
+			availableVol += cRemaining
+		}
+		if availableVol < remainingQty {
+			return nil, fmt.Errorf("FOK order cannot be fully filled (available: %d, requested: %d)", availableVol, remainingQty)
+		}
+	}
+
 	// 5. Match against each resting order.
 	stpCancelIncoming := false
 	for i := range candidates {
@@ -338,7 +358,23 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 		}
 	}
 
-	// 9. Create settlement obligations for all trades produced.
+	// 9. IOC enforcement: cancel any remaining quantity after matching.
+	if order.TimeInForce == types.TIF_IOC {
+		iocRemaining := order.Quantity - order.FilledQuantity
+		if iocRemaining > 0 {
+			if order.FilledQuantity == 0 {
+				order.Status = types.OrderStatusCancelled
+			} else {
+				order.Status = types.OrderStatusPartiallyFilled
+			}
+			order.UpdatedAt = now.Format(time.RFC3339)
+			if err := e.orderStore.Update(order); err != nil {
+				return trades, fmt.Errorf("failed to cancel IOC remainder: %w", err)
+			}
+		}
+	}
+
+	// 10. Create settlement obligations for all trades produced.
 	if e.settlementEngine != nil && len(trades) > 0 {
 		if err := e.settlementEngine.CreateObligationsFromTrades(trades); err != nil {
 			// Non-fatal: log but don't fail matching.
@@ -346,7 +382,7 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 		}
 	}
 
-	// 10. If incoming has remaining quantity, it stays as PENDING (already stored).
+	// 11. If incoming has remaining quantity (GTC/DAY), it stays as PENDING (already stored).
 	return trades, nil
 }
 

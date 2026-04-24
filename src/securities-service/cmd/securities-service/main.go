@@ -81,6 +81,10 @@ func main() {
 	firmStore := store.NewInMemoryFirmStore()
 	participantStore := store.NewInMemoryParticipantStore()
 
+	// Tick table and throttle stores.
+	tickTableStore := store.NewInMemoryTickTableStore()
+	throttleStore := store.NewInMemoryThrottleStore()
+
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
@@ -123,6 +127,8 @@ func main() {
 		circuitBreakerStore,
 		firmStore,
 		participantStore,
+		tickTableStore,
+		throttleStore,
 		dayManager,
 		matchingEngine,
 		sessionManager,
