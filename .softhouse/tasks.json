@@ -1,7 +1,44 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260424-p2b-exchange-ops",
+  "feature": "MillenniumIT P2b — Exchange Operations",
+  "requirement": "Announcements, audit trail, force logout + suspension with order cascade",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Announcements + audit trail + force-logout types and stores",
+      "description": "Add types and stores for announcements, audit trail, and force-logout.\n\nAPPEND to src/securities-service/internal/types/types.go:\n\n- Announcement struct: ID, Title, Body, Audience string (PUBLIC/CUSTOM), AudienceFirmIDs []string, SenderID, TenantID, CreatedAt — json tags\n- AuditEntry struct: ID, EntityType string (ORDER/TRADE/INSTRUMENT/PARTICIPANT/MARKET/CIRCUIT_BREAKER), EntityID, Action string (CREATE/UPDATE/DELETE/BUST/CORRECT/SUSPEND/HALT), ActorID, Details map[string]interface{}, TenantID, Timestamp — json tags\n\nAPPEND to src/securities-service/internal/store/store.go:\n- AnnouncementStore interface: Create(*Announcement) error, List(tenantID string) ([]Announcement, error)\n- AuditStore interface: Log(*AuditEntry) error, List(filters AuditFilters) ([]AuditEntry, error)\n- AuditFilters struct: EntityType, EntityID, ActorID, StartDate, EndDate string\n- InMemoryAnnouncementStore, InMemoryAuditStore\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Handlers: announcements, audit trail, force-logout/suspend + gateway",
+      "description": "Add HTTP endpoints and wire audit logging into existing operations.\n\nRead .softhouse/handoff/T1.md for types.\n\nPart A — Announcement handlers (new: handlers_announcement.go):\n- POST /api/v1/securities/announcements — create (validate: title, body required, audience PUBLIC or CUSTOM)\n- GET /api/v1/securities/announcements — list (filtered by tenant)\n\nPart B — Audit trail handler (new: handlers_audit.go):\n- GET /api/v1/securities/audit-trail?entity_type=ORDER&actor_id=ADMIN&start_date=2026-04-24 — list with filters\n\nPart C — Force logout + suspend (add to handlers_participant.go):\n- POST /api/v1/securities/participants/{id}/force-logout — set participant status to SUSPENDED, mass cancel all PENDING orders for that participant (reuse mass cancel logic)\n- POST /api/v1/securities/participants/{id}/suspend — same as force-logout but also logs audit entry\n- POST /api/v1/securities/participants/{id}/reinstate — set back to ACTIVE\n\nPart D — Wire audit logging into key operations:\n- In handleSubmitOrder: log AuditEntry(ORDER, CREATE) after successful order\n- In handleBustTrade: log AuditEntry(TRADE, BUST)\n- In handleUpdateInstrumentStatus: log AuditEntry(INSTRUMENT, HALT/UPDATE)\n- In force-logout/suspend: log AuditEntry(PARTICIPANT, SUSPEND)\n- Audit logging is best-effort (don't fail the operation if audit write fails)\n\nPart E — Update server.go + main.go with new stores. Add gateway routes.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/handlers_announcement.go", "src/securities-service/internal/server/handlers_audit.go", "src/securities-service/internal/server/handlers_participant.go", "src/securities-service/internal/server/handlers_order.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Unit tests for P2b features",
+      "description": "Write tests for announcements, audit trail, force-logout, and suspension cascade.\n\nTests:\n\n1. store_test.go additions:\n- TestAnnouncementStore_Create_List — create public and custom announcements, list filtered\n- TestAuditStore_Log_List — log multiple entries, list with entity_type filter, actor_id filter, date filter\n- TestAuditStore_AppendOnly — verify entries are never modified\n\n2. handlers tests:\n- TestCreateAnnouncement_Success — POST public announcement → 201\n- TestCreateAnnouncement_MissingTitle → 400\n- TestListAnnouncements — create 2, list → 2 returned\n- TestAuditTrail_ListWithFilters — log entries, GET with entity_type=ORDER → filtered\n- TestForceLogout — submit 3 orders, force-logout participant → 3 orders cancelled, participant SUSPENDED\n- TestSuspend_CascadesOrders — same as force-logout but verifies audit entry created\n- TestReinstate — suspend then reinstate → ACTIVE\n\nTarget: 70%+ on new handler code.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/server/"],
+      "dependencies": ["T2"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
