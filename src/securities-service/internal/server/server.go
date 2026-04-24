@@ -60,6 +60,9 @@ type Server struct {
 	surveillanceStore    store.SurveillanceStore
 	instrumentGroupStore store.InstrumentGroupStore
 	offBookTradeStore    store.OffBookTradeStore
+	locateStore          store.LocateStore
+	rfqStore             store.RFQStore
+	giveUpStore          store.GiveUpStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -79,6 +82,7 @@ type Server struct {
 // pendingChangeStore and referencePriceStore may be nil; if so, those endpoints return 503.
 // surveillanceStore, instrumentGroupStore, and offBookTradeStore may be nil; if so, those
 // endpoints return 503.
+// locateStore, rfqStore, and giveUpStore may be nil; if so, those P4a endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -102,6 +106,9 @@ func New(
 	surveillanceStore store.SurveillanceStore,
 	instrumentGroupStore store.InstrumentGroupStore,
 	offBookTradeStore store.OffBookTradeStore,
+	locateStore store.LocateStore,
+	rfqStore store.RFQStore,
+	giveUpStore store.GiveUpStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -133,6 +140,9 @@ func New(
 		surveillanceStore:    surveillanceStore,
 		instrumentGroupStore: instrumentGroupStore,
 		offBookTradeStore:    offBookTradeStore,
+		locateStore:          locateStore,
+		rfqStore:             rfqStore,
+		giveUpStore:          giveUpStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -274,6 +284,19 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Bulk upload (P3b Part D)
 	mux.HandleFunc("/api/v1/securities/bulk/instruments", s.handleBulkInstruments)
+
+	// P4a — Locates (short-sell locate requests)
+	mux.HandleFunc("/api/v1/securities/locates", s.handleLocates)
+	mux.HandleFunc("/api/v1/securities/locates/", s.handleLocateAction)
+
+	// P4a — RFQ (requests for quote)
+	mux.HandleFunc("/api/v1/securities/rfq", s.handleRFQs)
+	mux.HandleFunc("/api/v1/securities/rfq/", s.handleRFQAction)
+
+	// P4a — Give-ups (trade give-up instructions)
+	// Note: give-up initiation is under /trades/{id}/give-up, wired via the handleTrade wildcard.
+	mux.HandleFunc("/api/v1/securities/give-ups", s.handleGiveUps)
+	mux.HandleFunc("/api/v1/securities/give-ups/", s.handleGiveUpAction)
 
 }
 

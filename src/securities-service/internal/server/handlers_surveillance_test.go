@@ -44,6 +44,9 @@ func newSurveillanceTestServer(t *testing.T) (*httptest.Server, *store.InMemoryS
 		survStore,
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // locateStore
+		nil, // rfqStore
+		nil, // giveUpStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -308,6 +311,7 @@ func TestSurveillanceEndpoints_NotConfigured(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		nil, // surveillanceStore = nil
 		nil, nil,
+		nil, nil, nil, // locateStore, rfqStore, giveUpStore
 		nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()

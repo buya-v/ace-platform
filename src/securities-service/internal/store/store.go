@@ -1717,3 +1717,292 @@ func (s *InMemoryOffBookTradeStore) UpdateStatus(id string, status types.OffBook
 	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return nil
 }
+
+// ── P4a — LocateStore ─────────────────────────────────────────────────────────
+
+// LocateStore defines the repository contract for short-sell locate requests.
+type LocateStore interface {
+	Create(req *types.LocateRequest) error
+	Get(id string) (*types.LocateRequest, error)
+	List(firmID string) ([]types.LocateRequest, error)
+	Approve(id, lenderFirmID string) error
+	Use(id string) error
+}
+
+// InMemoryLocateStore is a thread-safe, in-memory implementation of LocateStore.
+type InMemoryLocateStore struct {
+	mu     sync.RWMutex
+	data   map[string]*types.LocateRequest
+	nextID int
+}
+
+// NewInMemoryLocateStore returns an empty InMemoryLocateStore.
+func NewInMemoryLocateStore() *InMemoryLocateStore {
+	return &InMemoryLocateStore{data: make(map[string]*types.LocateRequest), nextID: 1}
+}
+
+// Create stores a new locate request, assigning a sequential ID.
+func (s *InMemoryLocateStore) Create(req *types.LocateRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req.ID = s.nextID
+	s.nextID++
+	req.Status = "PENDING"
+	req.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	cp := *req
+	key := fmt.Sprintf("%d", req.ID)
+	s.data[key] = &cp
+	return nil
+}
+
+// Get retrieves a locate request by string ID.
+func (s *InMemoryLocateStore) Get(id string) (*types.LocateRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *r
+	return &cp, nil
+}
+
+// List returns all locate requests where the borrower or lender matches firmID.
+// If firmID is empty, all records are returned.
+func (s *InMemoryLocateStore) List(firmID string) ([]types.LocateRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.LocateRequest, 0, len(s.data))
+	for _, r := range s.data {
+		if firmID != "" && fmt.Sprintf("%d", r.BorrowerFirmID) != firmID && fmt.Sprintf("%d", r.LenderFirmID) != firmID {
+			continue
+		}
+		out = append(out, *r)
+	}
+	return out, nil
+}
+
+// Approve transitions a PENDING locate to APPROVED, setting the lender firm.
+func (s *InMemoryLocateStore) Approve(id, lenderFirmID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "PENDING" {
+		return fmt.Errorf("locate %s is not in PENDING status", id)
+	}
+	r.Status = "APPROVED"
+	return nil
+}
+
+// Use transitions an APPROVED locate to USED (consumed by a short-sell order).
+func (s *InMemoryLocateStore) Use(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "APPROVED" {
+		return fmt.Errorf("locate %s is not in APPROVED status", id)
+	}
+	r.Status = "USED"
+	return nil
+}
+
+// ── P4a — RFQStore ────────────────────────────────────────────────────────────
+
+// RFQStore defines the repository contract for requests for quote.
+type RFQStore interface {
+	Create(rfq *types.RequestForQuote) error
+	Get(id string) (*types.RequestForQuote, error)
+	List(instrumentID, status string) ([]types.RequestForQuote, error)
+	Respond(id, quoteID string) error
+	Cancel(id string) error
+}
+
+// InMemoryRFQStore is a thread-safe, in-memory implementation of RFQStore.
+type InMemoryRFQStore struct {
+	mu     sync.RWMutex
+	data   map[string]*types.RequestForQuote
+	nextID int
+}
+
+// NewInMemoryRFQStore returns an empty InMemoryRFQStore.
+func NewInMemoryRFQStore() *InMemoryRFQStore {
+	return &InMemoryRFQStore{data: make(map[string]*types.RequestForQuote), nextID: 1}
+}
+
+// Create stores a new RFQ, assigning a sequential ID.
+func (s *InMemoryRFQStore) Create(rfq *types.RequestForQuote) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rfq.ID = s.nextID
+	s.nextID++
+	rfq.Status = "OPEN"
+	rfq.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	cp := *rfq
+	key := fmt.Sprintf("%d", rfq.ID)
+	s.data[key] = &cp
+	return nil
+}
+
+// Get retrieves an RFQ by string ID.
+func (s *InMemoryRFQStore) Get(id string) (*types.RequestForQuote, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *r
+	return &cp, nil
+}
+
+// List returns RFQs filtered by instrumentID and/or status. Empty string = no filter.
+func (s *InMemoryRFQStore) List(instrumentID, status string) ([]types.RequestForQuote, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.RequestForQuote, 0, len(s.data))
+	for _, r := range s.data {
+		if instrumentID != "" && fmt.Sprintf("%d", r.InstrumentID) != instrumentID {
+			continue
+		}
+		if status != "" && r.Status != status {
+			continue
+		}
+		out = append(out, *r)
+	}
+	return out, nil
+}
+
+// Respond transitions an OPEN RFQ to RESPONDED, recording the response quote ID.
+func (s *InMemoryRFQStore) Respond(id, quoteID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "OPEN" {
+		return fmt.Errorf("RFQ %s is not in OPEN status", id)
+	}
+	r.Status = "RESPONDED"
+	// quoteID stored as ResponseQuoteID (int field; ignore parse error for simplicity).
+	fmt.Sscanf(quoteID, "%d", &r.ResponseQuoteID)
+	return nil
+}
+
+// Cancel transitions an OPEN RFQ to CANCELLED.
+func (s *InMemoryRFQStore) Cancel(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "OPEN" {
+		return fmt.Errorf("RFQ %s is not in OPEN status", id)
+	}
+	r.Status = "CANCELLED"
+	return nil
+}
+
+// ── P4a — GiveUpStore ─────────────────────────────────────────────────────────
+
+// GiveUpStore defines the repository contract for trade give-up requests.
+type GiveUpStore interface {
+	Create(req *types.GiveUpRequest) error
+	Get(id string) (*types.GiveUpRequest, error)
+	List(firmID string) ([]types.GiveUpRequest, error)
+	Accept(id string) error
+	Reject(id, reason string) error
+}
+
+// InMemoryGiveUpStore is a thread-safe, in-memory implementation of GiveUpStore.
+type InMemoryGiveUpStore struct {
+	mu     sync.RWMutex
+	data   map[string]*types.GiveUpRequest
+	nextID int
+}
+
+// NewInMemoryGiveUpStore returns an empty InMemoryGiveUpStore.
+func NewInMemoryGiveUpStore() *InMemoryGiveUpStore {
+	return &InMemoryGiveUpStore{data: make(map[string]*types.GiveUpRequest), nextID: 1}
+}
+
+// Create stores a new give-up request, assigning a sequential ID.
+func (s *InMemoryGiveUpStore) Create(req *types.GiveUpRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req.ID = s.nextID
+	s.nextID++
+	req.Status = "PENDING"
+	req.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	cp := *req
+	key := fmt.Sprintf("%d", req.ID)
+	s.data[key] = &cp
+	return nil
+}
+
+// Get retrieves a give-up request by string ID.
+func (s *InMemoryGiveUpStore) Get(id string) (*types.GiveUpRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *r
+	return &cp, nil
+}
+
+// List returns give-up requests where the from or to firm matches firmID.
+// If firmID is empty, all records are returned.
+func (s *InMemoryGiveUpStore) List(firmID string) ([]types.GiveUpRequest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]types.GiveUpRequest, 0, len(s.data))
+	for _, r := range s.data {
+		if firmID != "" && fmt.Sprintf("%d", r.FromFirmID) != firmID && fmt.Sprintf("%d", r.ToFirmID) != firmID {
+			continue
+		}
+		result = append(result, *r)
+	}
+	return result, nil
+}
+
+// Accept transitions a PENDING give-up to ACCEPTED.
+func (s *InMemoryGiveUpStore) Accept(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "PENDING" {
+		return fmt.Errorf("give-up %s is not in PENDING status", id)
+	}
+	r.Status = "ACCEPTED"
+	r.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// Reject transitions a PENDING give-up to REJECTED, recording the reason.
+func (s *InMemoryGiveUpStore) Reject(id, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if r.Status != "PENDING" {
+		return fmt.Errorf("give-up %s is not in PENDING status", id)
+	}
+	r.Status = "REJECTED"
+	r.Reason = reason
+	r.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}

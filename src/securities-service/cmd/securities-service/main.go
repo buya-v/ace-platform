@@ -146,6 +146,10 @@ func main() {
 		store.NewInMemorySurveillanceStore(),
 		store.NewInMemoryInstrumentGroupStore(),
 		store.NewInMemoryOffBookTradeStore(),
+		// P4a stores: locate, RFQ, give-up
+		store.NewInMemoryLocateStore(),
+		store.NewInMemoryRFQStore(),
+		store.NewInMemoryGiveUpStore(),
 		dayManager,
 		matchingEngine,
 		sessionManager,

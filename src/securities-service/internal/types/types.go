@@ -80,10 +80,11 @@ type Instrument struct {
 	OutstandingShares int64         `json:"outstanding_shares"`
 	SegmentID         string        `json:"segment_id,omitempty"`
 	STPMode           STPMode       `json:"stp_mode,omitempty"`
-	DeletionStatus    string        `json:"deletion_status,omitempty"`
-	DeletionDate      string        `json:"deletion_date,omitempty"`
-	CreatedAt         string        `json:"created_at"`
-	UpdatedAt         string        `json:"updated_at"`
+	DeletionStatus      string        `json:"deletion_status,omitempty"`
+	DeletionDate        string        `json:"deletion_date,omitempty"`
+	ShortSellRestricted bool          `json:"short_sell_restricted,omitempty"`
+	CreatedAt           string        `json:"created_at"`
+	UpdatedAt           string        `json:"updated_at"`
 }
 
 // BondDetails holds bond-specific attributes for a fixed-income instrument.
@@ -112,6 +113,7 @@ type SecurityOrder struct {
 	AvgFillPrice    float64     `json:"avg_fill_price"`
 	VisibleQuantity int         `json:"visible_quantity,omitempty"` // Iceberg: visible (displayed) quantity
 	HiddenQuantity  int         `json:"hidden_quantity,omitempty"`  // Iceberg: hidden (reserve) quantity
+	LocateID        string      `json:"locate_id,omitempty"`        // P4a: required for SHORT_SELL orders
 	CreatedAt       string      `json:"created_at"`
 	UpdatedAt       string      `json:"updated_at"`
 }
@@ -670,4 +672,47 @@ type BulkError struct {
 	Index  int    `json:"index"`
 	Ticker string `json:"ticker"`
 	Error  string `json:"error"`
+}
+
+// ── P4a — Short Sell, Locate, RFQ, Give-Up ───────────────────────────────────
+
+// LocateRequest represents a request by a borrower firm to locate shares for short selling.
+// Status lifecycle: PENDING → APPROVED or REJECTED → EXPIRED or USED.
+type LocateRequest struct {
+	ID             int    `json:"id"`
+	InstrumentID   int    `json:"instrument_id"`
+	BorrowerFirmID int    `json:"borrower_firm_id"`
+	LenderFirmID   int    `json:"lender_firm_id"`
+	Quantity       int    `json:"quantity"`
+	Status         string `json:"status"` // PENDING | APPROVED | REJECTED | EXPIRED | USED
+	ExpiresAt      string `json:"expires_at"`
+	CreatedAt      string `json:"created_at"`
+}
+
+// RequestForQuote represents a request for quote (RFQ) submitted by a firm for a block trade.
+// Status lifecycle: OPEN → RESPONDED or EXPIRED or CANCELLED.
+type RequestForQuote struct {
+	ID              int    `json:"id"`
+	InstrumentID    int    `json:"instrument_id"`
+	RequestorFirmID int    `json:"requestor_firm_id"`
+	Quantity        int    `json:"quantity"`
+	Side            string `json:"side"`
+	Status          string `json:"status"` // OPEN | RESPONDED | EXPIRED | CANCELLED
+	ResponseQuoteID int    `json:"response_quote_id,omitempty"`
+	TenantID        string `json:"tenant_id"`
+	CreatedAt       string `json:"created_at"`
+	ExpiresAt       string `json:"expires_at"`
+}
+
+// GiveUpRequest represents a trade give-up instruction from one firm to another.
+// Status lifecycle: PENDING → ACCEPTED or REJECTED.
+type GiveUpRequest struct {
+	ID         int    `json:"id"`
+	TradeID    int    `json:"trade_id"`
+	FromFirmID int    `json:"from_firm_id"`
+	ToFirmID   int    `json:"to_firm_id"`
+	Status     string `json:"status"` // PENDING | ACCEPTED | REJECTED
+	Reason     string `json:"reason,omitempty"`
+	CreatedAt  string `json:"created_at"`
+	ResolvedAt string `json:"resolved_at,omitempty"`
 }

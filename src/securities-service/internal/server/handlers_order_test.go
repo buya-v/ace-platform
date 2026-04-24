@@ -367,10 +367,11 @@ func TestSubmitOrder_StopWithStopPrice_Success(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestSubmitOrder_ShortSellDisabled(t *testing.T) {
+func TestSubmitOrder_ShortSellRequiresLocate(t *testing.T) {
 	ts := newTestServer(t)
 	instrID := createInstrForOrders(t, ts, 5, 0.05)
 
+	// SHORT_SELL without a locate_id should return LOCATE_REQUIRED.
 	payload := map[string]interface{}{
 		"instrument_id":  instrID,
 		"participant_id": "P-001",
@@ -384,8 +385,8 @@ func TestSubmitOrder_ShortSellDisabled(t *testing.T) {
 
 	var errResp types.ErrorResponse
 	decodeBody(t, resp, &errResp)
-	if errResp.Error.Code != "SHORT_SELL_DISABLED" {
-		t.Errorf("expected SHORT_SELL_DISABLED, got %q", errResp.Error.Code)
+	if errResp.Error.Code != "LOCATE_REQUIRED" {
+		t.Errorf("expected LOCATE_REQUIRED, got %q", errResp.Error.Code)
 	}
 }
 

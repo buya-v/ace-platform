@@ -96,6 +96,12 @@ func (s *Server) handleTrade(w http.ResponseWriter, r *http.Request) {
 		} else {
 			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		}
+	case "give-up":
+		if r.Method == http.MethodPost {
+			s.handleGiveUpForTrade(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
 	default:
 		s.writeError(w, http.StatusNotFound, "NOT_FOUND", fmt.Sprintf("unknown trade action: %s", action), nil)
 	}
