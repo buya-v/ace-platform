@@ -83,6 +83,12 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// CORS preflight requests always pass through — no tenant context needed.
+			if r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Bypass tenant enforcement for health / observability endpoints.
 			if tenantHealthPaths[r.URL.Path] {
 				next.ServeHTTP(w, r)

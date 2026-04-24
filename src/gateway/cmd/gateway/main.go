@@ -115,7 +115,7 @@ func main() {
 	rt.Handle("GET", "/api/v1/ws/book", wsHandler.BookHandler)
 	rt.Handle("GET", "/api/v1/ws/executions", wsHandler.ExecutionsHandler)
 
-	// Register platform-service routes: /platform/v1/* → platform-service:8090
+	// Register platform-service routes: /platform/v1/* → platform-service:8095
 	// These routes SKIP tenant middleware (platform API is above tenant scope).
 	// The bypass is handled in TenantMiddleware via tenantBypassPrefixes.
 	platformBaseURL := fmt.Sprintf("http://%s", cfg.PlatformServiceAddr)

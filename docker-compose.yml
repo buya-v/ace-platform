@@ -341,7 +341,7 @@ services:
     environment:
       <<: *common-env
       API_PORT: "8090"
-      HEALTH_PORT: "9090"
+      HEALTH_PORT: "9095"
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: ${POSTGRES_USER:-garudax}
@@ -349,10 +349,10 @@ services:
       DB_NAME: ${POSTGRES_DB:-garudax}
       DB_SSL_MODE: disable
     ports:
-      - "8090:8090"
-      - "9090:9090"
+      - "8095:8095"
+      - "9095:9095"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9095/healthz"]
       <<: *healthcheck-http
     networks:
       - garudax-network

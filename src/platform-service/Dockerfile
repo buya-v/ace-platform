@@ -9,5 +9,5 @@ FROM alpine:3.19
 RUN adduser -D -u 1000 appuser
 COPY --from=builder /build/platform-service /usr/local/bin/platform-service
 USER appuser
-EXPOSE 8090 9090
+EXPOSE 8095 9095
 ENTRYPOINT ["platform-service"]

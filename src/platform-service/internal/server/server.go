@@ -27,8 +27,8 @@ type Config struct {
 // DefaultConfig returns a Config with the standard port allocation for platform-service.
 func DefaultConfig() Config {
 	return Config{
-		APIPort:     8090,
-		HealthPort:  9090,
+		APIPort:     8095,
+		HealthPort:  9095,
 		BindAddress: "0.0.0.0",
 	}
 }
