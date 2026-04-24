@@ -81,8 +81,9 @@ func main() {
 	firmStore := store.NewInMemoryFirmStore()
 	participantStore := store.NewInMemoryParticipantStore()
 
-	// Tick table and throttle stores.
+	// Tick table, trade correction, and throttle stores.
 	tickTableStore := store.NewInMemoryTickTableStore()
+	tradeCorrectionStore := store.NewInMemoryTradeCorrectionStore()
 	throttleStore := store.NewInMemoryThrottleStore()
 
 	// Create a channel-based producer for local/dev. In production, swap for
@@ -128,6 +129,7 @@ func main() {
 		firmStore,
 		participantStore,
 		tickTableStore,
+		tradeCorrectionStore,
 		throttleStore,
 		dayManager,
 		matchingEngine,

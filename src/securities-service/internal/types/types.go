@@ -122,6 +122,7 @@ const (
 	TradeStatusConfirmed TradeStatus = "TRADE_CONFIRMED"
 	TradeStatusSettled   TradeStatus = "TRADE_SETTLED"
 	TradeStatusFailed    TradeStatus = "TRADE_FAILED"
+	TradeStatusBusted    TradeStatus = "TRADE_BUSTED"
 )
 
 // SecurityTrade represents a matched trade between a buy and sell order.

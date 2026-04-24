@@ -60,7 +60,9 @@ type OrderStore interface {
 type TradeStore interface {
 	Create(trade *types.SecurityTrade) error
 	Get(id string) (*types.SecurityTrade, error)
+	List() ([]types.SecurityTrade, error)
 	ListByInstrument(instrumentID string) ([]types.SecurityTrade, error)
+	UpdateStatus(id string, status types.TradeStatus) error
 }
 
 // PositionStore defines the repository contract for participant positions.
@@ -482,6 +484,18 @@ func (s *InMemoryTradeStore) Get(id string) (*types.SecurityTrade, error) {
 	return &copy, nil
 }
 
+// List returns all trades.
+func (s *InMemoryTradeStore) List() ([]types.SecurityTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.SecurityTrade, 0, len(s.data))
+	for _, trade := range s.data {
+		result = append(result, *trade)
+	}
+	return result, nil
+}
+
 // ListByInstrument returns all trades for a given instrument.
 func (s *InMemoryTradeStore) ListByInstrument(instrumentID string) ([]types.SecurityTrade, error) {
 	s.mu.RLock()
@@ -494,6 +508,19 @@ func (s *InMemoryTradeStore) ListByInstrument(instrumentID string) ([]types.Secu
 		}
 	}
 	return result, nil
+}
+
+// UpdateStatus changes the status of a trade.
+func (s *InMemoryTradeStore) UpdateStatus(id string, status types.TradeStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	trade, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	trade.Status = status
+	return nil
 }
 
 // --- InMemoryPositionStore ---
@@ -1019,6 +1046,7 @@ func (s *InMemoryTradeCorrectionStore) ListByTrade(tradeID string) ([]types.Trad
 // TickTableStore defines the repository contract for tiered tick tables.
 type TickTableStore interface {
 	Get(instrumentID string) (*types.TickTable, error)
+	List() ([]types.TickTable, error)
 	Set(table *types.TickTable) error
 	Delete(instrumentID string) error
 }
@@ -1049,6 +1077,23 @@ func (s *InMemoryTickTableStore) Get(instrumentID string) (*types.TickTable, err
 	}
 	copy(cp.Tiers, t.Tiers)
 	return &cp, nil
+}
+
+// List returns all tick tables.
+func (s *InMemoryTickTableStore) List() ([]types.TickTable, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]types.TickTable, 0, len(s.data))
+	for _, t := range s.data {
+		cp := types.TickTable{
+			InstrumentID: t.InstrumentID,
+			Tiers:        make([]types.TickTier, len(t.Tiers)),
+		}
+		copy(cp.Tiers, t.Tiers)
+		result = append(result, cp)
+	}
+	return result, nil
 }
 
 // Set upserts a tick table for the given instrument.
