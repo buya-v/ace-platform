@@ -1,0 +1,58 @@
+{
+  "run_id": "20260423-auctions-fix",
+  "feature": "Auctions + FIX Gateway Spec",
+  "requirement": "Call auction matching + market session phases + FIX protocol spec",
+  "status": "complete",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Call auction engine + market session phases",
+      "description": "Add opening/closing auction support to the securities-service matching engine.\n\nRead docs/securities-architecture.md section 10 (MSE Flagship) for auction requirements.\nRead src/securities-service/internal/engine/engine.go for the existing continuous matching engine.\nRead venues/mse-equities/config.json for auction trading hours.\n\nPart A \u2014 Market session types in types.go:\n- MarketSession enum: SESSION_PRE_OPEN, SESSION_CONTINUOUS, SESSION_CLOSING_AUCTION, SESSION_CLOSED\n- Add CurrentSession field to store or a SessionManager\n\nPart B \u2014 Call auction algorithm in src/securities-service/internal/engine/auction.go:\n- AuctionEngine struct (uses same stores as MatchingEngine)\n- CollectOrder(order *SecurityOrder) error \u2014 stores order without matching (auction collection phase)\n- RunAuction(instrumentID string) ([]SecurityTrade, *AuctionResult, error):\n  1. Get all collected orders for the instrument (BUY + SELL sides)\n  2. Sort buys descending by price, sells ascending by price\n  3. Build a price ladder: for each candidate price, calculate matchable volume (min(cumulative buy qty at >= price, cumulative sell qty at <= price))\n  4. Select the price that maximizes matchable volume. If tie, choose the price closest to the last traded price (or midpoint)\n  5. Execute all matches at the clearing price \u2014 create trades, update orders (FILLED/PARTIALLY_FILLED)\n  6. Return AuctionResult{ClearingPrice, MatchedVolume, UnmatchedBuyVolume, UnmatchedSellVolume}\n\nPart C \u2014 Session management in src/securities-service/internal/engine/session.go:\n- SessionManager struct with currentSession per instrument\n- TransitionTo(instrumentID, session) error \u2014 validates transitions:\n  PRE_OPEN \u2192 CONTINUOUS (triggers opening auction before transition)\n  CONTINUOUS \u2192 CLOSING_AUCTION (stops continuous matching)\n  CLOSING_AUCTION \u2192 CLOSED (triggers closing auction before transition)\n  CLOSED \u2192 PRE_OPEN (new trading day)\n- GetSession(instrumentID) MarketSession\n\nPart D \u2014 Wire into server:\n- POST /api/v1/securities/sessions/{instrumentID}/transition \u2014 change session phase\n- GET /api/v1/securities/sessions \u2014 list current sessions per instrument\n- During PRE_OPEN and CLOSING_AUCTION: orders go to CollectOrder instead of MatchOrder\n- During CONTINUOUS: orders go to MatchOrder (existing behavior)\n- During CLOSED: orders rejected\n\nPart E \u2014 Update main.go to create AuctionEngine and SessionManager.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/engine/auction.go",
+        "src/securities-service/internal/engine/session.go",
+        "src/securities-service/internal/types/types.go",
+        "src/securities-service/internal/server/server.go",
+        "src/securities-service/internal/server/handlers_order.go",
+        "src/securities-service/cmd/securities-service/main.go"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T2",
+      "title": "FIX protocol gateway architecture spec",
+      "description": "Write the FIX protocol gateway architecture specification. Spec only \u2014 no implementation.\n\nRead docs/platform-architecture.md for multi-tenant context.\nRead docs/securities-architecture.md for the trading model.\nRead GarudaX_Strategy_Directive.md \u00a74.1 for FIX requirements.\nRead docs/T033_gateway_spec.md for spec format reference.\n\nCreate docs/fix-gateway-spec.md covering:\n\n1. **Overview** \u2014 FIX protocol gateway for broker connectivity. Tenant-scoped FIX sessions.\n\n2. **FIX Protocol Support** \u2014 FIX 4.4 (primary), FIX 5.0/FIXT 1.1 (planned). Transport: TCP with SSL/TLS.\n\n3. **Message Types**:\n   - Inbound: NewOrderSingle (D), OrderCancelRequest (F), OrderCancelReplaceRequest (G), MarketDataRequest (V)\n   - Outbound: ExecutionReport (8), OrderCancelReject (9), MarketDataSnapshotFullRefresh (W), MarketDataIncrementalRefresh (X)\n   - Session: Logon (A), Logout (5), Heartbeat (0), TestRequest (1), ResendRequest (2), Reject (3), SequenceReset (4)\n\n4. **Session Management** \u2014 FIX session per broker per tenant. Session key: {tenant_id}:{sender_comp_id}:{target_comp_id}. Sequence number persistence. Daily session reset. Logon authentication (CompID + password or certificate).\n\n5. **Broker Onboarding** \u2014 registration flow: create broker in platform, assign CompID, configure FIX session parameters (heartbeat interval, encryption, message logging). Per-tenant broker list.\n\n6. **Order Flow** \u2014 NewOrderSingle \u2192 validate \u2192 convert to internal SecurityOrder \u2192 submit to securities-service \u2192 ExecutionReport back. Map FIX fields to internal types (OrdType, Side, TimeInForce, etc.).\n\n7. **Market Data** \u2014 MarketDataRequest subscription \u2192 stream from market-data-service \u2192 MarketDataSnapshotFullRefresh/IncrementalRefresh.\n\n8. **Tenant Isolation** \u2014 FIX sessions carry tenant_id. A broker's session can only access their assigned tenant's instruments and orders. Cross-tenant order routing is rejected.\n\n9. **Service Architecture** \u2014 fix-gateway-service as a separate Go service. Ports: FIX TCP on 9878, admin HTTP on 8091/9091. Docker Compose entry.\n\n10. **Database Schema** \u2014 V31 migration: fix_sessions, fix_brokers, fix_message_log tables.\n\n11. **Appendix** \u2014 FIX field mapping table (FIX tag \u2192 internal field), sample FIX messages, error codes.\n\nBe specific \u2014 exact FIX tags, field mappings, session state diagrams, SQL DDL.\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "docs",
+      "files_hint": [
+        "docs/fix-gateway-spec.md"
+      ],
+      "dependencies": [],
+      "status": "done",
+      "attempts": 1
+    },
+    {
+      "id": "T3",
+      "title": "Auction engine unit tests",
+      "description": "Write unit tests for the auction engine and session management.\n\nRead .softhouse/handoff/T1.md for what was implemented.\nRead src/securities-service/internal/engine/auction.go for auction algorithm.\nRead src/securities-service/internal/engine/session.go for session manager.\n\nCreate src/securities-service/internal/engine/auction_test.go:\n1. TestAuction_SinglePriceCross \u2014 3 buys at 100, 3 sells at 100 \u2192 clearing price 100, all matched\n2. TestAuction_MaxVolume \u2014 buys at 102,101,100, sells at 99,100,101 \u2192 clearing price that maximizes volume\n3. TestAuction_NoMatch \u2014 all buys below all sells \u2192 0 trades, clearing price 0\n4. TestAuction_PartialFill \u2014 buy 100@102, sell 50@99, sell 50@101 \u2192 100 shares matched at clearing price\n5. TestAuction_EmptyBook \u2014 no orders \u2192 0 trades\n6. TestAuction_TradesCreated \u2014 verify SecurityTrade records with correct prices/quantities\n7. TestAuction_PositionsUpdated \u2014 verify positions after auction\n\nCreate src/securities-service/internal/engine/session_test.go:\n1. TestSession_DefaultClosed \u2014 new instrument starts CLOSED\n2. TestSession_ValidTransitions \u2014 CLOSED\u2192PRE_OPEN\u2192CONTINUOUS\u2192CLOSING_AUCTION\u2192CLOSED\n3. TestSession_InvalidTransition \u2014 CLOSED\u2192CONTINUOUS \u2192 error\n4. TestSession_OrderRoutingPreOpen \u2014 during PRE_OPEN, orders go to auction collector\n5. TestSession_OrderRoutingContinuous \u2014 during CONTINUOUS, orders go to matcher\n6. TestSession_OrderRejectedClosed \u2014 during CLOSED, orders rejected\n\nTarget: 80%+ coverage on auction.go, 90%+ on session.go.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": [
+        "src/securities-service/internal/engine/auction_test.go",
+        "src/securities-service/internal/engine/session_test.go"
+      ],
+      "dependencies": [
+        "T1"
+      ],
+      "status": "done",
+      "attempts": 1
+    }
+  ]
+}
