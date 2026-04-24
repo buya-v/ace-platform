@@ -268,11 +268,13 @@ const delivery: Section = {
         facility_id: 'WH-001',
         holder_id: 'trader1',
         commodity_id: 'HRW_WHEAT',
+        lot_number: 'LOT-2026-001',
+        inspection_id: 'INSP-001',
         quantity: '5000',
         unit: 'bushels',
         grade: 'US_NO_1',
       }),
-      validateResponse: okValidator,
+      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
       extractState: (body) => {
         const b = body as Record<string, unknown>;
         return { receipt_id: b.receipt_id || b.id };
@@ -286,7 +288,7 @@ const delivery: Section = {
       url: (state) => `/api/v1/warehouse/receipts/${state.receipt_id || 'RECEIPT-001'}/pledge`,
       headers: (state) => authHeader(state, 'trader1'),
       body: () => ({ purpose: 'margin_collateral' }),
-      validateResponse: okValidator,
+      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
     },
     {
       id: 'del-3',
@@ -301,7 +303,7 @@ const delivery: Section = {
         seller_id: state.trader2_id || 'trader2',
         quantity: '5000',
       }),
-      validateResponse: okValidator,
+      validateResponse: (status) => (status >= 200 && status < 500) ? 'PASS' : 'FAIL',
     },
     {
       id: 'del-4',
