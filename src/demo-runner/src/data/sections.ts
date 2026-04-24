@@ -538,3 +538,7 @@ export const allSections: AnySection[] = [
 export function getAllSteps(): StepDefinition[] {
   return allSections.flatMap((s) => ('steps' in s ? s.steps : []));
 }
+
+export function getTotalStepCount(): number {
+  return getAllSteps().length;
+}
