@@ -24,9 +24,19 @@ export function useDemoRunner() {
     dispatch({ type: 'SET_RUN_ALL', inProgress: false });
   }, [state.gatewayUrl, state.appState, dispatch]);
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
+    // Clear backend state (auth accounts, locked users)
+    try {
+      await fetch(`${state.gatewayUrl}/api/v1/admin/demo/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      // Ignore — backend reset is best-effort
+    }
+    // Clear frontend state
     dispatch({ type: 'RESET_ALL' });
-  }, [dispatch]);
+  }, [state.gatewayUrl, dispatch]);
 
   const passCount = Object.values(state.results).filter((r) => r.status === 'PASS').length;
   const failCount = Object.values(state.results).filter((r) => r.status === 'FAIL').length;

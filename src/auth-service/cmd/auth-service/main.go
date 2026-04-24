@@ -93,6 +93,11 @@ func main() {
 		BindAddress: cfg.BindAddress,
 	})
 
+	// Wire demo reset — only works with in-memory store
+	if memStore, ok := repo.(*store.InMemoryStore); ok {
+		srv.SetResetter(memStore)
+	}
+
 	go func() {
 		if err := srv.StartHealthServer(); err != nil {
 			log.Fatalf("Health server error: %v", err)

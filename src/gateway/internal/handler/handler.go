@@ -563,3 +563,8 @@ func (h *Handler) UpdateOrderLimits(w http.ResponseWriter, r *http.Request) {
 
 	types.WriteJSON(w, http.StatusOK, limits)
 }
+
+// DemoReset clears all in-memory auth data for demo reset.
+func (h *Handler) DemoReset(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "auth-service", "DemoService/Reset")
+}

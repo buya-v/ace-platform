@@ -200,3 +200,15 @@ func (s *InMemoryStore) ListUsers() []*types.User {
 	}
 	return users
 }
+
+// Reset clears all data — used by demo reset endpoint.
+func (s *InMemoryStore) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.users = make(map[string]*types.User)
+	s.emails = make(map[string]string)
+	s.sessions = make(map[string]*types.Session)
+	s.apiKeys = make(map[string]*types.APIKey)
+	s.keyHash = make(map[string]string)
+	s.pkce = make(map[string]*types.PKCEChallenge)
+}

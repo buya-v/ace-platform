@@ -9,10 +9,16 @@ import (
 	"github.com/garudax-platform/auth-service/internal/handler"
 )
 
+// Resetter allows clearing in-memory state for demo reset.
+type Resetter interface {
+	Reset()
+}
+
 type Server struct {
-	handler *handler.AuthHandler
-	cfg     Config
-	ready   atomic.Bool
+	handler  *handler.AuthHandler
+	cfg      Config
+	ready    atomic.Bool
+	resetter Resetter
 }
 
 type Config struct {
@@ -26,6 +32,10 @@ func NewServer(h *handler.AuthHandler, cfg Config) *Server {
 		handler: h,
 		cfg:     cfg,
 	}
+}
+
+func (s *Server) SetResetter(r Resetter) {
+	s.resetter = r
 }
 
 func (s *Server) SetReady() {
@@ -62,6 +72,20 @@ func (s *Server) StartHealthServer() error {
 	mux.HandleFunc("/api/v1/apikey/validate", s.handler.ValidateAPIKey)
 	mux.HandleFunc("/api/v1/apikey/revoke", s.handler.RevokeAPIKey)
 	mux.HandleFunc("/api/v1/users", s.handler.ListUsers)
+
+	// Demo reset — clears all in-memory data
+	mux.HandleFunc("/api/v1/demo/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if s.resetter != nil {
+			s.resetter.Reset()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{"status":"reset","message":"All demo data cleared"}`)
+	})
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)
 	return http.ListenAndServe(addr, mux)
