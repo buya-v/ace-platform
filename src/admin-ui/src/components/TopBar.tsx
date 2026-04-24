@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useKPI } from '../contexts/KPIContext';
+import { useTenant } from '../contexts/TenantContext';
+import { useToast } from '../contexts/ToastContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import styles from './TopBar.module.css';
 
@@ -23,8 +25,19 @@ function formatTime(d: Date): string {
 export function TopBar() {
   const location = useLocation();
   const { health } = useKPI();
+  const { currentTenant, tenants, setCurrentTenant, isLoading: tenantLoading, fetchError: tenantError } = useTenant();
+  const { showToast } = useToast();
   const [time, setTime] = useState(() => formatTime(new Date()));
   const wsHealth = useWebSocket('/health', { enabled: true });
+
+  const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setCurrentTenant(id);
+    const tenant = tenants.find(t => t.id === id);
+    if (tenant) {
+      showToast(`Switched to ${tenant.name}`, 'info');
+    }
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTime(formatTime(new Date())), 1000);
@@ -58,6 +71,37 @@ export function TopBar() {
           </>
         )}
       </div>
+
+      {/* ── Tenant selector ── */}
+      <div className={styles.tenantSelector}>
+        <label htmlFor="topbar-tenant-select" className={styles.srOnly}>
+          Active tenant
+        </label>
+        <select
+          id="topbar-tenant-select"
+          className={styles.tenantSelect}
+          value={currentTenant?.id ?? ''}
+          onChange={handleTenantChange}
+          disabled={tenantLoading || !!tenantError || tenants.length === 0}
+          aria-label="Select active tenant"
+          aria-busy={tenantLoading}
+          data-testid="tenant-select"
+        >
+          {tenantLoading && (
+            <option value="" disabled>Loading tenants…</option>
+          )}
+          {!tenantLoading && tenantError && (
+            <option value="" disabled>Error loading tenants</option>
+          )}
+          {!tenantLoading && !tenantError && tenants.length === 0 && (
+            <option value="" disabled>No tenants available</option>
+          )}
+          {!tenantLoading && !tenantError && tenants.map(t => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+
       <div className={styles.right}>
         <button
           className={styles.printBtn}

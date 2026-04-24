@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useTenant } from '../contexts/TenantContext';
 import { hasAdminAccess, AuditEvent } from '../types';
 import { usePolling } from '../hooks/usePolling';
 import { Skeleton } from '../components/Skeleton';
@@ -36,6 +37,7 @@ function useMetricHistory(value: number | undefined): number[] {
 export function DashboardHome() {
   const { state: auth } = useAuth();
   const { showToast } = useToast();
+  const { currentTenant, isLoading: tenantLoading, fetchError: tenantError } = useTenant();
   const isAdmin = hasAdminAccess(auth.user?.roles ?? []);
 
   const [showHaltConfirm, setShowHaltConfirm] = useState(false);
@@ -123,6 +125,30 @@ export function DashboardHome() {
   return (
     <div>
       <h1 className={styles.title}>Dashboard Overview</h1>
+
+      {/* Tenant banner */}
+      {tenantLoading ? (
+        <div className={styles.tenantBanner} aria-busy="true" aria-label="Loading tenant information">
+          <span className={styles.tenantBannerLoading}>Loading tenant…</span>
+        </div>
+      ) : tenantError ? (
+        <div className={styles.tenantBanner} role="alert" data-testid="tenant-banner-error">
+          <span className={styles.tenantBannerEmpty}>Unable to load tenants: {tenantError}</span>
+        </div>
+      ) : currentTenant ? (
+        <div className={styles.tenantBanner} data-testid="tenant-banner">
+          <span className={styles.tenantBannerName}>{currentTenant.name}</span>
+          <span className={styles.tenantBannerStatus}>{currentTenant.status}</span>
+          {currentTenant.flagship && (
+            <span className={styles.tenantBannerFlagship}>Flagship</span>
+          )}
+          <span className={styles.tenantBannerId}>ID: {currentTenant.id}</span>
+        </div>
+      ) : (
+        <div className={styles.tenantBanner} data-testid="tenant-banner-empty">
+          <span className={styles.tenantBannerEmpty}>No tenant selected — use the selector above to choose a tenant</span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className={styles.grid}>

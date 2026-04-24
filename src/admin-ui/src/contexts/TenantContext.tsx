@@ -15,6 +15,7 @@ interface TenantContextType {
   tenants: TenantInfo[];
   setCurrentTenant: (id: string) => void;
   isLoading: boolean;
+  fetchError: string | null;
 }
 
 const STORAGE_KEY = 'garudax-tenant';
@@ -25,6 +26,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenants, setTenants] = useState<TenantInfo[]>([]);
   const [currentTenant, setCurrentTenantState] = useState<TenantInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     const config = getConfig();
@@ -63,8 +65,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem(STORAGE_KEY, defaultTenant.id);
         }
       })
-      .catch(_err => {
+      .catch((err: unknown) => {
         // Tenant fetch failed — leave isLoading false so the app can still render
+        const msg = err instanceof Error ? err.message : 'Failed to load tenants';
+        setFetchError(msg);
       })
       .finally(() => {
         setIsLoading(false);
@@ -83,7 +87,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <TenantContext.Provider value={{ currentTenant, tenants, setCurrentTenant, isLoading }}>
+    <TenantContext.Provider value={{ currentTenant, tenants, setCurrentTenant, isLoading, fetchError }}>
       {children}
     </TenantContext.Provider>
   );

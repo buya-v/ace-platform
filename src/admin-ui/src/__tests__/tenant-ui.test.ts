@@ -11,14 +11,16 @@ export function buildTenantSwitchToast(tenantName: string): string {
 }
 
 /**
- * resolveTenantOption — determines the select option state given loading/tenant list.
- * Returns: 'loading' | 'empty' | 'list'
+ * resolveTenantOption — determines the select option state given loading/error/tenant list.
+ * Returns: 'loading' | 'error' | 'empty' | 'list'
  */
 export function resolveTenantOption(
   isLoading: boolean,
   tenants: { id: string; name: string }[],
-): 'loading' | 'empty' | 'list' {
+  fetchError?: string | null,
+): 'loading' | 'error' | 'empty' | 'list' {
   if (isLoading) return 'loading';
+  if (fetchError) return 'error';
   if (tenants.length === 0) return 'empty';
   return 'list';
 }
@@ -29,8 +31,9 @@ export function resolveTenantOption(
 export function isTenantSelectDisabled(
   isLoading: boolean,
   tenantCount: number,
+  fetchError?: string | null,
 ): boolean {
-  return isLoading || tenantCount === 0;
+  return isLoading || !!fetchError || tenantCount === 0;
 }
 
 /**
@@ -39,6 +42,7 @@ export function isTenantSelectDisabled(
  */
 export type BannerContent =
   | { type: 'tenant'; name: string; status: string; id: string; flagship: boolean }
+  | { type: 'error'; message: string }
   | { type: 'empty' };
 
 export function buildTenantBannerContent(
@@ -48,7 +52,9 @@ export function buildTenantBannerContent(
     status: string;
     flagship: boolean;
   } | null,
+  fetchError?: string | null,
 ): BannerContent {
+  if (fetchError) return { type: 'error', message: fetchError };
   if (!currentTenant) return { type: 'empty' };
   return {
     type: 'tenant',
@@ -81,8 +87,14 @@ describe('TopBar — tenant select state', () => {
     expect(resolveTenantOption(true, [{ id: 'ace', name: 'ACE' }])).toBe('loading');
   });
 
-  it('returns empty when not loading and no tenants', () => {
+  it('returns error when fetch failed (not loading)', () => {
+    expect(resolveTenantOption(false, [], 'Network error')).toBe('error');
+    expect(resolveTenantOption(false, [{ id: 'ace', name: 'ACE' }], 'Failed to fetch tenants: 500')).toBe('error');
+  });
+
+  it('returns empty when not loading, no error, and no tenants', () => {
     expect(resolveTenantOption(false, [])).toBe('empty');
+    expect(resolveTenantOption(false, [], null)).toBe('empty');
   });
 
   it('returns list when not loading and tenants exist', () => {
@@ -102,19 +114,45 @@ describe('TopBar — select disabled logic', () => {
     expect(isTenantSelectDisabled(true, 2)).toBe(true);
   });
 
-  it('is disabled when no tenants (not loading)', () => {
+  it('is disabled when fetch failed (not loading)', () => {
+    expect(isTenantSelectDisabled(false, 0, 'Network error')).toBe(true);
+    expect(isTenantSelectDisabled(false, 2, 'Failed to fetch tenants: 500')).toBe(true);
+  });
+
+  it('is disabled when no tenants (not loading, no error)', () => {
     expect(isTenantSelectDisabled(false, 0)).toBe(true);
+    expect(isTenantSelectDisabled(false, 0, null)).toBe(true);
   });
 
   it('is enabled when not loading and tenants exist', () => {
     expect(isTenantSelectDisabled(false, 1)).toBe(false);
     expect(isTenantSelectDisabled(false, 3)).toBe(false);
+    expect(isTenantSelectDisabled(false, 2, null)).toBe(false);
   });
 });
 
 describe('DashboardHome — tenant banner content', () => {
   it('returns empty banner when currentTenant is null', () => {
     const banner = buildTenantBannerContent(null);
+    expect(banner.type).toBe('empty');
+  });
+
+  it('returns error banner when fetchError is present', () => {
+    const banner = buildTenantBannerContent(null, 'Failed to fetch tenants: 500');
+    expect(banner.type).toBe('error');
+    if (banner.type === 'error') {
+      expect(banner.message).toBe('Failed to fetch tenants: 500');
+    }
+  });
+
+  it('returns error banner even when currentTenant is set (error takes priority)', () => {
+    const tenant = { id: 'ace', name: 'ACE', status: 'ACTIVE', flagship: false };
+    const banner = buildTenantBannerContent(tenant, 'Partial error');
+    expect(banner.type).toBe('error');
+  });
+
+  it('returns empty when no error and no tenant', () => {
+    const banner = buildTenantBannerContent(null, null);
     expect(banner.type).toBe('empty');
   });
 

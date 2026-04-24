@@ -118,6 +118,59 @@
   font-size: 12px;
 }
 
+/* ── Tenant selector ── */
+.tenantSelector {
+  display: flex;
+  align-items: center;
+}
+
+.tenantSelect {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 24px 3px 8px;
+  height: 28px;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b949e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  max-width: 180px;
+  transition: border-color 0.15s;
+}
+
+.tenantSelect:hover:not(:disabled) {
+  border-color: var(--accent-blue, #388bfd);
+}
+
+.tenantSelect:focus {
+  border-color: var(--accent-blue, #388bfd);
+  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
+}
+
+.tenantSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Visually-hidden helper */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* ── Responsive: tablet (≤768px) ── */
 @media (max-width: 768px) {
   .topbar {
@@ -138,6 +191,12 @@
   .printBtn {
     display: none;
   }
+
+  /* Compact tenant selector on tablet */
+  .tenantSelect {
+    max-width: 130px;
+    font-size: 11px;
+  }
 }
 
 /* ── Responsive: small mobile (≤480px) ── */
@@ -157,5 +216,12 @@
     padding: 2px 6px;
     font-size: 11px;
     gap: 4px;
+  }
+
+  /* Tenant selector — full width and compact on mobile */
+  .tenantSelect {
+    max-width: 100px;
+    font-size: 11px;
+    padding: 2px 20px 2px 6px;
   }
 }
