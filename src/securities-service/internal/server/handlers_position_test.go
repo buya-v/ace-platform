@@ -36,6 +36,7 @@ func newPositionTestServer(t *testing.T) (*httptest.Server, *store.InMemoryPosit
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil,
 		nil, nil,
+		nil, nil, nil,
 		nil, me, nil, nil, nil,
 		cfg,
 	)
@@ -191,6 +192,7 @@ func TestListPositions_NilStore_Returns503(t *testing.T) {
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil,
 		nil, nil,
+		nil, nil, nil,
 		nil, me, nil, nil, nil,
 		cfg,
 	)

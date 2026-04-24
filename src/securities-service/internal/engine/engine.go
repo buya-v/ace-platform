@@ -22,6 +22,7 @@ type MatchingEngine struct {
 	producer             kafka.Producer
 	settlementEngine     *settlement.SettlementEngine
 	circuitBreakerEngine *CircuitBreakerEngine
+	surveillanceStore    store.SurveillanceStore
 }
 
 // NewMatchingEngine creates a new MatchingEngine with the given stores.
@@ -45,6 +46,51 @@ func NewMatchingEngine(
 		producer:             producer,
 		settlementEngine:     settlementEngine,
 		circuitBreakerEngine: circuitBreakerEngine,
+	}
+}
+
+// SetSurveillanceStore wires a surveillance store so that checkSurveillance is called
+// after every trade. May be called after construction. Nil is a no-op.
+func (e *MatchingEngine) SetSurveillanceStore(s store.SurveillanceStore) {
+	e.surveillanceStore = s
+}
+
+// checkSurveillance evaluates a completed trade against active thresholds
+// and creates alerts when thresholds are exceeded.
+// It is called non-fatally after each trade — errors are silently swallowed.
+func (e *MatchingEngine) checkSurveillance(trade *types.SecurityTrade) {
+	if e.surveillanceStore == nil {
+		return
+	}
+	thresholds, err := e.surveillanceStore.GetThresholds(trade.InstrumentID)
+	if err != nil || len(thresholds) == 0 {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, th := range thresholds {
+		var triggered bool
+		switch th.AlertType {
+		case types.AlertTypeLargeTrade:
+			triggered = float64(trade.Quantity) >= th.Value
+		case types.AlertTypePriceSpike:
+			triggered = trade.Price >= th.Value
+		}
+		if triggered {
+			alertID, err := newUUID()
+			if err != nil {
+				continue
+			}
+			alert := &types.SurveillanceAlert{
+				ID:           alertID,
+				InstrumentID: trade.InstrumentID,
+				AlertType:    th.AlertType,
+				Status:       types.AlertStatusOpen,
+				Message:      fmt.Sprintf("threshold breached: %s >= %.2f (trade qty=%d price=%.2f)", th.AlertType, th.Value, trade.Quantity, trade.Price),
+				TradeID:      trade.ID,
+				CreatedAt:    now,
+			}
+			_ = e.surveillanceStore.CreateAlert(alert)
+		}
 	}
 }
 
@@ -275,6 +321,9 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 		if e.circuitBreakerEngine != nil {
 			_ = e.circuitBreakerEngine.OnTrade(order.InstrumentID, trade.Price)
 		}
+
+		// Run surveillance checks after each trade.
+		e.checkSurveillance(&trade)
 
 		// 7. Update matched orders.
 		remainingQty -= fillQty

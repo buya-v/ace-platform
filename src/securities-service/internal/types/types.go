@@ -536,3 +536,92 @@ type ReferencePrice struct {
 	SetAt                 string  `json:"set_at"`
 	StaleThresholdMinutes int     `json:"stale_threshold_minutes"`
 }
+
+// ── Surveillance ──────────────────────────────────────────────────────────────
+
+// AlertStatus represents the lifecycle state of a surveillance alert.
+type AlertStatus string
+
+const (
+	AlertStatusOpen     AlertStatus = "OPEN"
+	AlertStatusResolved AlertStatus = "RESOLVED"
+)
+
+// AlertType represents the category of a surveillance alert.
+type AlertType string
+
+const (
+	AlertTypeLargeTrade    AlertType = "LARGE_TRADE"
+	AlertTypePriceSpike    AlertType = "PRICE_SPIKE"
+	AlertTypeWashTrade     AlertType = "WASH_TRADE"
+	AlertTypeVolumeAnomaly AlertType = "VOLUME_ANOMALY"
+)
+
+// SurveillanceAlert represents a market surveillance alert raised by the engine.
+type SurveillanceAlert struct {
+	ID           string      `json:"id"`
+	InstrumentID string      `json:"instrument_id"`
+	AlertType    AlertType   `json:"alert_type"`
+	Status       AlertStatus `json:"status"`
+	Message      string      `json:"message"`
+	TradeID      string      `json:"trade_id,omitempty"`
+	CreatedAt    string      `json:"created_at"`
+	ResolvedAt   string      `json:"resolved_at,omitempty"`
+	ResolvedBy   string      `json:"resolved_by,omitempty"`
+}
+
+// SurveillanceThreshold defines a monitoring threshold for a specific alert type on an instrument.
+type SurveillanceThreshold struct {
+	InstrumentID string    `json:"instrument_id"`
+	AlertType    AlertType `json:"alert_type"`
+	Value        float64   `json:"value"`
+	UpdatedAt    string    `json:"updated_at"`
+}
+
+// ── Instrument Groups ─────────────────────────────────────────────────────────
+
+// GroupType classifies how an instrument group was formed.
+type GroupType string
+
+const (
+	GroupTypeManual   GroupType = "MANUAL"
+	GroupTypeSector   GroupType = "SECTOR"
+	GroupTypeIndex    GroupType = "INDEX"
+)
+
+// InstrumentGroup represents a named collection of instruments (e.g., an index or sector basket).
+type InstrumentGroup struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description,omitempty"`
+	GroupType     GroupType `json:"group_type"`
+	InstrumentIDs []string  `json:"instrument_ids"`
+	CreatedAt     string    `json:"created_at"`
+	UpdatedAt     string    `json:"updated_at"`
+}
+
+// ── Off-Book Trades ───────────────────────────────────────────────────────────
+
+// OffBookStatus represents the reporting state of an off-book trade.
+type OffBookStatus string
+
+const (
+	OffBookReported  OffBookStatus = "REPORTED"
+	OffBookConfirmed OffBookStatus = "CONFIRMED"
+	OffBookRejected  OffBookStatus = "REJECTED"
+)
+
+// OffBookTrade represents an off-exchange negotiated trade reported to the exchange.
+type OffBookTrade struct {
+	ID              string        `json:"id"`
+	InstrumentID    string        `json:"instrument_id"`
+	BuyParticipant  string        `json:"buy_participant"`
+	SellParticipant string        `json:"sell_participant"`
+	Price           float64       `json:"price"`
+	Quantity        int           `json:"quantity"`
+	TradeDate       string        `json:"trade_date"`
+	Status          OffBookStatus `json:"status"`
+	Notes           string        `json:"notes,omitempty"`
+	CreatedAt       string        `json:"created_at"`
+	UpdatedAt       string        `json:"updated_at"`
+}

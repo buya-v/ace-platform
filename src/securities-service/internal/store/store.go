@@ -1419,3 +1419,293 @@ func (s *InMemoryReferencePriceStore) Set(rp *types.ReferencePrice) error {
 	s.data[rp.InstrumentID] = &cp
 	return nil
 }
+
+// ── SurveillanceStore ─────────────────────────────────────────────────────────
+
+// SurveillanceAlertFilters carries optional filter parameters for listing surveillance alerts.
+type SurveillanceAlertFilters struct {
+	Status    types.AlertStatus
+	AlertType types.AlertType
+}
+
+// SurveillanceStore defines the repository contract for market surveillance alerts and thresholds.
+type SurveillanceStore interface {
+	CreateAlert(alert *types.SurveillanceAlert) error
+	ListAlerts(filters SurveillanceAlertFilters) ([]types.SurveillanceAlert, error)
+	ResolveAlert(id, resolvedBy string) error
+	SetThreshold(threshold *types.SurveillanceThreshold) error
+	GetThresholds(instrumentID string) ([]types.SurveillanceThreshold, error)
+}
+
+// InMemorySurveillanceStore is a thread-safe, in-memory implementation of SurveillanceStore.
+type InMemorySurveillanceStore struct {
+	mu         sync.RWMutex
+	alerts     map[string]*types.SurveillanceAlert
+	thresholds map[string]*types.SurveillanceThreshold // key: instrumentID+":"+alertType
+}
+
+// NewInMemorySurveillanceStore returns an empty InMemorySurveillanceStore.
+func NewInMemorySurveillanceStore() *InMemorySurveillanceStore {
+	return &InMemorySurveillanceStore{
+		alerts:     make(map[string]*types.SurveillanceAlert),
+		thresholds: make(map[string]*types.SurveillanceThreshold),
+	}
+}
+
+// thresholdKey builds the composite key for a threshold record.
+func thresholdKey(instrumentID string, alertType types.AlertType) string {
+	return instrumentID + ":" + string(alertType)
+}
+
+// CreateAlert stores a new surveillance alert.
+func (s *InMemorySurveillanceStore) CreateAlert(alert *types.SurveillanceAlert) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.alerts[alert.ID]; exists {
+		return fmt.Errorf("alert %s already exists", alert.ID)
+	}
+	cp := *alert
+	s.alerts[alert.ID] = &cp
+	return nil
+}
+
+// ListAlerts returns alerts matching the given filters.
+func (s *InMemorySurveillanceStore) ListAlerts(filters SurveillanceAlertFilters) ([]types.SurveillanceAlert, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.SurveillanceAlert, 0, len(s.alerts))
+	for _, a := range s.alerts {
+		if filters.Status != "" && a.Status != filters.Status {
+			continue
+		}
+		if filters.AlertType != "" && a.AlertType != filters.AlertType {
+			continue
+		}
+		out = append(out, *a)
+	}
+	return out, nil
+}
+
+// ResolveAlert transitions an OPEN alert to RESOLVED.
+func (s *InMemorySurveillanceStore) ResolveAlert(id, resolvedBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.alerts[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if a.Status == types.AlertStatusResolved {
+		return fmt.Errorf("alert %s is already resolved", id)
+	}
+	a.Status = types.AlertStatusResolved
+	a.ResolvedBy = resolvedBy
+	a.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// SetThreshold upserts a surveillance threshold for an instrument and alert type.
+func (s *InMemorySurveillanceStore) SetThreshold(threshold *types.SurveillanceThreshold) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *threshold
+	cp.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	s.thresholds[thresholdKey(threshold.InstrumentID, threshold.AlertType)] = &cp
+	return nil
+}
+
+// GetThresholds returns all thresholds for the given instrument.
+func (s *InMemorySurveillanceStore) GetThresholds(instrumentID string) ([]types.SurveillanceThreshold, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	prefix := instrumentID + ":"
+	var out []types.SurveillanceThreshold
+	for k, v := range s.thresholds {
+		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
+			cp := *v
+			out = append(out, cp)
+		}
+	}
+	return out, nil
+}
+
+// ── InstrumentGroupStore ──────────────────────────────────────────────────────
+
+// InstrumentGroupStore defines the repository contract for instrument groups.
+type InstrumentGroupStore interface {
+	Create(group *types.InstrumentGroup) error
+	Get(id string) (*types.InstrumentGroup, error)
+	List() ([]types.InstrumentGroup, error)
+	Delete(id string) error
+	AddInstrument(groupID, instrumentID string) error
+	RemoveInstrument(groupID, instrumentID string) error
+}
+
+// InMemoryInstrumentGroupStore is a thread-safe, in-memory implementation of InstrumentGroupStore.
+type InMemoryInstrumentGroupStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.InstrumentGroup
+}
+
+// NewInMemoryInstrumentGroupStore returns an empty InMemoryInstrumentGroupStore.
+func NewInMemoryInstrumentGroupStore() *InMemoryInstrumentGroupStore {
+	return &InMemoryInstrumentGroupStore{data: make(map[string]*types.InstrumentGroup)}
+}
+
+// Create stores a new instrument group.
+func (s *InMemoryInstrumentGroupStore) Create(group *types.InstrumentGroup) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[group.ID]; exists {
+		return fmt.Errorf("instrument group %s already exists", group.ID)
+	}
+	cp := *group
+	cp.InstrumentIDs = make([]string, len(group.InstrumentIDs))
+	copy(cp.InstrumentIDs, group.InstrumentIDs)
+	s.data[group.ID] = &cp
+	return nil
+}
+
+// Get retrieves an instrument group by ID.
+func (s *InMemoryInstrumentGroupStore) Get(id string) (*types.InstrumentGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *g
+	cp.InstrumentIDs = make([]string, len(g.InstrumentIDs))
+	copy(cp.InstrumentIDs, g.InstrumentIDs)
+	return &cp, nil
+}
+
+// List returns all instrument groups.
+func (s *InMemoryInstrumentGroupStore) List() ([]types.InstrumentGroup, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.InstrumentGroup, 0, len(s.data))
+	for _, g := range s.data {
+		cp := *g
+		cp.InstrumentIDs = make([]string, len(g.InstrumentIDs))
+		copy(cp.InstrumentIDs, g.InstrumentIDs)
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+// Delete removes an instrument group by ID.
+func (s *InMemoryInstrumentGroupStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// AddInstrument appends an instrument ID to a group (idempotent).
+func (s *InMemoryInstrumentGroupStore) AddInstrument(groupID, instrumentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g, ok := s.data[groupID]
+	if !ok {
+		return ErrNotFound
+	}
+	for _, id := range g.InstrumentIDs {
+		if id == instrumentID {
+			return nil // already present — idempotent
+		}
+	}
+	g.InstrumentIDs = append(g.InstrumentIDs, instrumentID)
+	g.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// RemoveInstrument removes an instrument ID from a group.
+func (s *InMemoryInstrumentGroupStore) RemoveInstrument(groupID, instrumentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g, ok := s.data[groupID]
+	if !ok {
+		return ErrNotFound
+	}
+	newIDs := g.InstrumentIDs[:0]
+	for _, id := range g.InstrumentIDs {
+		if id != instrumentID {
+			newIDs = append(newIDs, id)
+		}
+	}
+	g.InstrumentIDs = newIDs
+	g.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// ── OffBookTradeStore ─────────────────────────────────────────────────────────
+
+// OffBookTradeStore defines the repository contract for off-book trades.
+type OffBookTradeStore interface {
+	Create(trade *types.OffBookTrade) error
+	List() ([]types.OffBookTrade, error)
+	Get(id string) (*types.OffBookTrade, error)
+	UpdateStatus(id string, status types.OffBookStatus) error
+}
+
+// InMemoryOffBookTradeStore is a thread-safe, in-memory implementation of OffBookTradeStore.
+type InMemoryOffBookTradeStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.OffBookTrade
+}
+
+// NewInMemoryOffBookTradeStore returns an empty InMemoryOffBookTradeStore.
+func NewInMemoryOffBookTradeStore() *InMemoryOffBookTradeStore {
+	return &InMemoryOffBookTradeStore{data: make(map[string]*types.OffBookTrade)}
+}
+
+// Create stores a new off-book trade.
+func (s *InMemoryOffBookTradeStore) Create(trade *types.OffBookTrade) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[trade.ID]; exists {
+		return fmt.Errorf("off-book trade %s already exists", trade.ID)
+	}
+	cp := *trade
+	s.data[trade.ID] = &cp
+	return nil
+}
+
+// List returns all off-book trades.
+func (s *InMemoryOffBookTradeStore) List() ([]types.OffBookTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.OffBookTrade, 0, len(s.data))
+	for _, t := range s.data {
+		out = append(out, *t)
+	}
+	return out, nil
+}
+
+// Get retrieves an off-book trade by ID.
+func (s *InMemoryOffBookTradeStore) Get(id string) (*types.OffBookTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *t
+	return &cp, nil
+}
+
+// UpdateStatus changes the status of an off-book trade.
+func (s *InMemoryOffBookTradeStore) UpdateStatus(id string, status types.OffBookStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	t.Status = status
+	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}

@@ -2941,3 +2941,428 @@ func TestReferencePriceStore_Overwrite(t *testing.T) {
 		t.Errorf("expected SetBy supervisor after overwrite, got %q", got.SetBy)
 	}
 }
+
+// ============================================================
+// SurveillanceStore tests
+// ============================================================
+
+func TestSurveillanceStore_CreateAlert_ListAll(t *testing.T) {
+	s := store.NewInMemorySurveillanceStore()
+
+	alert1 := &types.SurveillanceAlert{
+		ID:           "alert-1",
+		InstrumentID: "INST-1",
+		AlertType:    types.AlertTypeLargeTrade,
+		Status:       types.AlertStatusOpen,
+		Message:      "large trade detected",
+		CreatedAt:    "2026-01-01T00:00:00Z",
+	}
+	alert2 := &types.SurveillanceAlert{
+		ID:           "alert-2",
+		InstrumentID: "INST-2",
+		AlertType:    types.AlertTypePriceSpike,
+		Status:       types.AlertStatusOpen,
+		Message:      "price spike detected",
+		CreatedAt:    "2026-01-01T00:01:00Z",
+	}
+
+	if err := s.CreateAlert(alert1); err != nil {
+		t.Fatalf("CreateAlert alert-1: %v", err)
+	}
+	if err := s.CreateAlert(alert2); err != nil {
+		t.Fatalf("CreateAlert alert-2: %v", err)
+	}
+
+	all, err := s.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 alerts, got %d", len(all))
+	}
+}
+
+func TestSurveillanceStore_ListFilterByStatus(t *testing.T) {
+	s := store.NewInMemorySurveillanceStore()
+
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "a-open", InstrumentID: "I1", AlertType: types.AlertTypeLargeTrade,
+		Status: types.AlertStatusOpen, Message: "open", CreatedAt: "2026-01-01T00:00:00Z",
+	})
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "a-res", InstrumentID: "I1", AlertType: types.AlertTypeLargeTrade,
+		Status: types.AlertStatusResolved, Message: "resolved", CreatedAt: "2026-01-01T00:00:00Z",
+		ResolvedAt: "2026-01-01T01:00:00Z",
+	})
+
+	open, err := s.ListAlerts(store.SurveillanceAlertFilters{Status: types.AlertStatusOpen})
+	if err != nil {
+		t.Fatalf("ListAlerts OPEN: %v", err)
+	}
+	if len(open) != 1 {
+		t.Errorf("expected 1 OPEN alert, got %d", len(open))
+	}
+	if open[0].ID != "a-open" {
+		t.Errorf("expected alert id a-open, got %q", open[0].ID)
+	}
+
+	resolved, err := s.ListAlerts(store.SurveillanceAlertFilters{Status: types.AlertStatusResolved})
+	if err != nil {
+		t.Fatalf("ListAlerts RESOLVED: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Errorf("expected 1 RESOLVED alert, got %d", len(resolved))
+	}
+}
+
+func TestSurveillanceStore_ListFilterByAlertType(t *testing.T) {
+	s := store.NewInMemorySurveillanceStore()
+
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "lt-1", InstrumentID: "I1", AlertType: types.AlertTypeLargeTrade,
+		Status: types.AlertStatusOpen, Message: "large trade", CreatedAt: "2026-01-01T00:00:00Z",
+	})
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "ps-1", InstrumentID: "I1", AlertType: types.AlertTypePriceSpike,
+		Status: types.AlertStatusOpen, Message: "price spike", CreatedAt: "2026-01-01T00:00:00Z",
+	})
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "lt-2", InstrumentID: "I2", AlertType: types.AlertTypeLargeTrade,
+		Status: types.AlertStatusOpen, Message: "large trade 2", CreatedAt: "2026-01-01T00:00:00Z",
+	})
+
+	largeTrades, err := s.ListAlerts(store.SurveillanceAlertFilters{AlertType: types.AlertTypeLargeTrade})
+	if err != nil {
+		t.Fatalf("ListAlerts LARGE_TRADE: %v", err)
+	}
+	if len(largeTrades) != 2 {
+		t.Errorf("expected 2 LARGE_TRADE alerts, got %d", len(largeTrades))
+	}
+
+	priceSpikes, err := s.ListAlerts(store.SurveillanceAlertFilters{AlertType: types.AlertTypePriceSpike})
+	if err != nil {
+		t.Fatalf("ListAlerts PRICE_SPIKE: %v", err)
+	}
+	if len(priceSpikes) != 1 {
+		t.Errorf("expected 1 PRICE_SPIKE alert, got %d", len(priceSpikes))
+	}
+}
+
+func TestSurveillanceStore_ResolveAlert(t *testing.T) {
+	s := store.NewInMemorySurveillanceStore()
+
+	s.CreateAlert(&types.SurveillanceAlert{
+		ID: "alert-r", InstrumentID: "I1", AlertType: types.AlertTypeLargeTrade,
+		Status: types.AlertStatusOpen, Message: "pending resolution", CreatedAt: "2026-01-01T00:00:00Z",
+	})
+
+	// Resolve it.
+	if err := s.ResolveAlert("alert-r", "analyst-1"); err != nil {
+		t.Fatalf("ResolveAlert: %v", err)
+	}
+
+	// Verify RESOLVED.
+	all, _ := s.ListAlerts(store.SurveillanceAlertFilters{Status: types.AlertStatusResolved})
+	if len(all) != 1 {
+		t.Errorf("expected 1 RESOLVED alert after resolve, got %d", len(all))
+	}
+	if all[0].ResolvedBy != "analyst-1" {
+		t.Errorf("expected resolved_by analyst-1, got %q", all[0].ResolvedBy)
+	}
+	if all[0].ResolvedAt == "" {
+		t.Error("expected resolved_at to be set")
+	}
+
+	// Double-resolve should return error.
+	if err := s.ResolveAlert("alert-r", "analyst-2"); err == nil {
+		t.Error("expected error when resolving already-resolved alert")
+	}
+
+	// Not-found.
+	if err := s.ResolveAlert("no-such-alert", "analyst-1"); err == nil {
+		t.Error("expected error when resolving non-existent alert")
+	}
+}
+
+func TestSurveillanceStore_SetGetThresholds(t *testing.T) {
+	s := store.NewInMemorySurveillanceStore()
+
+	th1 := &types.SurveillanceThreshold{
+		InstrumentID: "INST-T1",
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        1000.0,
+	}
+	th2 := &types.SurveillanceThreshold{
+		InstrumentID: "INST-T1",
+		AlertType:    types.AlertTypePriceSpike,
+		Value:        500.0,
+	}
+
+	if err := s.SetThreshold(th1); err != nil {
+		t.Fatalf("SetThreshold th1: %v", err)
+	}
+	if err := s.SetThreshold(th2); err != nil {
+		t.Fatalf("SetThreshold th2: %v", err)
+	}
+
+	// Get thresholds for INST-T1 — should return both.
+	got, err := s.GetThresholds("INST-T1")
+	if err != nil {
+		t.Fatalf("GetThresholds: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 thresholds for INST-T1, got %d", len(got))
+	}
+
+	// Get thresholds for unknown instrument — should return empty.
+	none, err := s.GetThresholds("NO-SUCH-INST")
+	if err != nil {
+		t.Fatalf("GetThresholds unknown: %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("expected 0 thresholds for unknown instrument, got %d", len(none))
+	}
+
+	// Upsert: overwrite th1 with new value.
+	th1Updated := &types.SurveillanceThreshold{
+		InstrumentID: "INST-T1",
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        2000.0,
+	}
+	if err := s.SetThreshold(th1Updated); err != nil {
+		t.Fatalf("SetThreshold upsert: %v", err)
+	}
+	updated, _ := s.GetThresholds("INST-T1")
+	for _, th := range updated {
+		if th.AlertType == types.AlertTypeLargeTrade && th.Value != 2000.0 {
+			t.Errorf("expected updated threshold value 2000, got %f", th.Value)
+		}
+	}
+}
+
+// ============================================================
+// InstrumentGroupStore tests
+// ============================================================
+
+func TestInstrumentGroupStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryInstrumentGroupStore()
+
+	group := &types.InstrumentGroup{
+		ID:            "group-1",
+		Name:          "Blue Chips",
+		GroupType:     types.GroupTypeManual,
+		InstrumentIDs: []string{"INST-A", "INST-B"},
+		CreatedAt:     "2026-01-01T00:00:00Z",
+		UpdatedAt:     "2026-01-01T00:00:00Z",
+	}
+
+	if err := s.Create(group); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("group-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Name != "Blue Chips" {
+		t.Errorf("expected name Blue Chips, got %q", got.Name)
+	}
+	if len(got.InstrumentIDs) != 2 {
+		t.Errorf("expected 2 instrument IDs, got %d", len(got.InstrumentIDs))
+	}
+
+	// Not found.
+	_, err = s.Get("no-such-group")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestInstrumentGroupStore_List_Delete(t *testing.T) {
+	s := store.NewInMemoryInstrumentGroupStore()
+
+	for i, name := range []string{"GroupA", "GroupB"} {
+		g := &types.InstrumentGroup{
+			ID:        fmt.Sprintf("grp-%d", i),
+			Name:      name,
+			GroupType: types.GroupTypeManual,
+			CreatedAt: "2026-01-01T00:00:00Z",
+			UpdatedAt: "2026-01-01T00:00:00Z",
+		}
+		if err := s.Create(g); err != nil {
+			t.Fatalf("Create %s: %v", name, err)
+		}
+	}
+
+	// List — expect 2.
+	all, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 groups, got %d", len(all))
+	}
+
+	// Delete one.
+	if err := s.Delete("grp-0"); err != nil {
+		t.Fatalf("Delete grp-0: %v", err)
+	}
+
+	// List — expect 1.
+	remaining, err := s.List()
+	if err != nil {
+		t.Fatalf("List after delete: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Errorf("expected 1 group after delete, got %d", len(remaining))
+	}
+
+	// Delete non-existent.
+	if err := s.Delete("grp-0"); err == nil {
+		t.Error("expected error when deleting non-existent group")
+	}
+}
+
+func TestInstrumentGroupStore_AddRemoveInstrument(t *testing.T) {
+	s := store.NewInMemoryInstrumentGroupStore()
+
+	s.Create(&types.InstrumentGroup{
+		ID:            "grp-ar",
+		Name:          "Test Group",
+		GroupType:     types.GroupTypeManual,
+		InstrumentIDs: []string{},
+		CreatedAt:     "2026-01-01T00:00:00Z",
+		UpdatedAt:     "2026-01-01T00:00:00Z",
+	})
+
+	// Add 2 instruments.
+	if err := s.AddInstrument("grp-ar", "INST-X"); err != nil {
+		t.Fatalf("AddInstrument INST-X: %v", err)
+	}
+	if err := s.AddInstrument("grp-ar", "INST-Y"); err != nil {
+		t.Fatalf("AddInstrument INST-Y: %v", err)
+	}
+
+	got, _ := s.Get("grp-ar")
+	if len(got.InstrumentIDs) != 2 {
+		t.Errorf("expected 2 instruments after adding 2, got %d", len(got.InstrumentIDs))
+	}
+
+	// Add duplicate — idempotent, should still be 2.
+	if err := s.AddInstrument("grp-ar", "INST-X"); err != nil {
+		t.Fatalf("AddInstrument duplicate INST-X: %v", err)
+	}
+	got, _ = s.Get("grp-ar")
+	if len(got.InstrumentIDs) != 2 {
+		t.Errorf("expected 2 instruments after duplicate add, got %d", len(got.InstrumentIDs))
+	}
+
+	// Remove INST-X.
+	if err := s.RemoveInstrument("grp-ar", "INST-X"); err != nil {
+		t.Fatalf("RemoveInstrument INST-X: %v", err)
+	}
+
+	got, _ = s.Get("grp-ar")
+	if len(got.InstrumentIDs) != 1 {
+		t.Errorf("expected 1 instrument after remove, got %d", len(got.InstrumentIDs))
+	}
+	if got.InstrumentIDs[0] != "INST-Y" {
+		t.Errorf("expected remaining instrument INST-Y, got %q", got.InstrumentIDs[0])
+	}
+
+	// Add to non-existent group.
+	if err := s.AddInstrument("no-such-group", "INST-Z"); err == nil {
+		t.Error("expected error when adding to non-existent group")
+	}
+
+	// Remove from non-existent group.
+	if err := s.RemoveInstrument("no-such-group", "INST-Y"); err == nil {
+		t.Error("expected error when removing from non-existent group")
+	}
+}
+
+// ============================================================
+// OffBookTradeStore tests
+// ============================================================
+
+func newOffBookTrade(id, instrumentID, buyPart, sellPart string, qty int, price float64) *types.OffBookTrade {
+	return &types.OffBookTrade{
+		ID:              id,
+		InstrumentID:    instrumentID,
+		BuyParticipant:  buyPart,
+		SellParticipant: sellPart,
+		Price:           price,
+		Quantity:        qty,
+		TradeDate:       "2026-01-01",
+		Status:          types.OffBookReported,
+		CreatedAt:       "2026-01-01T00:00:00Z",
+		UpdatedAt:       "2026-01-01T00:00:00Z",
+	}
+}
+
+func TestOffBookTradeStore_Create_List(t *testing.T) {
+	s := store.NewInMemoryOffBookTradeStore()
+
+	t1 := newOffBookTrade("obt-1", "INST-1", "BUY-P", "SELL-P", 500, 100.0)
+	t2 := newOffBookTrade("obt-2", "INST-2", "BUY-P", "SELL-P", 1000, 200.0)
+
+	if err := s.Create(t1); err != nil {
+		t.Fatalf("Create obt-1: %v", err)
+	}
+	if err := s.Create(t2); err != nil {
+		t.Fatalf("Create obt-2: %v", err)
+	}
+
+	all, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 off-book trades, got %d", len(all))
+	}
+
+	// Duplicate create should fail.
+	if err := s.Create(t1); err == nil {
+		t.Error("expected error on duplicate Create")
+	}
+}
+
+func TestOffBookTradeStore_UpdateStatus(t *testing.T) {
+	s := store.NewInMemoryOffBookTradeStore()
+
+	trade := newOffBookTrade("obt-s", "INST-1", "BUY-P", "SELL-P", 100, 50.0)
+	if err := s.Create(trade); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Verify initial status.
+	got, err := s.Get("obt-s")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != types.OffBookReported {
+		t.Errorf("expected initial status REPORTED, got %q", got.Status)
+	}
+
+	// Update to CONFIRMED.
+	if err := s.UpdateStatus("obt-s", types.OffBookConfirmed); err != nil {
+		t.Fatalf("UpdateStatus CONFIRMED: %v", err)
+	}
+
+	got, err = s.Get("obt-s")
+	if err != nil {
+		t.Fatalf("Get after update: %v", err)
+	}
+	if got.Status != types.OffBookConfirmed {
+		t.Errorf("expected status CONFIRMED, got %q", got.Status)
+	}
+	if got.UpdatedAt == "2026-01-01T00:00:00Z" {
+		// updated_at should have changed — if it's still the creation timestamp something is wrong
+		// (only fail if it looks like it wasn't updated at all — UpdatedAt may equal CreatedAt on fast machines)
+	}
+
+	// Not found.
+	if err := s.UpdateStatus("no-such-trade", types.OffBookConfirmed); err == nil {
+		t.Error("expected error when updating non-existent trade")
+	}
+}

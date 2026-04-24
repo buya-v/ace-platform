@@ -38,6 +38,7 @@ func newPendingChangeTestServer(t *testing.T) (*httptest.Server, *store.InMemory
 		nil, nil, nil, nil, nil,
 		pcStore,
 		nil,
+		nil, nil, nil,
 		nil, me, nil, nil, nil,
 		cfg,
 	)

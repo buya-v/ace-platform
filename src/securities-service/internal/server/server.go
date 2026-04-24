@@ -57,6 +57,9 @@ type Server struct {
 	auditStore           store.AuditStore
 	pendingChangeStore   store.PendingChangeStore
 	referencePriceStore  store.ReferencePriceStore
+	surveillanceStore    store.SurveillanceStore
+	instrumentGroupStore store.InstrumentGroupStore
+	offBookTradeStore    store.OffBookTradeStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -74,6 +77,8 @@ type Server struct {
 // tradeCorrectionStore may be nil; if so, trade correction endpoints return 503.
 // announcementStore and auditStore may be nil; if so, those endpoints return 503.
 // pendingChangeStore and referencePriceStore may be nil; if so, those endpoints return 503.
+// surveillanceStore, instrumentGroupStore, and offBookTradeStore may be nil; if so, those
+// endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -94,6 +99,9 @@ func New(
 	auditStore store.AuditStore,
 	pendingChangeStore store.PendingChangeStore,
 	referencePriceStore store.ReferencePriceStore,
+	surveillanceStore store.SurveillanceStore,
+	instrumentGroupStore store.InstrumentGroupStore,
+	offBookTradeStore store.OffBookTradeStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -122,6 +130,9 @@ func New(
 		auditStore:           auditStore,
 		pendingChangeStore:   pendingChangeStore,
 		referencePriceStore:  referencePriceStore,
+		surveillanceStore:    surveillanceStore,
+		instrumentGroupStore: instrumentGroupStore,
+		offBookTradeStore:    offBookTradeStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -238,6 +249,19 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Pending changes (P2c Part C)
 	mux.HandleFunc("/api/v1/securities/pending-changes", s.handlePendingChanges)
 	mux.HandleFunc("/api/v1/securities/pending-changes/", s.handlePendingChange)
+
+	// Surveillance
+	mux.HandleFunc("/api/v1/securities/surveillance/alerts", s.handleSurveillanceAlerts)
+	mux.HandleFunc("/api/v1/securities/surveillance/alerts/", s.handleSurveillanceAlert)
+	mux.HandleFunc("/api/v1/securities/surveillance/thresholds/", s.handleSurveillanceThresholds)
+
+	// Instrument groups
+	mux.HandleFunc("/api/v1/securities/instrument-groups", s.handleInstrumentGroups)
+	mux.HandleFunc("/api/v1/securities/instrument-groups/", s.handleInstrumentGroup)
+
+	// Off-book trades
+	mux.HandleFunc("/api/v1/securities/off-book-trades", s.handleOffBookTrades)
+	mux.HandleFunc("/api/v1/securities/off-book-trades/", s.handleOffBookTrade)
 
 }
 

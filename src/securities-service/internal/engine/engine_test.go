@@ -1259,3 +1259,127 @@ func TestFOK_NoCrossing(t *testing.T) {
 		t.Errorf("expected 0 trades for FOK no-crossing, got %d", len(trades))
 	}
 }
+
+// ============================================================
+// Surveillance engine tests
+// ============================================================
+
+// newEngineWithSurveillance creates a MatchingEngine wired with a real SurveillanceStore.
+func newEngineWithSurveillance(s *testStores, ss *store.InMemorySurveillanceStore) *engine.MatchingEngine {
+	e := engine.NewMatchingEngine(s.inst, s.ord, s.trd, s.pos, nil, nil, nil)
+	e.SetSurveillanceStore(ss)
+	return e
+}
+
+// submitMatchingPair submits a sell resting order then a buy incoming order
+// that fully crosses it, returning the resulting trades.
+func submitMatchingPair(t *testing.T, e *engine.MatchingEngine, s *testStores, qty int) []types.SecurityTrade {
+	t.Helper()
+	sell := limitOrder("sell-1", testInstID, "P-SELL", types.OrderSideSell, qty, 10.0, ts(0))
+	if err := s.ord.Submit(sell); err != nil {
+		t.Fatalf("submit sell: %v", err)
+	}
+	buy := limitOrder("buy-1", testInstID, "P-BUY", types.OrderSideBuy, qty, 10.0, ts(1))
+	if err := s.ord.Submit(buy); err != nil {
+		t.Fatalf("submit buy: %v", err)
+	}
+	trades, err := e.MatchOrder("ace-commodities", buy)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+	return trades
+}
+
+func TestSurveillance_LargeTrade(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	// Set LARGE_TRADE threshold at 50.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        50,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit a trade with quantity 100 — should trigger.
+	trades := submitMatchingPair(t, eng, s, 100)
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected at least 1 LARGE_TRADE alert, got 0")
+	}
+	if alerts[0].AlertType != types.AlertTypeLargeTrade {
+		t.Errorf("expected LARGE_TRADE alert, got %q", alerts[0].AlertType)
+	}
+	if alerts[0].Status != types.AlertStatusOpen {
+		t.Errorf("expected OPEN alert, got %q", alerts[0].Status)
+	}
+	if alerts[0].TradeID != trades[0].ID {
+		t.Errorf("expected trade ID %q in alert, got %q", trades[0].ID, alerts[0].TradeID)
+	}
+}
+
+func TestSurveillance_NormalTrade(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	// Set LARGE_TRADE threshold at 50.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        50,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit a trade with quantity 10 — should NOT trigger.
+	trades := submitMatchingPair(t, eng, s, 10)
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts for quantity 10 with threshold 50, got %d", len(alerts))
+	}
+}
+
+func TestSurveillance_NoThreshold(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+	// No threshold set.
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Even a large quantity trade should produce no alerts.
+	trades := submitMatchingPair(t, eng, s, 9999)
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts when no threshold set, got %d", len(alerts))
+	}
+}
