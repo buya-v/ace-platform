@@ -1,7 +1,56 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260424-p2a-production-trading",
+  "feature": "MillenniumIT P2a — Production Trading Features",
+  "requirement": "Trade correction, order throttling, tiered tick tables, IOC/FOK enforcement",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Trade correction + tiered tick tables + IOC/FOK types + throttle types",
+      "description": "Add types and stores for trade corrections, tiered tick tables, order throttling, and IOC/FOK enforcement.\n\nAPPEND to src/securities-service/internal/types/types.go:\n\nPart A — Trade correction:\n- TradeCorrection struct: ID, TradeID, Action (BUST/CORRECT/REINSTATE), Reason, OriginalPrice float64, OriginalQuantity int, CorrectedPrice float64, CorrectedQuantity int, ActorID, Timestamp — json tags\n- Add TradeStatus field to SecurityTrade if not present: Status string (TRADE_ACTIVE/TRADE_BUSTED/TRADE_CORRECTED)\n\nPart B — Tiered tick table:\n- TickTier struct: MinPrice float64, MaxPrice float64, TickSize float64 — json tags\n- TickTable struct: InstrumentID string, Tiers []TickTier — json tags\n\nPart C — Order throttle:\n- ThrottleConfig struct: FirmID string, MaxOrdersPerSecond int, CurrentCount int, WindowStart time.Time\n\nPart D — IOC/FOK constants (verify TimeInForce already has IOC, FOK):\n- Ensure TIF_IOC and TIF_FOK constants exist alongside TIF_GTC, TIF_DAY, TIF_GTD\n\nAPPEND to src/securities-service/internal/store/store.go:\n- TradeCorrectionStore interface: Create(*TradeCorrection) error, ListByTrade(tradeID string) ([]TradeCorrection, error)\n- TickTableStore interface: Get(instrumentID string) (*TickTable, error), Set(*TickTable) error, Delete(instrumentID string) error\n- ThrottleStore interface: CheckAndIncrement(firmID string, maxPerSecond int) (bool, error) — returns true if under limit\n- InMemory implementations for all three\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Engine: tiered tick validation + IOC/FOK + throttle check",
+      "description": "Wire tiered tick tables, IOC/FOK enforcement, and order throttling into the matching engine.\n\nRead .softhouse/handoff/T1.md for types.\nRead src/securities-service/internal/engine/engine.go for MatchOrder.\nRead src/securities-service/internal/server/handlers_order.go for order submission.\n\nPart A — Tiered tick validation (new: src/securities-service/internal/engine/tick_table.go):\n- ValidateTickSize(price float64, tickTable *TickTable) error\n  - Find the tier where MinPrice <= price < MaxPrice\n  - Check: math.Remainder(price, tier.TickSize) within 1e-9 epsilon\n  - If no tier matches, use instrument's default tick_size\n  - Return error 'price X must be a multiple of tick_size Y (tier: Z-W)'\n- Wire into handleSubmitOrder: before existing tick_size check, try tiered validation first\n\nPart B — IOC/FOK enforcement (modify engine.go MatchOrder):\n- After matching completes, check order's TimeInForce:\n  - IOC: if order has remaining quantity (not fully filled), cancel the remainder immediately. Set status to PARTIALLY_FILLED or CANCELLED.\n  - FOK: before matching, check if total available resting volume >= order quantity. If not, reject entire order with 422 'FOK order cannot be fully filled'. If yes, proceed with matching.\n- These only apply to incoming orders, not resting orders.\n\nPart C — Order throttle (modify handlers_order.go):\n- Before processing order submission, call throttleStore.CheckAndIncrement(participantID, maxPerSecond)\n- If over limit: return 429 {error: {code: 'THROTTLED', message: 'rate limit exceeded: max N orders/sec'}}\n- Default maxPerSecond: 100 (configurable per firm via ThrottleConfig)\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "opus",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/engine/tick_table.go", "src/securities-service/internal/engine/engine.go", "src/securities-service/internal/server/handlers_order.go"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Trade correction handlers + tick table + throttle endpoints + gateway",
+      "description": "Add HTTP endpoints for trade corrections, tick tables, throttle config.\n\nRead .softhouse/handoff/T1.md, T2.md.\n\nPart A — Trade correction handlers (new: handlers_trade.go):\n- GET /api/v1/securities/trades — list trades\n- GET /api/v1/securities/trades/{id} — get trade\n- POST /api/v1/securities/trades/{id}/bust — bust trade (validate: reason required, trade must be ACTIVE)\n  - Mark trade as BUSTED, reverse positions, create TradeCorrection audit record\n- POST /api/v1/securities/trades/{id}/correct — correct trade (validate: new price/qty, reason)\n  - Update trade, adjust positions, create TradeCorrection audit record\n- POST /api/v1/securities/trades/{id}/reinstate — reinstate busted trade\n  - Mark ACTIVE again, re-apply positions, create TradeCorrection audit record\n- GET /api/v1/securities/trades/{id}/corrections — list corrections for a trade\n\nPart B — Tick table endpoints (add to handlers_instrument.go or new file):\n- GET /api/v1/securities/tick-tables/{instrument_id} — get tick table\n- PUT /api/v1/securities/tick-tables/{instrument_id} — set tick table {tiers: [{min_price, max_price, tick_size}]}\n- DELETE /api/v1/securities/tick-tables/{instrument_id} — remove (falls back to instrument default)\n\nPart C — Wire into server.go + main.go + gateway routes.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/handlers_trade.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": ["T2"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Unit tests for P2a features",
+      "description": "Write tests for trade corrections, tiered tick tables, IOC/FOK, and throttling.\n\nTests:\n\n1. engine/tick_table_test.go:\n- TestTieredTick_ValidPrice — price aligns with tier's tick_size → pass\n- TestTieredTick_InvalidPrice — price doesn't align → error with tier info\n- TestTieredTick_MultipleTiers — price falls in different tiers, each validated correctly\n- TestTieredTick_NoTable — falls back to instrument default tick_size\n\n2. engine_test.go additions:\n- TestIOC_PartialFill — IOC order partially fills, remainder cancelled\n- TestIOC_FullFill — IOC fully filled, no cancellation\n- TestIOC_NoMatch — IOC with no matches, entire order cancelled\n- TestFOK_FullFill — FOK fully fillable, executes\n- TestFOK_InsufficientLiquidity — FOK rejected, 0 trades\n\n3. store_test.go additions:\n- TestTradeCorrectionStore_Create_List\n- TestTickTableStore_SetGetDelete\n- TestThrottleStore_UnderLimit — returns true\n- TestThrottleStore_OverLimit — returns false after N calls\n- TestThrottleStore_WindowReset — limit resets after 1 second\n\nTarget: 70%+ on new code.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T4.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/engine/tick_table_test.go", "src/securities-service/internal/engine/engine_test.go", "src/securities-service/internal/store/store_test.go"],
+      "dependencies": ["T3"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
