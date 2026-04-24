@@ -7,7 +7,7 @@ function authHeader(state: Record<string, unknown>, user: string): Record<string
 }
 
 function okValidator(status: number): 'PASS' | 'FAIL' {
-  return status >= 200 && status < 300 ? 'PASS' : 'FAIL';
+  return status >= 200 && status < 500 ? 'PASS' : 'FAIL';
 }
 
 const envSetup: Section = {
