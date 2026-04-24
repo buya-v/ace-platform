@@ -45,6 +45,9 @@ type Server struct {
 	settlementStore      store.SettlementStore
 	corporateActionStore store.CorporateActionStore
 	entitlementStore     store.EntitlementStore
+	marketStore          store.MarketStore
+	segmentStore         store.SegmentStore
+	circuitBreakerStore  store.CircuitBreakerStore
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
 	settlementEngine     *settlement.SettlementEngine
@@ -55,6 +58,8 @@ type Server struct {
 // New creates a new Server with the given stores, matching engine, and configuration.
 // producer may be nil; if so, order events are not published.
 // settlementEngine and settlementStore may be nil; if so, settlement endpoints return 503.
+// marketStore, segmentStore, and circuitBreakerStore may be nil; if so, those endpoints
+// return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -63,6 +68,9 @@ func New(
 	settlementStore store.SettlementStore,
 	corporateActionStore store.CorporateActionStore,
 	entitlementStore store.EntitlementStore,
+	marketStore store.MarketStore,
+	segmentStore store.SegmentStore,
+	circuitBreakerStore store.CircuitBreakerStore,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
 	settlementEngine *settlement.SettlementEngine,
@@ -78,6 +86,9 @@ func New(
 		settlementStore:      settlementStore,
 		corporateActionStore: corporateActionStore,
 		entitlementStore:     entitlementStore,
+		marketStore:          marketStore,
+		segmentStore:         segmentStore,
+		circuitBreakerStore:  circuitBreakerStore,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
 		settlementEngine:     settlementEngine,
@@ -128,7 +139,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/instruments", s.handleInstruments)
 	mux.HandleFunc("/api/v1/securities/instruments/", s.handleInstrument)
 
-	// Orders
+	// Orders — mass-cancel must be registered before the wildcard orders/ route.
+	mux.HandleFunc("/api/v1/securities/orders/mass-cancel", s.handleMassCancel)
 	mux.HandleFunc("/api/v1/securities/orders", s.handleOrders)
 	mux.HandleFunc("/api/v1/securities/orders/", s.handleOrder)
 
@@ -146,6 +158,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// FRC Reports
 	mux.HandleFunc("/api/v1/securities/reports/frc", s.handleFRCReport)
+
+	// Markets and Segments (MillenniumIT P1)
+	mux.HandleFunc("/api/v1/securities/markets", s.handleMarkets)
+	mux.HandleFunc("/api/v1/securities/markets/", s.handleMarket)
+	mux.HandleFunc("/api/v1/securities/segments", s.handleSegments)
+
+	// Circuit Breakers (MillenniumIT P1)
+	mux.HandleFunc("/api/v1/securities/circuit-breakers", s.handleCircuitBreakers)
+	mux.HandleFunc("/api/v1/securities/circuit-breakers/", s.handleCircuitBreaker)
 }
 
 // --- Health endpoints ---

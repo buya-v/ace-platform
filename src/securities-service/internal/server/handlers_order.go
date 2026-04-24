@@ -365,3 +365,85 @@ func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
 
 	s.writeJSON(w, http.StatusOK, cancelled)
 }
+
+// massCancelRequest is the optional request body for POST .../orders/mass-cancel.
+// All fields are optional — an empty body cancels all PENDING orders.
+type massCancelRequest struct {
+	InstrumentID  string          `json:"instrument_id"`
+	ParticipantID string          `json:"participant_id"`
+	Side          types.OrderSide `json:"side"`
+}
+
+// massCancelResponse is the response body for the mass-cancel endpoint.
+type massCancelResponse struct {
+	CancelledCount int                    `json:"cancelled_count"`
+	Orders         []types.SecurityOrder  `json:"orders"`
+}
+
+// handleMassCancel handles POST /api/v1/securities/orders/mass-cancel.
+//
+// Filters all PENDING orders matching the optional request body filters, cancels
+// each one, and returns the count and updated order list.
+//
+// Request body (all optional):
+//
+//	instrument_id  — restrict to orders for this instrument
+//	participant_id — restrict to orders from this participant
+//	side           — restrict to orders with this side (BUY, SELL, SHORT_SELL)
+func (s *Server) handleMassCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+
+	var req massCancelRequest
+	// Body is optional — ignore decode errors for empty bodies.
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+			return
+		}
+	}
+
+	// List all PENDING orders matching the filters.
+	filters := store.OrderFilters{
+		InstrumentID:  req.InstrumentID,
+		ParticipantID: req.ParticipantID,
+		Status:        types.OrderStatusPending,
+	}
+
+	pending, err := s.orderStore.List(filters)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Apply optional side filter in-memory.
+	if req.Side != "" {
+		filtered := pending[:0]
+		for _, o := range pending {
+			if o.Side == req.Side {
+				filtered = append(filtered, o)
+			}
+		}
+		pending = filtered
+	}
+
+	cancelled := make([]types.SecurityOrder, 0, len(pending))
+	for _, o := range pending {
+		if err := s.orderStore.Cancel(o.ID); err != nil {
+			// Skip orders that are no longer cancellable (race condition).
+			continue
+		}
+		updated, err := s.orderStore.Get(o.ID)
+		if err != nil {
+			continue
+		}
+		cancelled = append(cancelled, *updated)
+	}
+
+	s.writeJSON(w, http.StatusOK, massCancelResponse{
+		CancelledCount: len(cancelled),
+		Orders:         cancelled,
+	})
+}

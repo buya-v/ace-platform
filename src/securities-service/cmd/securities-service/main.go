@@ -72,6 +72,11 @@ func main() {
 	corporateActionStore := store.NewInMemoryCorporateActionStore()
 	entitlementStore := store.NewInMemoryEntitlementStore()
 
+	// Market/Segment/CircuitBreaker stores (MillenniumIT P1).
+	marketStore := store.NewInMemoryMarketStore()
+	segmentStore := store.NewInMemorySegmentStore()
+	circuitBreakerStore := store.NewInMemoryCircuitBreakerStore()
+
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
@@ -88,7 +93,8 @@ func main() {
 	// Settlement engine processes T+2 obligations from trades.
 	settlementEngine := settlement.NewSettlementEngine(orderStore, settlementStore)
 
-	cbEngine := engine.NewCircuitBreakerEngine(store.NewInMemoryCircuitBreakerStore())
+	// Circuit breaker engine shares the same store used by the HTTP handlers.
+	cbEngine := engine.NewCircuitBreakerEngine(circuitBreakerStore)
 	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine, cbEngine)
 
 	// Auction engine collects orders during pre-open and closing auction phases.
@@ -97,7 +103,23 @@ func main() {
 	// Session manager routes orders to the correct engine based on market phase.
 	sessionManager := engine.NewSessionManager(auctionEngine, matchingEngine)
 
-	srv := server.New(instrumentStore, orderStore, tradeStore, positionStore, settlementStore, corporateActionStore, entitlementStore, matchingEngine, sessionManager, settlementEngine, producer, cfg)
+	srv := server.New(
+		instrumentStore,
+		orderStore,
+		tradeStore,
+		positionStore,
+		settlementStore,
+		corporateActionStore,
+		entitlementStore,
+		marketStore,
+		segmentStore,
+		circuitBreakerStore,
+		matchingEngine,
+		sessionManager,
+		settlementEngine,
+		producer,
+		cfg,
+	)
 
 	// Start health server on port 9089.
 	go func() {

@@ -48,7 +48,7 @@ func newTestServerWithCA(t *testing.T, s caStores) *httptest.Server {
 	cfg := DefaultConfig()
 	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil, nil)
 	srv := New(s.instrument, s.order, s.trade, s.position, nil,
-		s.corporateAct, s.entitlement, me, nil, nil, nil, cfg)
+		s.corporateAct, s.entitlement, store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), me, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()
