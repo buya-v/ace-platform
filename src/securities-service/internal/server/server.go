@@ -46,6 +46,7 @@ type Server struct {
 	corporateActionStore store.CorporateActionStore
 	entitlementStore     store.EntitlementStore
 	engine               *engine.MatchingEngine
+	sessionManager       *engine.SessionManager
 	settlementEngine     *settlement.SettlementEngine
 	producer             kafka.Producer
 	ready                atomic.Int32
@@ -63,6 +64,7 @@ func New(
 	corporateActionStore store.CorporateActionStore,
 	entitlementStore store.EntitlementStore,
 	matchingEngine *engine.MatchingEngine,
+	sessionManager *engine.SessionManager,
 	settlementEngine *settlement.SettlementEngine,
 	producer kafka.Producer,
 	cfg Config,
@@ -77,6 +79,7 @@ func New(
 		corporateActionStore: corporateActionStore,
 		entitlementStore:     entitlementStore,
 		engine:               matchingEngine,
+		sessionManager:       sessionManager,
 		settlementEngine:     settlementEngine,
 		producer:             producer,
 	}
@@ -136,6 +139,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Corporate Actions
 	mux.HandleFunc("/api/v1/securities/corporate-actions", s.handleCorporateActions)
 	mux.HandleFunc("/api/v1/securities/corporate-actions/", s.handleCorporateAction)
+
+	// Sessions
+	mux.HandleFunc("/api/v1/securities/sessions", s.handleSessions)
+	mux.HandleFunc("/api/v1/securities/sessions/", s.handleSessionTransition)
 
 	// FRC Reports
 	mux.HandleFunc("/api/v1/securities/reports/frc", s.handleFRCReport)

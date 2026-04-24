@@ -90,7 +90,13 @@ func main() {
 
 	matchingEngine := engine.NewMatchingEngine(instrumentStore, orderStore, tradeStore, positionStore, producer, settlementEngine)
 
-	srv := server.New(instrumentStore, orderStore, tradeStore, positionStore, settlementStore, corporateActionStore, entitlementStore, matchingEngine, settlementEngine, producer, cfg)
+	// Auction engine collects orders during pre-open and closing auction phases.
+	auctionEngine := engine.NewAuctionEngine(orderStore, tradeStore, positionStore, settlementEngine)
+
+	// Session manager routes orders to the correct engine based on market phase.
+	sessionManager := engine.NewSessionManager(auctionEngine, matchingEngine)
+
+	srv := server.New(instrumentStore, orderStore, tradeStore, positionStore, settlementStore, corporateActionStore, entitlementStore, matchingEngine, sessionManager, settlementEngine, producer, cfg)
 
 	// Start health server on port 9089.
 	go func() {

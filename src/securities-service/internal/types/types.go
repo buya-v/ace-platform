@@ -251,6 +251,26 @@ type FRCReport struct {
 	GeneratedAt string                 `json:"generated_at"`
 }
 
+// MarketSession represents the current trading session phase of an instrument.
+type MarketSession string
+
+const (
+	SessionPreOpen        MarketSession = "PRE_OPEN"
+	SessionContinuous     MarketSession = "CONTINUOUS"
+	SessionClosingAuction MarketSession = "CLOSING_AUCTION"
+	SessionClosed         MarketSession = "CLOSED"
+)
+
+// AuctionResult summarises the outcome of a call auction.
+type AuctionResult struct {
+	InstrumentID      string  `json:"instrument_id"`
+	ClearingPrice     float64 `json:"clearing_price"`
+	MatchedVolume     int     `json:"matched_volume"`
+	UnmatchedBuyVolume  int   `json:"unmatched_buy_volume"`
+	UnmatchedSellVolume int   `json:"unmatched_sell_volume"`
+	TradeCount        int     `json:"trade_count"`
+}
+
 // ErrorDetail carries a machine-readable code and human-readable message.
 type ErrorDetail struct {
 	Code    string   `json:"code"`

@@ -176,9 +176,15 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		_ = err
 	}
 
-	// Run matching engine if available.
+	// Route through SessionManager if available, otherwise fall back to direct matching.
 	var trades []types.SecurityTrade
-	if s.engine != nil {
+	if s.sessionManager != nil {
+		matched, err := s.sessionManager.SubmitOrder(&order, tenantID.String())
+		if err == nil {
+			trades = matched
+		}
+		// Non-fatal: if matching/collection fails, the order is still stored as PENDING.
+	} else if s.engine != nil {
 		matched, err := s.engine.MatchOrder(tenantID.String(), &order)
 		if err == nil {
 			trades = matched
