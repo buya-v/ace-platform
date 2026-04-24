@@ -202,6 +202,20 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		_ = err
 	}
 
+	// Audit log: order created (best-effort, do not fail the operation).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "ORDER",
+			EntityID:   order.ID,
+			Action:     "CREATE",
+			ActorID:    order.ParticipantID,
+			TenantID:   tenantID.String(),
+			Timestamp:  order.CreatedAt,
+		})
+	}
+
 	// Route through SessionManager if available, otherwise fall back to direct matching.
 	var trades []types.SecurityTrade
 	if s.sessionManager != nil {

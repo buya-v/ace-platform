@@ -1117,6 +1117,99 @@ func (s *InMemoryTickTableStore) Delete(instrumentID string) error {
 	return nil
 }
 
+// ── AnnouncementStore ─────────────────────────────────────────────────────────
+
+// AnnouncementStore defines the repository contract for exchange announcements.
+type AnnouncementStore interface {
+	Create(a *types.Announcement) error
+	ListByTenant(tenantID string) ([]types.Announcement, error)
+}
+
+// InMemoryAnnouncementStore is a thread-safe, in-memory implementation of AnnouncementStore.
+type InMemoryAnnouncementStore struct {
+	mu   sync.RWMutex
+	data []types.Announcement
+}
+
+// NewInMemoryAnnouncementStore returns an empty InMemoryAnnouncementStore.
+func NewInMemoryAnnouncementStore() *InMemoryAnnouncementStore {
+	return &InMemoryAnnouncementStore{}
+}
+
+// Create appends a new announcement.
+func (s *InMemoryAnnouncementStore) Create(a *types.Announcement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data = append(s.data, *a)
+	return nil
+}
+
+// ListByTenant returns all announcements for the given tenant.
+func (s *InMemoryAnnouncementStore) ListByTenant(tenantID string) ([]types.Announcement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]types.Announcement, 0)
+	for _, a := range s.data {
+		if a.TenantID == tenantID {
+			result = append(result, a)
+		}
+	}
+	return result, nil
+}
+
+// ── AuditStore ────────────────────────────────────────────────────────────────
+
+// AuditStore defines the repository contract for audit trail entries.
+type AuditStore interface {
+	Log(entry types.AuditEntry) error
+	List(filters types.AuditFilters) ([]types.AuditEntry, error)
+}
+
+// InMemoryAuditStore is a thread-safe, in-memory implementation of AuditStore.
+type InMemoryAuditStore struct {
+	mu   sync.RWMutex
+	data []types.AuditEntry
+}
+
+// NewInMemoryAuditStore returns an empty InMemoryAuditStore.
+func NewInMemoryAuditStore() *InMemoryAuditStore {
+	return &InMemoryAuditStore{}
+}
+
+// Log appends a new audit entry.
+func (s *InMemoryAuditStore) Log(entry types.AuditEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data = append(s.data, entry)
+	return nil
+}
+
+// List returns audit entries matching the given filters.
+func (s *InMemoryAuditStore) List(filters types.AuditFilters) ([]types.AuditEntry, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]types.AuditEntry, 0)
+	for _, e := range s.data {
+		if filters.EntityType != "" && e.EntityType != filters.EntityType {
+			continue
+		}
+		if filters.EntityID != "" && e.EntityID != filters.EntityID {
+			continue
+		}
+		if filters.ActorID != "" && e.ActorID != filters.ActorID {
+			continue
+		}
+		if filters.StartDate != "" && e.Timestamp < filters.StartDate {
+			continue
+		}
+		if filters.EndDate != "" && e.Timestamp > filters.EndDate {
+			continue
+		}
+		result = append(result, e)
+	}
+	return result, nil
+}
+
 // ── ThrottleStore ─────────────────────────────────────────────────────────────
 
 // ThrottleStore defines the repository contract for per-firm order rate limiting.

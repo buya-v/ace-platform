@@ -53,6 +53,8 @@ type Server struct {
 	tickTableStore       store.TickTableStore
 	tradeCorrectionStore store.TradeCorrectionStore
 	throttleStore        store.ThrottleStore
+	announcementStore    store.AnnouncementStore
+	auditStore           store.AuditStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -68,6 +70,7 @@ type Server struct {
 // return 503.
 // firmStore, participantStore, and dayManager may be nil; if so, those endpoints return 503.
 // tradeCorrectionStore may be nil; if so, trade correction endpoints return 503.
+// announcementStore and auditStore may be nil; if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -84,6 +87,8 @@ func New(
 	tickTableStore store.TickTableStore,
 	tradeCorrectionStore store.TradeCorrectionStore,
 	throttleStore store.ThrottleStore,
+	announcementStore store.AnnouncementStore,
+	auditStore store.AuditStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -108,6 +113,8 @@ func New(
 		tickTableStore:       tickTableStore,
 		tradeCorrectionStore: tradeCorrectionStore,
 		throttleStore:        throttleStore,
+		announcementStore:    announcementStore,
+		auditStore:           auditStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -195,6 +202,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Participants
 	mux.HandleFunc("/api/v1/securities/participants", s.handleParticipants)
 	mux.HandleFunc("/api/v1/securities/participants/", s.handleParticipant)
+
+	// Announcements
+	mux.HandleFunc("/api/v1/securities/announcements", s.handleAnnouncements)
+
+	// Audit trail
+	mux.HandleFunc("/api/v1/securities/audit-trail", s.handleAuditTrail)
 
 	// Day lifecycle
 	mux.HandleFunc("/api/v1/securities/day/status", s.handleDayStatus)

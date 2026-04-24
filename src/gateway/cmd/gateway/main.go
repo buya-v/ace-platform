@@ -193,6 +193,14 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/participants", secHandler)
 	rt.Handle("GET", "/api/v1/securities/participants/{id}", secHandler)
 	rt.Handle("PUT", "/api/v1/securities/participants/{id}/permissions", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants/{id}/force-logout", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants/{id}/suspend", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants/{id}/reinstate", secHandler)
+	// Announcements
+	rt.Handle("GET", "/api/v1/securities/announcements", secHandler)
+	rt.Handle("POST", "/api/v1/securities/announcements", secHandler)
+	// Audit trail
+	rt.Handle("GET", "/api/v1/securities/audit-trail", secHandler)
 	// Day lifecycle
 	rt.Handle("GET", "/api/v1/securities/day/status", secHandler)
 	rt.Handle("POST", "/api/v1/securities/day/start", secHandler)

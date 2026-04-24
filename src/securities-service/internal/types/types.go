@@ -464,3 +464,48 @@ type TickTable struct {
 	InstrumentID string     `json:"instrument_id"`
 	Tiers        []TickTier `json:"tiers"`
 }
+
+// ── Announcements ─────────────────────────────────────────────────────────────
+
+// AnnouncementAudience controls who can see an announcement.
+type AnnouncementAudience string
+
+const (
+	AudiencePublic      AnnouncementAudience = "PUBLIC"
+	AudienceParticipant AnnouncementAudience = "PARTICIPANT"
+	AudienceInternal    AnnouncementAudience = "INTERNAL"
+)
+
+// Announcement is a market notice published by the exchange operator.
+type Announcement struct {
+	ID        string               `json:"id"`
+	TenantID  string               `json:"tenant_id"`
+	Title     string               `json:"title"`
+	Body      string               `json:"body"`
+	Audience  AnnouncementAudience `json:"audience"`
+	CreatedAt string               `json:"created_at"`
+	UpdatedAt string               `json:"updated_at"`
+}
+
+// ── Audit Trail ───────────────────────────────────────────────────────────────
+
+// AuditEntry records a single auditable action on a domain entity.
+type AuditEntry struct {
+	ID         string `json:"id"`
+	EntityType string `json:"entity_type"` // ORDER | TRADE | INSTRUMENT | PARTICIPANT
+	EntityID   string `json:"entity_id"`
+	Action     string `json:"action"` // CREATE | UPDATE | BUST | SUSPEND | REINSTATE
+	ActorID    string `json:"actor_id"`
+	TenantID   string `json:"tenant_id"`
+	Timestamp  string `json:"timestamp"`
+	Detail     string `json:"detail,omitempty"`
+}
+
+// AuditFilters carries optional filter parameters for listing audit entries.
+type AuditFilters struct {
+	EntityType string
+	EntityID   string
+	ActorID    string
+	StartDate  string
+	EndDate    string
+}

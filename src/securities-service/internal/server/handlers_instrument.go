@@ -305,13 +305,29 @@ func (s *Server) handleUpdateInstrumentStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	changedAt := time.Now().UTC().Format(time.RFC3339)
 	resp := instrumentStatusResponse{
 		InstrumentID:   id,
 		PreviousStatus: previousStatus,
 		CurrentStatus:  req.Status,
 		Reason:         req.Reason,
-		ChangedAt:      time.Now().UTC().Format(time.RFC3339),
+		ChangedAt:      changedAt,
 	}
+
+	// Audit log: instrument status updated (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "INSTRUMENT",
+			EntityID:   id,
+			Action:     "UPDATE",
+			ActorID:    "system",
+			Timestamp:  changedAt,
+			Detail:     string(req.Status),
+		})
+	}
+
 	s.writeJSON(w, http.StatusOK, resp)
 }
 

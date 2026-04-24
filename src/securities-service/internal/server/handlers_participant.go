@@ -12,6 +12,14 @@ import (
 	"github.com/garudax-platform/securities-service/internal/types"
 )
 
+// actorFromRequest extracts an actor ID from the X-Actor-ID header, defaulting to "system".
+func actorFromRequest(r *http.Request) string {
+	if a := r.Header.Get("X-Actor-ID"); a != "" {
+		return a
+	}
+	return "system"
+}
+
 // ── Firms ─────────────────────────────────────────────────────────────────────
 
 // handleFirms dispatches GET /api/v1/securities/firms (list)
@@ -201,15 +209,44 @@ func (s *Server) handleParticipants(w http.ResponseWriter, r *http.Request) {
 
 // handleParticipant dispatches GET /api/v1/securities/participants/{id}
 // and PUT /api/v1/securities/participants/{id}/permissions.
+// Also handles POST sub-resources: /force-logout, /suspend, /reinstate.
 func (s *Server) handleParticipant(w http.ResponseWriter, r *http.Request) {
 	if s.participantStore == nil {
 		s.writeError(w, http.StatusServiceUnavailable, "NOT_CONFIGURED", "participant store not configured", nil)
 		return
 	}
+	trimmed := strings.TrimSuffix(r.URL.Path, "/")
 	// Detect /permissions sub-resource.
-	if strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/permissions") {
+	if strings.HasSuffix(trimmed, "/permissions") {
 		if r.Method == http.MethodPut {
 			s.handleUpdateParticipantPermissions(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
+	// Detect /force-logout sub-resource.
+	if strings.HasSuffix(trimmed, "/force-logout") {
+		if r.Method == http.MethodPost {
+			s.handleForceLogout(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
+	// Detect /suspend sub-resource.
+	if strings.HasSuffix(trimmed, "/suspend") {
+		if r.Method == http.MethodPost {
+			s.handleSuspendParticipant(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
+	// Detect /reinstate sub-resource.
+	if strings.HasSuffix(trimmed, "/reinstate") {
+		if r.Method == http.MethodPost {
+			s.handleReinstateParticipant(w, r)
 		} else {
 			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		}
@@ -338,6 +375,142 @@ func (s *Server) handleUpdateParticipantPermissions(w http.ResponseWriter, r *ht
 		}
 		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
 		return
+	}
+
+	p, err := s.participantStore.Get(id)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, p)
+}
+
+// extractParticipantID extracts the participant ID from a path with the pattern
+// /api/v1/securities/participants/{id}[/sub-resource].
+func extractParticipantID(path string) string {
+	const prefix = "/api/v1/securities/participants/"
+	rest := strings.TrimPrefix(path, prefix)
+	rest = strings.TrimSuffix(rest, "/")
+	parts := strings.SplitN(rest, "/", 2)
+	return parts[0]
+}
+
+// ── Force-logout / Suspend / Reinstate ───────────────────────────────────────
+
+// forceLogoutOrSuspend is the shared logic for force-logout and suspend:
+//   1. Get participant, verify it exists.
+//   2. Set status to SUSPENDED.
+//   3. Mass-cancel all PENDING orders for this participant.
+//   4. Log AuditEntry (best-effort).
+//   5. Return summary.
+func (s *Server) forceLogoutOrSuspend(w http.ResponseWriter, r *http.Request, action string) {
+	id := extractParticipantID(r.URL.Path)
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "participant id is required", nil)
+		return
+	}
+
+	p, err := s.participantStore.Get(id)
+	if err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("participant %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+	_ = p
+
+	// Suspend the participant.
+	if err := s.participantStore.UpdateStatus(id, types.ParticipantSuspended); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Mass-cancel all PENDING orders for this participant.
+	cancelledCount := 0
+	if s.orderStore != nil {
+		orders, listErr := s.orderStore.List(store.OrderFilters{
+			ParticipantID: id,
+			Status:        types.OrderStatusPending,
+		})
+		if listErr == nil {
+			for _, o := range orders {
+				if cancelErr := s.orderStore.Cancel(o.ID); cancelErr == nil {
+					cancelledCount++
+				}
+			}
+		}
+	}
+
+	// Log audit entry (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "PARTICIPANT",
+			EntityID:   id,
+			Action:     "SUSPEND",
+			ActorID:    actorFromRequest(r),
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"participant_id":   id,
+		"cancelled_orders": cancelledCount,
+		"status":           types.ParticipantSuspended,
+	})
+}
+
+// handleForceLogout handles POST /api/v1/securities/participants/{id}/force-logout.
+// Suspends the participant and cancels all PENDING orders.
+func (s *Server) handleForceLogout(w http.ResponseWriter, r *http.Request) {
+	s.forceLogoutOrSuspend(w, r, "FORCE_LOGOUT")
+}
+
+// handleSuspendParticipant handles POST /api/v1/securities/participants/{id}/suspend.
+// Suspends the participant and cancels all PENDING orders.
+func (s *Server) handleSuspendParticipant(w http.ResponseWriter, r *http.Request) {
+	s.forceLogoutOrSuspend(w, r, "SUSPEND")
+}
+
+// handleReinstateParticipant handles POST /api/v1/securities/participants/{id}/reinstate.
+// Sets the participant back to ACTIVE and logs an audit entry.
+func (s *Server) handleReinstateParticipant(w http.ResponseWriter, r *http.Request) {
+	id := extractParticipantID(r.URL.Path)
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "participant id is required", nil)
+		return
+	}
+
+	if _, err := s.participantStore.Get(id); err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("participant %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	if err := s.participantStore.UpdateStatus(id, types.ParticipantActive); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Log audit entry (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "PARTICIPANT",
+			EntityID:   id,
+			Action:     "REINSTATE",
+			ActorID:    actorFromRequest(r),
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		})
 	}
 
 	p, err := s.participantStore.Get(id)

@@ -86,6 +86,10 @@ func main() {
 	tradeCorrectionStore := store.NewInMemoryTradeCorrectionStore()
 	throttleStore := store.NewInMemoryThrottleStore()
 
+	// Announcement and audit stores.
+	announcementStore := store.NewInMemoryAnnouncementStore()
+	auditStore := store.NewInMemoryAuditStore()
+
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
@@ -131,6 +135,8 @@ func main() {
 		tickTableStore,
 		tradeCorrectionStore,
 		throttleStore,
+		announcementStore,
+		auditStore,
 		dayManager,
 		matchingEngine,
 		sessionManager,

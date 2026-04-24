@@ -190,6 +190,19 @@ func (s *Server) handleBustTrade(w http.ResponseWriter, r *http.Request, tradeID
 		return
 	}
 
+	// Audit log: trade busted (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "TRADE",
+			EntityID:   tradeID,
+			Action:     "BUST",
+			ActorID:    req.ActorID,
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
 	s.writeJSON(w, http.StatusCreated, correction)
 }
 
