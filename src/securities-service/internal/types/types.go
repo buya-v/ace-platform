@@ -716,3 +716,74 @@ type GiveUpRequest struct {
 	CreatedAt  string `json:"created_at"`
 	ResolvedAt string `json:"resolved_at,omitempty"`
 }
+
+// ── Surveillance Investigations ───────────────────────────────────────────────
+
+// InvestigationStatus represents the lifecycle state of an investigation.
+type InvestigationStatus string
+
+const (
+	InvestigationOpen   InvestigationStatus = "OPEN"
+	InvestigationClosed InvestigationStatus = "CLOSED"
+)
+
+// Investigation represents a formal market surveillance investigation into potential rule breaches.
+type Investigation struct {
+	ID           string              `json:"id"`
+	Subject      string              `json:"subject"`       // brief description of what is being investigated
+	InstrumentID string              `json:"instrument_id"` // instrument under investigation (may be empty)
+	Status       InvestigationStatus `json:"status"`
+	AssignedTo   string              `json:"assigned_to,omitempty"`
+	Findings     string              `json:"findings,omitempty"`
+	Evidence     []string            `json:"evidence,omitempty"` // list of evidence references
+	OpenedAt     string              `json:"opened_at"`
+	ClosedAt     string              `json:"closed_at,omitempty"`
+}
+
+// ── Market Replay ─────────────────────────────────────────────────────────────
+
+// ReplaySession represents a recorded market replay session.
+type ReplaySession struct {
+	ID          string `json:"id"`
+	InstrumentID string `json:"instrument_id"`
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	Description string `json:"description,omitempty"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// ReplayEvent represents a single event within a replay session.
+type ReplayEvent struct {
+	SessionID  string      `json:"session_id"`
+	Sequence   int         `json:"sequence"`
+	EventType  string      `json:"event_type"` // ORDER | TRADE | STATUS_CHANGE
+	Payload    interface{} `json:"payload"`
+	OccurredAt string      `json:"occurred_at"`
+}
+
+// ── Fixed-Income Bonds ────────────────────────────────────────────────────────
+
+// DayCountConvention specifies the accrued-interest day-count basis for a bond.
+type DayCountConvention string
+
+const (
+	DayCountACT360 DayCountConvention = "ACT/360"
+	DayCountACT365 DayCountConvention = "ACT/365"
+	DayCount30360  DayCountConvention = "30/360"
+)
+
+// Bond represents a fixed-income bond instrument listed on the exchange.
+type Bond struct {
+	ID                 string             `json:"id"`
+	ISIN               string             `json:"isin"`
+	Name               string             `json:"name"`
+	Issuer             string             `json:"issuer"`
+	MaturityDate       string             `json:"maturity_date"`
+	CouponRate         float64            `json:"coupon_rate"`   // annual rate, e.g. 0.05 for 5%
+	CouponFrequency    string             `json:"coupon_frequency"` // ANNUAL | SEMI_ANNUAL | QUARTERLY
+	ParValue           float64            `json:"par_value"`
+	DayCountConvention DayCountConvention `json:"day_count_convention"`
+	TradingStatus      TradingStatus      `json:"trading_status"`
+	CreatedAt          string             `json:"created_at"`
+	UpdatedAt          string             `json:"updated_at"`
+}

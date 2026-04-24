@@ -47,6 +47,9 @@ func newGiveUpTestServer(t *testing.T) (*httptest.Server, *store.InMemoryGiveUpS
 		nil, // locateStore
 		nil, // rfqStore
 		guStore,
+		nil, // investigationStore
+		nil, // replayStore
+		nil, // bondStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

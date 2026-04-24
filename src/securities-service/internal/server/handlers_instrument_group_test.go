@@ -40,6 +40,9 @@ func newGroupTestServer(t *testing.T) (*httptest.Server, *store.InMemoryInstrume
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, // investigationStore
+		nil, // replayStore
+		nil, // bondStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -259,6 +262,7 @@ func TestInstrumentGroupEndpoints_NotConfigured(t *testing.T) {
 		nil,  // instrumentGroupStore = nil
 		nil,  // offBookTradeStore
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()

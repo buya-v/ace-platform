@@ -150,6 +150,10 @@ func main() {
 		store.NewInMemoryLocateStore(),
 		store.NewInMemoryRFQStore(),
 		store.NewInMemoryGiveUpStore(),
+		// Investigation, replay, and bond stores.
+		store.NewInMemoryInvestigationStore(),
+		store.NewInMemoryReplayStore(),
+		store.NewInMemoryBondStore(),
 		dayManager,
 		matchingEngine,
 		sessionManager,

@@ -48,6 +48,9 @@ func newTestServerWithAudit(t *testing.T) (*httptest.Server, *store.InMemoryAudi
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, // investigationStore
+		nil, // replayStore
+		nil, // bondStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

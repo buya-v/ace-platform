@@ -44,6 +44,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, me, nil, nil, nil, cfg)
 	srv.SetReady()
 
@@ -572,6 +573,7 @@ func TestHealthzEndpoint(t *testing.T) {
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
@@ -598,6 +600,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, nil, cfg)
 	// NOT calling SetReady()
 
@@ -616,6 +619,7 @@ func TestReadyzEndpoint_Ready(t *testing.T) {
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 

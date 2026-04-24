@@ -63,6 +63,9 @@ type Server struct {
 	locateStore          store.LocateStore
 	rfqStore             store.RFQStore
 	giveUpStore          store.GiveUpStore
+	investigationStore   store.InvestigationStore
+	replayStore          store.ReplayStore
+	bondStore            store.BondStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -83,6 +86,7 @@ type Server struct {
 // surveillanceStore, instrumentGroupStore, and offBookTradeStore may be nil; if so, those
 // endpoints return 503.
 // locateStore, rfqStore, and giveUpStore may be nil; if so, those P4a endpoints return 503.
+// investigationStore, replayStore, and bondStore may be nil; if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -109,6 +113,9 @@ func New(
 	locateStore store.LocateStore,
 	rfqStore store.RFQStore,
 	giveUpStore store.GiveUpStore,
+	investigationStore store.InvestigationStore,
+	replayStore store.ReplayStore,
+	bondStore store.BondStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -143,6 +150,9 @@ func New(
 		locateStore:          locateStore,
 		rfqStore:             rfqStore,
 		giveUpStore:          giveUpStore,
+		investigationStore:   investigationStore,
+		replayStore:          replayStore,
+		bondStore:            bondStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -298,6 +308,17 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/give-ups", s.handleGiveUps)
 	mux.HandleFunc("/api/v1/securities/give-ups/", s.handleGiveUpAction)
 
+	// Surveillance investigations
+	mux.HandleFunc("/api/v1/securities/investigations", s.handleInvestigations)
+	mux.HandleFunc("/api/v1/securities/investigations/", s.handleInvestigation)
+
+	// Market replay
+	mux.HandleFunc("/api/v1/securities/replay/sessions", s.handleReplaySessions)
+	mux.HandleFunc("/api/v1/securities/replay/sessions/", s.handleReplaySession)
+
+	// Fixed-income bonds
+	mux.HandleFunc("/api/v1/securities/bonds", s.handleBonds)
+	mux.HandleFunc("/api/v1/securities/bonds/", s.handleBond)
 }
 
 // --- Health endpoints ---

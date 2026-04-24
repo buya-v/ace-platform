@@ -3705,3 +3705,342 @@ func TestGiveUpStore_Create_Accept_Reject(t *testing.T) {
 		t.Errorf("Reject not-found: expected ErrNotFound, got %v", err)
 	}
 }
+
+// ============================================================
+// InvestigationStore tests
+// ============================================================
+
+func newInvestigation(id, subject, instrumentID string) *types.Investigation {
+	return &types.Investigation{
+		ID:           id,
+		Subject:      subject,
+		InstrumentID: instrumentID,
+		Status:       types.InvestigationOpen,
+		AssignedTo:   "analyst-1",
+		OpenedAt:     "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestInvestigationStore_Create_Get_List(t *testing.T) {
+	s := store.NewInMemoryInvestigationStore()
+
+	inv1 := newInvestigation("INV-1", "Suspected wash trade", "INST-A")
+	inv2 := newInvestigation("INV-2", "Price manipulation", "INST-B")
+
+	if err := s.Create(inv1); err != nil {
+		t.Fatalf("Create INV-1: %v", err)
+	}
+	if err := s.Create(inv2); err != nil {
+		t.Fatalf("Create INV-2: %v", err)
+	}
+
+	// Duplicate returns an error.
+	if err := s.Create(inv1); err == nil {
+		t.Error("expected error on duplicate Create, got nil")
+	}
+
+	// Get returns the stored investigation.
+	got, err := s.Get("INV-1")
+	if err != nil {
+		t.Fatalf("Get INV-1: %v", err)
+	}
+	if got.Subject != "Suspected wash trade" {
+		t.Errorf("Subject: want %q, got %q", "Suspected wash trade", got.Subject)
+	}
+	if got.Status != types.InvestigationOpen {
+		t.Errorf("Status: want OPEN, got %s", got.Status)
+	}
+
+	// Get non-existent returns ErrNotFound.
+	if _, err := s.Get("NO-SUCH-INV"); err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+
+	// List returns all investigations.
+	all, err := s.List(store.InvestigationFilters{})
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 investigations, got %d", len(all))
+	}
+
+	// List with status filter returns only matching.
+	open, err := s.List(store.InvestigationFilters{Status: types.InvestigationOpen})
+	if err != nil {
+		t.Fatalf("List OPEN: %v", err)
+	}
+	if len(open) != 2 {
+		t.Errorf("expected 2 OPEN investigations, got %d", len(open))
+	}
+
+	// List with CLOSED filter returns none.
+	closed, err := s.List(store.InvestigationFilters{Status: types.InvestigationClosed})
+	if err != nil {
+		t.Fatalf("List CLOSED: %v", err)
+	}
+	if len(closed) != 0 {
+		t.Errorf("expected 0 CLOSED investigations, got %d", len(closed))
+	}
+
+	// Get returns a copy — mutation does not affect store.
+	got.Subject = "MUTATED"
+	got2, _ := s.Get("INV-1")
+	if got2.Subject == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}
+
+func TestInvestigationStore_Close(t *testing.T) {
+	s := store.NewInMemoryInvestigationStore()
+	s.Create(newInvestigation("INV-CLOSE", "Volume anomaly", "INST-C"))
+
+	// Close with findings.
+	findings := "Confirmed algorithmic trading pattern — no rule breach found."
+	if err := s.Close("INV-CLOSE", findings); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	got, err := s.Get("INV-CLOSE")
+	if err != nil {
+		t.Fatalf("Get after Close: %v", err)
+	}
+	if got.Status != types.InvestigationClosed {
+		t.Errorf("Status: want CLOSED, got %s", got.Status)
+	}
+	if got.Findings != findings {
+		t.Errorf("Findings: want %q, got %q", findings, got.Findings)
+	}
+	if got.ClosedAt == "" {
+		t.Error("ClosedAt must be set after Close")
+	}
+
+	// Closing an already-closed investigation returns an error.
+	if err := s.Close("INV-CLOSE", "again"); err == nil {
+		t.Error("expected error when closing an already-closed investigation, got nil")
+	}
+
+	// Closing a non-existent investigation returns ErrNotFound.
+	if err := s.Close("NO-SUCH-INV", "x"); err != store.ErrNotFound {
+		t.Errorf("Close missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Closed investigation appears in CLOSED filter but not OPEN filter.
+	closed, _ := s.List(store.InvestigationFilters{Status: types.InvestigationClosed})
+	if len(closed) != 1 {
+		t.Errorf("expected 1 CLOSED investigation, got %d", len(closed))
+	}
+}
+
+func TestInvestigationStore_AddEvidence(t *testing.T) {
+	s := store.NewInMemoryInvestigationStore()
+	s.Create(newInvestigation("INV-EV", "Suspicious orders", "INST-D"))
+
+	// Add three evidence references.
+	refs := []string{"trade-ref-001", "order-ref-999", "audit-log-2026-04-24"}
+	for _, ref := range refs {
+		if err := s.AddEvidence("INV-EV", ref); err != nil {
+			t.Fatalf("AddEvidence %q: %v", ref, err)
+		}
+	}
+
+	got, err := s.Get("INV-EV")
+	if err != nil {
+		t.Fatalf("Get after AddEvidence: %v", err)
+	}
+	if len(got.Evidence) != 3 {
+		t.Errorf("expected 3 evidence items, got %d", len(got.Evidence))
+	}
+	if got.Evidence[0] != refs[0] {
+		t.Errorf("Evidence[0]: want %q, got %q", refs[0], got.Evidence[0])
+	}
+
+	// AddEvidence to non-existent investigation returns ErrNotFound.
+	if err := s.AddEvidence("NO-SUCH-INV", "x"); err != store.ErrNotFound {
+		t.Errorf("AddEvidence missing: expected ErrNotFound, got %v", err)
+	}
+}
+
+// ============================================================
+// ReplayStore tests
+// ============================================================
+
+func TestReplayStore_CreateSession_AddEvents_GetEvents(t *testing.T) {
+	s := store.NewInMemoryReplayStore()
+
+	sess := &types.ReplaySession{
+		ID:           "REPLAY-1",
+		InstrumentID: "INST-E",
+		StartTime:    "2026-04-24T09:00:00Z",
+		EndTime:      "2026-04-24T17:00:00Z",
+		Description:  "Full trading day replay",
+		CreatedAt:    "2026-04-24T20:00:00Z",
+	}
+
+	// CreateSession.
+	if err := s.CreateSession(sess); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	// Duplicate CreateSession returns an error.
+	if err := s.CreateSession(sess); err == nil {
+		t.Error("expected error on duplicate CreateSession, got nil")
+	}
+
+	// GetSession returns the session.
+	got, err := s.GetSession("REPLAY-1")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.InstrumentID != "INST-E" {
+		t.Errorf("InstrumentID: want INST-E, got %s", got.InstrumentID)
+	}
+
+	// GetSession non-existent returns ErrNotFound.
+	if _, err := s.GetSession("NO-SESSION"); err != store.ErrNotFound {
+		t.Errorf("GetSession missing: expected ErrNotFound, got %v", err)
+	}
+
+	// ListSessions returns all sessions.
+	sessions, err := s.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Errorf("expected 1 session, got %d", len(sessions))
+	}
+
+	// AddEvent — add 3 events out of order.
+	events := []*types.ReplayEvent{
+		{SessionID: "REPLAY-1", Sequence: 3, EventType: "TRADE", OccurredAt: "2026-04-24T10:02:00Z"},
+		{SessionID: "REPLAY-1", Sequence: 1, EventType: "ORDER", OccurredAt: "2026-04-24T09:30:00Z"},
+		{SessionID: "REPLAY-1", Sequence: 2, EventType: "ORDER", OccurredAt: "2026-04-24T10:01:00Z"},
+	}
+	for _, ev := range events {
+		if err := s.AddEvent(ev); err != nil {
+			t.Fatalf("AddEvent seq=%d: %v", ev.Sequence, err)
+		}
+	}
+
+	// GetEvents returns events sorted by Sequence.
+	gotEvents, err := s.GetEvents("REPLAY-1")
+	if err != nil {
+		t.Fatalf("GetEvents: %v", err)
+	}
+	if len(gotEvents) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(gotEvents))
+	}
+	for i, ev := range gotEvents {
+		if ev.Sequence != i+1 {
+			t.Errorf("event[%d] Sequence: want %d, got %d", i, i+1, ev.Sequence)
+		}
+	}
+	if gotEvents[0].EventType != "ORDER" {
+		t.Errorf("event[0] EventType: want ORDER, got %s", gotEvents[0].EventType)
+	}
+	if gotEvents[2].EventType != "TRADE" {
+		t.Errorf("event[2] EventType: want TRADE, got %s", gotEvents[2].EventType)
+	}
+
+	// GetEvents for unknown session returns empty slice (not an error).
+	noEvents, err := s.GetEvents("NO-SESSION")
+	if err != nil {
+		t.Fatalf("GetEvents missing session: %v", err)
+	}
+	if len(noEvents) != 0 {
+		t.Errorf("expected 0 events for unknown session, got %d", len(noEvents))
+	}
+}
+
+// ============================================================
+// BondStore tests
+// ============================================================
+
+func newBond(id, isin, issuer string, couponRate float64, convention types.DayCountConvention) *types.Bond {
+	return &types.Bond{
+		ID:                 id,
+		ISIN:               isin,
+		Name:               issuer + " Bond",
+		Issuer:             issuer,
+		MaturityDate:       "2031-04-24",
+		CouponRate:         couponRate,
+		CouponFrequency:    "ANNUAL",
+		ParValue:           1000.0,
+		DayCountConvention: convention,
+		TradingStatus:      types.TradingStatusActive,
+		CreatedAt:          "2026-04-24T00:00:00Z",
+		UpdatedAt:          "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestBondStore_Create_List(t *testing.T) {
+	s := store.NewInMemoryBondStore()
+
+	b1 := newBond("BOND-1", "MN1234567890", "MN Telecom", 0.05, types.DayCountACT365)
+	b2 := newBond("BOND-2", "MN0987654321", "MN Energy", 0.07, types.DayCount30360)
+
+	if err := s.Create(b1); err != nil {
+		t.Fatalf("Create BOND-1: %v", err)
+	}
+	if err := s.Create(b2); err != nil {
+		t.Fatalf("Create BOND-2: %v", err)
+	}
+
+	// Duplicate returns an error.
+	if err := s.Create(b1); err == nil {
+		t.Error("expected error on duplicate Create, got nil")
+	}
+
+	// Get returns the stored bond.
+	got, err := s.Get("BOND-1")
+	if err != nil {
+		t.Fatalf("Get BOND-1: %v", err)
+	}
+	if got.Issuer != "MN Telecom" {
+		t.Errorf("Issuer: want MN Telecom, got %s", got.Issuer)
+	}
+	if got.CouponRate != 0.05 {
+		t.Errorf("CouponRate: want 0.05, got %v", got.CouponRate)
+	}
+	if got.DayCountConvention != types.DayCountACT365 {
+		t.Errorf("DayCountConvention: want ACT/365, got %s", got.DayCountConvention)
+	}
+
+	// Get non-existent returns ErrNotFound.
+	if _, err := s.Get("NO-BOND"); err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+
+	// List returns all bonds.
+	all, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 bonds, got %d", len(all))
+	}
+
+	// UpdateStatus changes the trading status.
+	if err := s.UpdateStatus("BOND-1", types.TradingStatusHalted); err != nil {
+		t.Fatalf("UpdateStatus: %v", err)
+	}
+	updated, _ := s.Get("BOND-1")
+	if updated.TradingStatus != types.TradingStatusHalted {
+		t.Errorf("TradingStatus: want HALTED, got %s", updated.TradingStatus)
+	}
+	if updated.UpdatedAt == b1.UpdatedAt {
+		t.Error("UpdatedAt must change after UpdateStatus")
+	}
+
+	// UpdateStatus non-existent returns ErrNotFound.
+	if err := s.UpdateStatus("NO-BOND", types.TradingStatusActive); err != store.ErrNotFound {
+		t.Errorf("UpdateStatus missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Get returns a copy — mutation does not affect store.
+	got.Issuer = "MUTATED"
+	got2, _ := s.Get("BOND-1")
+	if got2.Issuer == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}

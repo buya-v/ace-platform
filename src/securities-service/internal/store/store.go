@@ -2006,3 +2006,263 @@ func (s *InMemoryGiveUpStore) Reject(id, reason string) error {
 	r.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
 	return nil
 }
+
+// ── InvestigationStore ────────────────────────────────────────────────────────
+
+// InvestigationFilters carries optional filter parameters for listing investigations.
+type InvestigationFilters struct {
+	Status types.InvestigationStatus
+}
+
+// InvestigationStore defines the repository contract for market surveillance investigations.
+type InvestigationStore interface {
+	Create(inv *types.Investigation) error
+	Get(id string) (*types.Investigation, error)
+	List(filters InvestigationFilters) ([]types.Investigation, error)
+	Close(id, findings string) error
+	AddEvidence(id, evidence string) error
+}
+
+// InMemoryInvestigationStore is a thread-safe, in-memory implementation of InvestigationStore.
+type InMemoryInvestigationStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Investigation
+}
+
+// NewInMemoryInvestigationStore returns an empty InMemoryInvestigationStore.
+func NewInMemoryInvestigationStore() *InMemoryInvestigationStore {
+	return &InMemoryInvestigationStore{data: make(map[string]*types.Investigation)}
+}
+
+// Create stores a new investigation.
+func (s *InMemoryInvestigationStore) Create(inv *types.Investigation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[inv.ID]; exists {
+		return fmt.Errorf("investigation %s already exists", inv.ID)
+	}
+	cp := *inv
+	if cp.Evidence == nil {
+		cp.Evidence = []string{}
+	}
+	s.data[inv.ID] = &cp
+	return nil
+}
+
+// Get retrieves an investigation by ID.
+func (s *InMemoryInvestigationStore) Get(id string) (*types.Investigation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	inv, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *inv
+	ev := make([]string, len(inv.Evidence))
+	copy(ev, inv.Evidence)
+	cp.Evidence = ev
+	return &cp, nil
+}
+
+// List returns investigations matching the given filters.
+func (s *InMemoryInvestigationStore) List(filters InvestigationFilters) ([]types.Investigation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Investigation, 0, len(s.data))
+	for _, inv := range s.data {
+		if filters.Status != "" && inv.Status != filters.Status {
+			continue
+		}
+		cp := *inv
+		ev := make([]string, len(inv.Evidence))
+		copy(ev, inv.Evidence)
+		cp.Evidence = ev
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+// Close marks an investigation as CLOSED with findings.
+func (s *InMemoryInvestigationStore) Close(id, findings string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if inv.Status == types.InvestigationClosed {
+		return fmt.Errorf("investigation %s is already closed", id)
+	}
+	inv.Status = types.InvestigationClosed
+	inv.Findings = findings
+	inv.ClosedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// AddEvidence appends an evidence reference to an investigation.
+func (s *InMemoryInvestigationStore) AddEvidence(id, evidence string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	inv.Evidence = append(inv.Evidence, evidence)
+	return nil
+}
+
+// ── ReplayStore ───────────────────────────────────────────────────────────────
+
+// ReplayStore defines the repository contract for market replay sessions and events.
+type ReplayStore interface {
+	CreateSession(session *types.ReplaySession) error
+	GetSession(id string) (*types.ReplaySession, error)
+	ListSessions() ([]types.ReplaySession, error)
+	AddEvent(event *types.ReplayEvent) error
+	GetEvents(sessionID string) ([]types.ReplayEvent, error)
+}
+
+// InMemoryReplayStore is a thread-safe, in-memory implementation of ReplayStore.
+type InMemoryReplayStore struct {
+	mu       sync.RWMutex
+	sessions map[string]*types.ReplaySession
+	events   []types.ReplayEvent
+}
+
+// NewInMemoryReplayStore returns an empty InMemoryReplayStore.
+func NewInMemoryReplayStore() *InMemoryReplayStore {
+	return &InMemoryReplayStore{
+		sessions: make(map[string]*types.ReplaySession),
+	}
+}
+
+// CreateSession stores a new replay session.
+func (s *InMemoryReplayStore) CreateSession(session *types.ReplaySession) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.sessions[session.ID]; exists {
+		return fmt.Errorf("replay session %s already exists", session.ID)
+	}
+	cp := *session
+	s.sessions[session.ID] = &cp
+	return nil
+}
+
+// GetSession retrieves a replay session by ID.
+func (s *InMemoryReplayStore) GetSession(id string) (*types.ReplaySession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *sess
+	return &cp, nil
+}
+
+// ListSessions returns all replay sessions.
+func (s *InMemoryReplayStore) ListSessions() ([]types.ReplaySession, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.ReplaySession, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		out = append(out, *sess)
+	}
+	return out, nil
+}
+
+// AddEvent appends a replay event to the store.
+func (s *InMemoryReplayStore) AddEvent(event *types.ReplayEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, *event)
+	return nil
+}
+
+// GetEvents returns all events for the given session, in sequence order.
+func (s *InMemoryReplayStore) GetEvents(sessionID string) ([]types.ReplayEvent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []types.ReplayEvent
+	for _, ev := range s.events {
+		if ev.SessionID == sessionID {
+			out = append(out, ev)
+		}
+	}
+	// Sort by Sequence.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].Sequence < out[j-1].Sequence; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out, nil
+}
+
+// ── BondStore ─────────────────────────────────────────────────────────────────
+
+// BondStore defines the repository contract for fixed-income bond instruments.
+type BondStore interface {
+	Create(bond *types.Bond) error
+	Get(id string) (*types.Bond, error)
+	List() ([]types.Bond, error)
+	UpdateStatus(id string, status types.TradingStatus) error
+}
+
+// InMemoryBondStore is a thread-safe, in-memory implementation of BondStore.
+type InMemoryBondStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Bond
+}
+
+// NewInMemoryBondStore returns an empty InMemoryBondStore.
+func NewInMemoryBondStore() *InMemoryBondStore {
+	return &InMemoryBondStore{data: make(map[string]*types.Bond)}
+}
+
+// Create stores a new bond.
+func (s *InMemoryBondStore) Create(bond *types.Bond) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[bond.ID]; exists {
+		return fmt.Errorf("bond %s already exists", bond.ID)
+	}
+	cp := *bond
+	s.data[bond.ID] = &cp
+	return nil
+}
+
+// Get retrieves a bond by ID.
+func (s *InMemoryBondStore) Get(id string) (*types.Bond, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *b
+	return &cp, nil
+}
+
+// List returns all bonds.
+func (s *InMemoryBondStore) List() ([]types.Bond, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Bond, 0, len(s.data))
+	for _, b := range s.data {
+		out = append(out, *b)
+	}
+	return out, nil
+}
+
+// UpdateStatus changes the trading status of a bond.
+func (s *InMemoryBondStore) UpdateStatus(id string, status types.TradingStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	b.TradingStatus = status
+	b.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}

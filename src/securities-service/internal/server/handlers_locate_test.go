@@ -47,6 +47,9 @@ func newLocateTestServer(t *testing.T) (*httptest.Server, *store.InMemoryLocateS
 		locStore,
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, // investigationStore
+		nil, // replayStore
+		nil, // bondStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

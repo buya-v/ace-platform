@@ -30,6 +30,7 @@ func newTestServerWithTradeStore(
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
+		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, me, nil, nil, nil, cfg)
 	srv.SetReady()
 
