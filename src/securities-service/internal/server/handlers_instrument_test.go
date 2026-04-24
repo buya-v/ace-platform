@@ -11,9 +11,13 @@ import (
 	"testing"
 
 	"github.com/garudax-platform/securities-service/internal/engine"
+	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
+
+// testTenant is the default tenant header value used in all server tests.
+const testTenant = "ace-commodities"
 
 // ============================================================
 // Test infrastructure
@@ -29,6 +33,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 }
 
 // newTestServerWithStores creates a test server backed by the provided stores.
+// The API handler chain includes TenantMiddleware with testTenant whitelisted.
 func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, orderStore store.OrderStore) *httptest.Server {
 	t.Helper()
 	cfg := DefaultConfig()
@@ -41,7 +46,11 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 	mux := http.NewServeMux()
 	srv.registerRoutes(mux)
 
-	ts := httptest.NewServer(mux)
+	// Wrap with TenantMiddleware so handler tests exercise the full middleware chain.
+	tenantMW := middleware.TenantMiddleware([]string{testTenant})
+	handler := tenantMW(mux)
+
+	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -62,6 +71,8 @@ func doJSON(t *testing.T, ts *httptest.Server, method, path string, body interfa
 		t.Fatalf("http.NewRequest: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Include tenant header so handlers receive tenant context from TenantMiddleware.
+	req.Header.Set("X-GarudaX-Tenant", testTenant)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("http.Do: %v", err)
@@ -216,6 +227,7 @@ func TestCreateInstrument_InvalidJSON(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/securities/instruments",
 		strings.NewReader("{bad json"))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GarudaX-Tenant", testTenant)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Do: %v", err)

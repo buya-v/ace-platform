@@ -138,11 +138,15 @@ func TestChannelProducer_PublishHook_Called(t *testing.T) {
 	}
 }
 
+// testTenantID is the tenant used in all wiring tests.
+const testTenantID = "ace-commodities"
+
 // ---- PublishTradeExecuted tests ---------------------------------------------
 
 func TestPublishTradeExecuted(t *testing.T) {
 	p := kafka.NewChannelProducer(defaultCfg())
-	p.RegisterTopic(kafka.TopicTradeExecuted, 8)
+	topic := kafka.TopicTradeExecuted(testTenantID)
+	p.RegisterTopic(topic, 8)
 
 	trade := &types.SecurityTrade{
 		ID:             "trade-abc",
@@ -157,17 +161,17 @@ func TestPublishTradeExecuted(t *testing.T) {
 		CreatedAt:      "2026-01-01T00:00:00Z",
 	}
 
-	if err := kafka.PublishTradeExecuted(p, trade); err != nil {
+	if err := kafka.PublishTradeExecuted(p, testTenantID, trade); err != nil {
 		t.Fatalf("PublishTradeExecuted: %v", err)
 	}
 
-	recs := p.Records(kafka.TopicTradeExecuted)
+	recs := p.Records(topic)
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(recs))
 	}
 	r := recs[0]
-	if r.Topic != kafka.TopicTradeExecuted {
-		t.Errorf("Topic: want %s, got %s", kafka.TopicTradeExecuted, r.Topic)
+	if r.Topic != topic {
+		t.Errorf("Topic: want %s, got %s", topic, r.Topic)
 	}
 	if r.Key != "trade-abc" {
 		t.Errorf("Key: want trade-abc, got %s", r.Key)
@@ -209,7 +213,8 @@ func TestPublishTradeExecuted(t *testing.T) {
 
 func TestPublishOrderCreated(t *testing.T) {
 	p := kafka.NewChannelProducer(defaultCfg())
-	p.RegisterTopic(kafka.TopicOrderCreated, 8)
+	topic := kafka.TopicOrderCreated(testTenantID)
+	p.RegisterTopic(topic, 8)
 
 	order := &types.SecurityOrder{
 		ID:           "order-xyz",
@@ -221,11 +226,11 @@ func TestPublishOrderCreated(t *testing.T) {
 		Status:       types.OrderStatusPending,
 	}
 
-	if err := kafka.PublishOrderCreated(p, order); err != nil {
+	if err := kafka.PublishOrderCreated(p, testTenantID, order); err != nil {
 		t.Fatalf("PublishOrderCreated: %v", err)
 	}
 
-	recs := p.Records(kafka.TopicOrderCreated)
+	recs := p.Records(topic)
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(recs))
 	}
@@ -241,18 +246,19 @@ func TestPublishOrderCreated(t *testing.T) {
 
 func TestPublishOrderCancelled(t *testing.T) {
 	p := kafka.NewChannelProducer(defaultCfg())
-	p.RegisterTopic(kafka.TopicOrderCancelled, 8)
+	topic := kafka.TopicOrderCancelled(testTenantID)
+	p.RegisterTopic(topic, 8)
 
 	order := &types.SecurityOrder{
 		ID:     "order-canc",
 		Status: types.OrderStatusCancelled,
 	}
 
-	if err := kafka.PublishOrderCancelled(p, order); err != nil {
+	if err := kafka.PublishOrderCancelled(p, testTenantID, order); err != nil {
 		t.Fatalf("PublishOrderCancelled: %v", err)
 	}
 
-	recs := p.Records(kafka.TopicOrderCancelled)
+	recs := p.Records(topic)
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(recs))
 	}
@@ -267,21 +273,21 @@ func TestPublishOrderCancelled(t *testing.T) {
 
 func TestNilProducer_PublishTradeExecuted(t *testing.T) {
 	trade := &types.SecurityTrade{ID: "t1", InstrumentID: "i1"}
-	if err := kafka.PublishTradeExecuted(nil, trade); err != nil {
+	if err := kafka.PublishTradeExecuted(nil, testTenantID, trade); err != nil {
 		t.Errorf("PublishTradeExecuted(nil) should be a no-op, got: %v", err)
 	}
 }
 
 func TestNilProducer_PublishOrderCreated(t *testing.T) {
 	order := &types.SecurityOrder{ID: "o1"}
-	if err := kafka.PublishOrderCreated(nil, order); err != nil {
+	if err := kafka.PublishOrderCreated(nil, testTenantID, order); err != nil {
 		t.Errorf("PublishOrderCreated(nil) should be a no-op, got: %v", err)
 	}
 }
 
 func TestNilProducer_PublishOrderCancelled(t *testing.T) {
 	order := &types.SecurityOrder{ID: "o1"}
-	if err := kafka.PublishOrderCancelled(nil, order); err != nil {
+	if err := kafka.PublishOrderCancelled(nil, testTenantID, order); err != nil {
 		t.Errorf("PublishOrderCancelled(nil) should be a no-op, got: %v", err)
 	}
 }

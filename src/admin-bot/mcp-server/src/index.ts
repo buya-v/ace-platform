@@ -32,6 +32,7 @@ import { registerFeeTools } from "./tools/fees.js";
 import { registerTicketTools } from "./tools/tickets.js";
 import { registerDailyAdminTools } from "./tools/daily_admin.js";
 import { registerSecuritiesTools } from "./tools/securities.js";
+import { registerPlatformTools } from "./tools/platform.js";
 
 // Resource registrations
 import { registerSystemStatusResource } from "./resources/system_status.js";
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
   registerTicketTools(server, client);
   registerDailyAdminTools(server, client);
   registerSecuritiesTools(server, client);
+  registerPlatformTools(server, client);
 
   // Register resources
   registerSystemStatusResource(server, client);

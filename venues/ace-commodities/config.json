@@ -1,0 +1,13 @@
+{
+  "tenant_id": "ace-commodities",
+  "name": "ACE Commodity Exchange",
+  "trading_calendar": {
+    "timezone": "Asia/Ulaanbaatar",
+    "trading_hours": {"open": "10:00", "close": "15:00"},
+    "holidays": ["2026-01-01", "2026-02-10", "2026-02-11", "2026-07-11", "2026-07-12", "2026-07-13"]
+  },
+  "settlement": {"default_cycle": "T+0", "delivery": "physical"},
+  "circuit_breakers": {"upper_limit_pct": 10.0, "lower_limit_pct": 10.0, "cooldown_minutes": 5},
+  "compliance": {"kyc_required": true, "aml_screening": true},
+  "features": {"short_selling": false, "auctions": false, "frc_reporting": false}
+}

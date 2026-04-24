@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/garudax-platform/platform-service/internal/config"
 	"github.com/garudax-platform/platform-service/internal/provisioning"
 	"github.com/garudax-platform/platform-service/internal/server"
 	"github.com/garudax-platform/platform-service/internal/store"
@@ -46,7 +47,12 @@ func main() {
 	provisioner := provisioning.New(nil)
 	logger.Info("provisioner running in dry-run mode (no DATABASE_URL configured)")
 
-	srv := server.NewWithProvisioner(tenantStore, cfg, provisioner)
+	// Init config loader — reads venue configs from VENUES_DIR (default: ./venues).
+	venuesDir := os.Getenv("VENUES_DIR")
+	cfgLoader := config.NewConfigLoader(venuesDir)
+	logger.Info("config loader initialised", slog.String("venues_dir", venuesDir))
+
+	srv := server.NewWithConfig(tenantStore, cfg, provisioner, cfgLoader)
 
 	// Start health server on port 9090.
 	go func() {

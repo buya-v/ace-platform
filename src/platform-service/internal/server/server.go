@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 
+	"github.com/garudax-platform/platform-service/internal/config"
 	"github.com/garudax-platform/platform-service/internal/provisioning"
 	"github.com/garudax-platform/platform-service/internal/store"
 	"github.com/garudax-platform/platform-service/internal/types"
@@ -33,18 +35,20 @@ func DefaultConfig() Config {
 
 // Server is the HTTP server for the platform-service.
 type Server struct {
-	cfg         Config
-	tenantStore store.TenantStore
-	provisioner *provisioning.Provisioner
-	ready       atomic.Int32
+	cfg          Config
+	tenantStore  store.TenantStore
+	provisioner  *provisioning.Provisioner
+	configLoader *config.ConfigLoader
+	ready        atomic.Int32
 }
 
 // New creates a new Server with the given tenant store and configuration.
 func New(tenantStore store.TenantStore, cfg Config) *Server {
 	return &Server{
-		cfg:         cfg,
-		tenantStore: tenantStore,
-		provisioner: provisioning.New(nil), // nil db = dry-run mode for MVP
+		cfg:          cfg,
+		tenantStore:  tenantStore,
+		provisioner:  provisioning.New(nil), // nil db = dry-run mode for MVP
+		configLoader: config.NewConfigLoader(""),
 	}
 }
 
@@ -52,9 +56,21 @@ func New(tenantStore store.TenantStore, cfg Config) *Server {
 // Use this when you want to inject a non-default provisioner (e.g. with a real DB).
 func NewWithProvisioner(tenantStore store.TenantStore, cfg Config, p *provisioning.Provisioner) *Server {
 	return &Server{
-		cfg:         cfg,
-		tenantStore: tenantStore,
-		provisioner: p,
+		cfg:          cfg,
+		tenantStore:  tenantStore,
+		provisioner:  p,
+		configLoader: config.NewConfigLoader(""),
+	}
+}
+
+// NewWithConfig creates a new Server with an explicit ConfigLoader.
+// Use this to override the default venues directory (e.g. in tests or custom deployments).
+func NewWithConfig(tenantStore store.TenantStore, cfg Config, p *provisioning.Provisioner, cl *config.ConfigLoader) *Server {
+	return &Server{
+		cfg:          cfg,
+		tenantStore:  tenantStore,
+		provisioner:  p,
+		configLoader: cl,
 	}
 }
 
@@ -93,8 +109,15 @@ func (s *Server) StartAPIServer() error {
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Tenant collection: GET (list), POST (create)
 	mux.HandleFunc("/platform/v1/tenants", s.handleTenants)
-	// Individual tenant: GET, PATCH, and sub-resource /status
-	mux.HandleFunc("/platform/v1/tenants/", s.handleTenant)
+	// Tenant config: GET /platform/v1/tenants/{id}/config
+	// Registered before the wildcard tenant route so it takes precedence.
+	mux.HandleFunc("/platform/v1/tenants/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/config") {
+			s.handleTenantConfig(w, r)
+			return
+		}
+		s.handleTenant(w, r)
+	})
 }
 
 // --- Health endpoints ---

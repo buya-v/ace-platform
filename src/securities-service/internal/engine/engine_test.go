@@ -117,10 +117,13 @@ func submit(t *testing.T, s *testStores, order *types.SecurityOrder) {
 
 // submitAndMatch submits the incoming order to the store first (required for
 // engine.Update calls), then calls MatchOrder.
+// defaultTenantID is the tenant used for all engine tests.
+const defaultTenantID = "ace-commodities"
+
 func submitAndMatch(t *testing.T, eng *engine.MatchingEngine, s *testStores, order *types.SecurityOrder) ([]types.SecurityTrade, error) {
 	t.Helper()
 	submit(t, s, order)
-	return eng.MatchOrder(order)
+	return eng.MatchOrder(defaultTenantID, order)
 }
 
 // ---- engine tests -----------------------------------------------------------
@@ -422,7 +425,7 @@ func TestMatchOrder_HaltedInstrument(t *testing.T) {
 	eng := newEngine(s, nil)
 
 	order := limitOrder("buy-1", haltedID, "buyer", types.OrderSideBuy, 100, 50.00, ts(0))
-	_, err := eng.MatchOrder(order)
+	_, err := eng.MatchOrder(defaultTenantID, order)
 	if err == nil {
 		t.Fatal("expected error for HALTED instrument, got nil")
 	}
@@ -463,7 +466,7 @@ func TestMatchOrder_UnknownInstrument(t *testing.T) {
 	eng, _ := setup(t)
 
 	order := limitOrder("buy-1", "INST-MISSING", "buyer", types.OrderSideBuy, 100, 50.00, ts(0))
-	_, err := eng.MatchOrder(order)
+	_, err := eng.MatchOrder(defaultTenantID, order)
 	if err == nil {
 		t.Fatal("expected error for unknown instrument, got nil")
 	}
@@ -597,7 +600,8 @@ func TestMatchOrder_KafkaEventPublished(t *testing.T) {
 	createInstrument(t, s, testInstID, types.TradingStatusActive)
 
 	prod := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
-	prod.RegisterTopic(kafka.TopicTradeExecuted, 64)
+	topic := kafka.TopicTradeExecuted(defaultTenantID)
+	prod.RegisterTopic(topic, 64)
 
 	eng := newEngine(s, prod)
 
@@ -613,12 +617,12 @@ func TestMatchOrder_KafkaEventPublished(t *testing.T) {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
 
-	recs := prod.Records(kafka.TopicTradeExecuted)
+	recs := prod.Records(topic)
 	if len(recs) != 1 {
 		t.Fatalf("expected 1 kafka record, got %d", len(recs))
 	}
-	if recs[0].Topic != kafka.TopicTradeExecuted {
-		t.Errorf("topic: want %s, got %s", kafka.TopicTradeExecuted, recs[0].Topic)
+	if recs[0].Topic != topic {
+		t.Errorf("topic: want %s, got %s", topic, recs[0].Topic)
 	}
 	if recs[0].Key != trades[0].ID {
 		t.Errorf("partition key: want trade ID %s, got %s", trades[0].ID, recs[0].Key)

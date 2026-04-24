@@ -57,8 +57,9 @@ func newUUID() (string, error) {
 }
 
 // MatchOrder attempts to match an incoming order against resting orders on the opposite side.
+// tenantID is used to route Kafka events to the correct tenant-scoped topic.
 // It returns all trades created during matching.
-func (e *MatchingEngine) MatchOrder(order *types.SecurityOrder) ([]types.SecurityTrade, error) {
+func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder) ([]types.SecurityTrade, error) {
 	// 1. Get instrument and validate ACTIVE status.
 	inst, err := e.instrumentStore.Get(order.InstrumentID)
 	if err != nil {
@@ -181,7 +182,7 @@ func (e *MatchingEngine) MatchOrder(order *types.SecurityOrder) ([]types.Securit
 		trades = append(trades, trade)
 
 		// Publish trade executed event (nil-safe: no-op if producer not configured).
-		if err := kafka.PublishTradeExecuted(e.producer, &trade); err != nil {
+		if err := kafka.PublishTradeExecuted(e.producer, tenantID, &trade); err != nil {
 			// Non-fatal: log the error but continue matching.
 			_ = err
 		}

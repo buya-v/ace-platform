@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/garudax-platform/securities-service/internal/kafka"
+	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -50,6 +51,13 @@ var validOrderTypes = map[types.OrderType]bool{
 //   - CreatedAt and UpdatedAt set to current UTC time
 //   - TimeInForce defaults to GTC if empty
 func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
+	// Extract tenant from context (set by TenantMiddleware).
+	tenantID, ok := middleware.TenantFromContext(r.Context())
+	if !ok {
+		s.writeError(w, http.StatusUnauthorized, "TENANT_REQUIRED", "X-GarudaX-Tenant header is required", nil)
+		return
+	}
+
 	var order types.SecurityOrder
 	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
@@ -163,7 +171,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Publish order created event (nil-safe: no-op if producer not configured).
-	if err := kafka.PublishOrderCreated(s.producer, &order); err != nil {
+	if err := kafka.PublishOrderCreated(s.producer, tenantID.String(), &order); err != nil {
 		// Non-fatal: continue even if publishing fails.
 		_ = err
 	}
@@ -171,7 +179,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	// Run matching engine if available.
 	var trades []types.SecurityTrade
 	if s.engine != nil {
-		matched, err := s.engine.MatchOrder(&order)
+		matched, err := s.engine.MatchOrder(tenantID.String(), &order)
 		if err == nil {
 			trades = matched
 		}
@@ -182,8 +190,9 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"order":  order,
-		"trades": trades,
+		"tenant_id": tenantID.String(),
+		"order":     order,
+		"trades":    trades,
 	})
 }
 
@@ -291,6 +300,13 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 // An order may only be cancelled if its status is PENDING or PARTIALLY_FILLED.
 // Returns 409 CONFLICT if the order is in any other state.
 func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
+	// Extract tenant from context (set by TenantMiddleware).
+	tenantID, ok := middleware.TenantFromContext(r.Context())
+	if !ok {
+		s.writeError(w, http.StatusUnauthorized, "TENANT_REQUIRED", "X-GarudaX-Tenant header is required", nil)
+		return
+	}
+
 	id := extractLastSegment(r.URL.Path)
 	if id == "" {
 		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "order id is required", nil)
@@ -336,7 +352,7 @@ func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
 	cancelled.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 
 	// Publish order cancelled event (nil-safe: no-op if producer not configured).
-	if err := kafka.PublishOrderCancelled(s.producer, cancelled); err != nil {
+	if err := kafka.PublishOrderCancelled(s.producer, tenantID.String(), cancelled); err != nil {
 		// Non-fatal: continue even if publishing fails.
 		_ = err
 	}

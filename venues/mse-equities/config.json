@@ -1,0 +1,15 @@
+{
+  "tenant_id": "mse-equities",
+  "name": "Mongolian Stock Exchange",
+  "trading_calendar": {
+    "timezone": "Asia/Ulaanbaatar",
+    "trading_hours": {"open": "10:00", "close": "13:00"},
+    "pre_open_auction": {"start": "09:30", "end": "10:00"},
+    "closing_auction": {"start": "12:50", "end": "13:00"},
+    "holidays": ["2026-01-01", "2026-02-10", "2026-02-11", "2026-07-11", "2026-07-12", "2026-07-13"]
+  },
+  "settlement": {"default_cycle": "T+2", "csd": "MCSD", "delivery": "book-entry"},
+  "circuit_breakers": {"upper_limit_pct": 15.0, "lower_limit_pct": 15.0, "cooldown_minutes": 10},
+  "compliance": {"kyc_required": true, "aml_screening": true, "frc_reporting": true},
+  "features": {"short_selling": true, "auctions": true, "corporate_actions": true, "frc_reporting": true}
+}

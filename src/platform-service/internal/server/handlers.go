@@ -13,6 +13,26 @@ import (
 	"github.com/garudax-platform/platform-service/internal/types"
 )
 
+// handleTenantConfig handles GET /platform/v1/tenants/{id}/config.
+// Returns the venue configuration for the given tenant ID, or 404 if not found.
+func (s *Server) handleTenantConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+
+	// Path: /platform/v1/tenants/{id}/config — strip the /config suffix to get the tenant ID.
+	path := strings.TrimSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/config")
+	id := extractLastSegment(path)
+
+	cfg, err := s.configLoader.LoadConfig(id)
+	if err != nil {
+		s.writeError(w, http.StatusNotFound, "CONFIG_NOT_FOUND", "config not found for tenant: "+id, nil)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, cfg)
+}
+
 // slugRE matches valid tenant IDs: lowercase alphanumeric and hyphens.
 var slugRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 

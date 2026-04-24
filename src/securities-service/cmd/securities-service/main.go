@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
+	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/server"
 	"github.com/garudax-platform/securities-service/internal/settlement"
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -71,9 +73,15 @@ func main() {
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
-	producer.RegisterTopic(kafka.TopicTradeExecuted, 256)
-	producer.RegisterTopic(kafka.TopicOrderCreated, 256)
-	producer.RegisterTopic(kafka.TopicOrderCancelled, 256)
+
+	// Register per-tenant topics for all configured tenants.
+	validTenants := middleware.ValidTenantsFromEnv()
+	logger.Info("registering tenant Kafka topics", slog.String("tenants", strings.Join(validTenants, ",")))
+	for _, tenantID := range validTenants {
+		producer.RegisterTopic(kafka.TopicTradeExecuted(tenantID), 256)
+		producer.RegisterTopic(kafka.TopicOrderCreated(tenantID), 256)
+		producer.RegisterTopic(kafka.TopicOrderCancelled(tenantID), 256)
+	}
 
 	// Settlement engine processes T+2 obligations from trades.
 	settlementEngine := settlement.NewSettlementEngine(orderStore, settlementStore)

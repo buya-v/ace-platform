@@ -10,6 +10,7 @@ import (
 
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
+	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/settlement"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
@@ -92,12 +93,17 @@ func (s *Server) StartHealthServer() error {
 
 // StartAPIServer starts the main API HTTP server on APIPort.
 // It blocks until the server fails; call it in a goroutine.
+// TenantMiddleware is applied to the API handler chain using VALID_TENANTS env var.
 func (s *Server) StartAPIServer() error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
+	// Wrap the mux with tenant middleware.
+	tenantMW := middleware.TenantMiddleware(middleware.ValidTenantsFromEnv())
+	handler := tenantMW(mux)
+
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.APIPort)
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, handler)
 }
 
 // registerRoutes wires all API routes onto the given ServeMux.
