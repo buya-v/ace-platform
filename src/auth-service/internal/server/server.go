@@ -84,7 +84,7 @@ func (s *Server) StartHealthServer() error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{"status":"reset","message":"Demo data cleared. Admin accounts preserved, lockouts reset.","preserved":["admin accounts"],"cleared":["trader accounts","sessions","api keys","lockouts"]}`)
+		fmt.Fprintln(w, `{"status":"reset","message":"All demo data cleared. All accounts deleted for fresh registration.","cleared":["all users","sessions","api keys"]}`)
 	})
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.BindAddress, s.cfg.HealthPort)
