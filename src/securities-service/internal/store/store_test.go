@@ -3366,3 +3366,342 @@ func TestOffBookTradeStore_UpdateStatus(t *testing.T) {
 		t.Error("expected error when updating non-existent trade")
 	}
 }
+
+// ============================================================
+// P4a — LocateStore tests
+// ============================================================
+
+func TestLocateStore_Create_Approve_Use(t *testing.T) {
+	s := store.NewInMemoryLocateStore()
+
+	req := &types.LocateRequest{
+		InstrumentID:   42,
+		BorrowerFirmID: 10,
+		Quantity:       500,
+	}
+
+	// Create — should assign ID=1 and status=PENDING.
+	if err := s.Create(req); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if req.ID != 1 {
+		t.Errorf("expected assigned ID 1, got %d", req.ID)
+	}
+	if req.Status != "PENDING" {
+		t.Errorf("expected status PENDING after Create, got %q", req.Status)
+	}
+	if req.CreatedAt == "" {
+		t.Error("expected CreatedAt to be set")
+	}
+
+	locID := fmt.Sprintf("%d", req.ID)
+
+	// Get back.
+	got, err := s.Get(locID)
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.Status != "PENDING" {
+		t.Errorf("expected PENDING, got %q", got.Status)
+	}
+
+	// Approve — should transition to APPROVED.
+	if err := s.Approve(locID, "LENDER-01"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+	got, _ = s.Get(locID)
+	if got.Status != "APPROVED" {
+		t.Errorf("expected APPROVED after Approve, got %q", got.Status)
+	}
+
+	// Double-approve should fail (not PENDING anymore).
+	if err := s.Approve(locID, "LENDER-02"); err == nil {
+		t.Error("expected error when approving non-PENDING locate")
+	}
+
+	// Use — should transition to USED.
+	if err := s.Use(locID); err != nil {
+		t.Fatalf("Use: %v", err)
+	}
+	got, _ = s.Get(locID)
+	if got.Status != "USED" {
+		t.Errorf("expected USED after Use, got %q", got.Status)
+	}
+
+	// Double-use should fail (not APPROVED anymore).
+	if err := s.Use(locID); err == nil {
+		t.Error("expected error when using non-APPROVED locate")
+	}
+
+	// Not-found path.
+	if _, err := s.Get("9999"); err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+	if err := s.Approve("9999", "L"); err != store.ErrNotFound {
+		t.Errorf("Approve not-found: expected ErrNotFound, got %v", err)
+	}
+	if err := s.Use("9999"); err != store.ErrNotFound {
+		t.Errorf("Use not-found: expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestLocateStore_ListByFirm(t *testing.T) {
+	s := store.NewInMemoryLocateStore()
+
+	// Create two locates for firm 10 and one for firm 20.
+	s.Create(&types.LocateRequest{InstrumentID: 1, BorrowerFirmID: 10, Quantity: 100})
+	s.Create(&types.LocateRequest{InstrumentID: 2, BorrowerFirmID: 10, Quantity: 200})
+	s.Create(&types.LocateRequest{InstrumentID: 3, BorrowerFirmID: 20, Quantity: 300})
+
+	// Filter by firm 10.
+	all, err := s.List("10")
+	if err != nil {
+		t.Fatalf("List firm 10: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 locates for firm 10, got %d", len(all))
+	}
+
+	// Filter by firm 20.
+	all, err = s.List("20")
+	if err != nil {
+		t.Fatalf("List firm 20: %v", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("expected 1 locate for firm 20, got %d", len(all))
+	}
+
+	// No filter — all records.
+	all, err = s.List("")
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3 total locates, got %d", len(all))
+	}
+
+	// Unknown firm — empty result.
+	all, err = s.List("99")
+	if err != nil {
+		t.Fatalf("List unknown firm: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 locates for unknown firm, got %d", len(all))
+	}
+}
+
+// ============================================================
+// P4a — RFQStore tests
+// ============================================================
+
+func TestRFQStore_Create_Respond_Cancel(t *testing.T) {
+	s := store.NewInMemoryRFQStore()
+
+	rfq := &types.RequestForQuote{
+		InstrumentID:    7,
+		RequestorFirmID: 5,
+		Quantity:        1000,
+		Side:            "BUY",
+	}
+
+	// Create — assigns ID, sets OPEN.
+	if err := s.Create(rfq); err != nil {
+		t.Fatalf("Create RFQ: %v", err)
+	}
+	if rfq.ID != 1 {
+		t.Errorf("expected ID 1, got %d", rfq.ID)
+	}
+	if rfq.Status != "OPEN" {
+		t.Errorf("expected status OPEN, got %q", rfq.Status)
+	}
+	if rfq.CreatedAt == "" {
+		t.Error("expected CreatedAt to be set")
+	}
+
+	rfqID := fmt.Sprintf("%d", rfq.ID)
+
+	// Get back.
+	got, err := s.Get(rfqID)
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.InstrumentID != 7 {
+		t.Errorf("expected InstrumentID 7, got %d", got.InstrumentID)
+	}
+
+	// Respond — should transition to RESPONDED.
+	if err := s.Respond(rfqID, "Q-001"); err != nil {
+		t.Fatalf("Respond: %v", err)
+	}
+	got, _ = s.Get(rfqID)
+	if got.Status != "RESPONDED" {
+		t.Errorf("expected RESPONDED, got %q", got.Status)
+	}
+
+	// Respond again should fail (not OPEN).
+	if err := s.Respond(rfqID, "Q-002"); err == nil {
+		t.Error("expected error responding to non-OPEN RFQ")
+	}
+
+	// Second RFQ — cancel path.
+	rfq2 := &types.RequestForQuote{
+		InstrumentID:    8,
+		RequestorFirmID: 6,
+		Quantity:        500,
+		Side:            "SELL",
+	}
+	s.Create(rfq2)
+	rfq2ID := fmt.Sprintf("%d", rfq2.ID)
+
+	if err := s.Cancel(rfq2ID); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	got2, _ := s.Get(rfq2ID)
+	if got2.Status != "CANCELLED" {
+		t.Errorf("expected CANCELLED, got %q", got2.Status)
+	}
+
+	// Cancel again should fail.
+	if err := s.Cancel(rfq2ID); err == nil {
+		t.Error("expected error cancelling non-OPEN RFQ")
+	}
+
+	// Not-found paths.
+	if _, err := s.Get("9999"); err != store.ErrNotFound {
+		t.Errorf("Get not-found: expected ErrNotFound, got %v", err)
+	}
+	if err := s.Respond("9999", "Q"); err != store.ErrNotFound {
+		t.Errorf("Respond not-found: expected ErrNotFound, got %v", err)
+	}
+	if err := s.Cancel("9999"); err != store.ErrNotFound {
+		t.Errorf("Cancel not-found: expected ErrNotFound, got %v", err)
+	}
+
+	// List — unfiltered.
+	all, err := s.List("", "")
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("expected 2 RFQs, got %d", len(all))
+	}
+
+	// List — filter by status.
+	open, err := s.List("", "OPEN")
+	if err != nil {
+		t.Fatalf("List open: %v", err)
+	}
+	if len(open) != 0 {
+		t.Errorf("expected 0 OPEN RFQs (both consumed), got %d", len(open))
+	}
+}
+
+// ============================================================
+// P4a — GiveUpStore tests
+// ============================================================
+
+func TestGiveUpStore_Create_Accept_Reject(t *testing.T) {
+	s := store.NewInMemoryGiveUpStore()
+
+	req := &types.GiveUpRequest{
+		TradeID:  101,
+		ToFirmID: 20,
+	}
+
+	// Create — assigns ID=1, status=PENDING.
+	if err := s.Create(req); err != nil {
+		t.Fatalf("Create GiveUp: %v", err)
+	}
+	if req.ID != 1 {
+		t.Errorf("expected ID 1, got %d", req.ID)
+	}
+	if req.Status != "PENDING" {
+		t.Errorf("expected status PENDING, got %q", req.Status)
+	}
+	if req.CreatedAt == "" {
+		t.Error("expected CreatedAt to be set")
+	}
+
+	guID := fmt.Sprintf("%d", req.ID)
+
+	// Get back.
+	got, err := s.Get(guID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.TradeID != 101 {
+		t.Errorf("expected TradeID 101, got %d", got.TradeID)
+	}
+
+	// Accept — PENDING → ACCEPTED.
+	if err := s.Accept(guID); err != nil {
+		t.Fatalf("Accept: %v", err)
+	}
+	got, _ = s.Get(guID)
+	if got.Status != "ACCEPTED" {
+		t.Errorf("expected ACCEPTED, got %q", got.Status)
+	}
+	if got.ResolvedAt == "" {
+		t.Error("expected ResolvedAt to be set after Accept")
+	}
+
+	// Accept again should fail (not PENDING).
+	if err := s.Accept(guID); err == nil {
+		t.Error("expected error accepting non-PENDING give-up")
+	}
+
+	// Second give-up — reject path.
+	req2 := &types.GiveUpRequest{TradeID: 202, ToFirmID: 30}
+	s.Create(req2)
+	gu2ID := fmt.Sprintf("%d", req2.ID)
+
+	if err := s.Reject(gu2ID, "counterparty declined"); err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
+	got2, _ := s.Get(gu2ID)
+	if got2.Status != "REJECTED" {
+		t.Errorf("expected REJECTED, got %q", got2.Status)
+	}
+	if got2.Reason != "counterparty declined" {
+		t.Errorf("expected reason 'counterparty declined', got %q", got2.Reason)
+	}
+	if got2.ResolvedAt == "" {
+		t.Error("expected ResolvedAt to be set after Reject")
+	}
+
+	// Reject again should fail.
+	if err := s.Reject(gu2ID, "again"); err == nil {
+		t.Error("expected error rejecting non-PENDING give-up")
+	}
+
+	// List by firm.
+	req3 := &types.GiveUpRequest{TradeID: 303, FromFirmID: 10, ToFirmID: 20}
+	s.Create(req3)
+	byFirm, err := s.List("10")
+	if err != nil {
+		t.Fatalf("List by firm: %v", err)
+	}
+	if len(byFirm) != 1 {
+		t.Errorf("expected 1 give-up for firm 10, got %d", len(byFirm))
+	}
+
+	// List all.
+	all, err := s.List("")
+	if err != nil {
+		t.Fatalf("List all: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3 give-ups total, got %d", len(all))
+	}
+
+	// Not-found paths.
+	if _, err := s.Get("9999"); err != store.ErrNotFound {
+		t.Errorf("Get not-found: expected ErrNotFound, got %v", err)
+	}
+	if err := s.Accept("9999"); err != store.ErrNotFound {
+		t.Errorf("Accept not-found: expected ErrNotFound, got %v", err)
+	}
+	if err := s.Reject("9999", "x"); err != store.ErrNotFound {
+		t.Errorf("Reject not-found: expected ErrNotFound, got %v", err)
+	}
+}
