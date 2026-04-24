@@ -40,6 +40,8 @@ func newTestServerWithAnnouncement(t *testing.T) *httptest.Server {
 		nil, // throttleStore
 		annStore,
 		auditStore,
+		nil, // pendingChangeStore
+		nil, // referencePriceStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

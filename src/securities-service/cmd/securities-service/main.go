@@ -90,6 +90,10 @@ func main() {
 	announcementStore := store.NewInMemoryAnnouncementStore()
 	auditStore := store.NewInMemoryAuditStore()
 
+	// Pending change and reference price stores (P2c).
+	pendingChangeStore := store.NewInMemoryPendingChangeStore()
+	referencePriceStore := store.NewInMemoryReferencePriceStore()
+
 	// Create a channel-based producer for local/dev. In production, swap for
 	// a real Kafka wire-protocol producer behind the kafka.Producer interface.
 	producer := kafka.NewChannelProducer(kafka.DefaultProducerConfig())
@@ -137,6 +141,8 @@ func main() {
 		throttleStore,
 		announcementStore,
 		auditStore,
+		pendingChangeStore,
+		referencePriceStore,
 		dayManager,
 		matchingEngine,
 		sessionManager,

@@ -55,6 +55,8 @@ type Server struct {
 	throttleStore        store.ThrottleStore
 	announcementStore    store.AnnouncementStore
 	auditStore           store.AuditStore
+	pendingChangeStore   store.PendingChangeStore
+	referencePriceStore  store.ReferencePriceStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -71,6 +73,7 @@ type Server struct {
 // firmStore, participantStore, and dayManager may be nil; if so, those endpoints return 503.
 // tradeCorrectionStore may be nil; if so, trade correction endpoints return 503.
 // announcementStore and auditStore may be nil; if so, those endpoints return 503.
+// pendingChangeStore and referencePriceStore may be nil; if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -89,6 +92,8 @@ func New(
 	throttleStore store.ThrottleStore,
 	announcementStore store.AnnouncementStore,
 	auditStore store.AuditStore,
+	pendingChangeStore store.PendingChangeStore,
+	referencePriceStore store.ReferencePriceStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -115,6 +120,8 @@ func New(
 		throttleStore:        throttleStore,
 		announcementStore:    announcementStore,
 		auditStore:           auditStore,
+		pendingChangeStore:   pendingChangeStore,
+		referencePriceStore:  referencePriceStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -162,9 +169,9 @@ func (s *Server) StartAPIServer() error {
 // registerRoutes wires all API routes onto the given ServeMux.
 // Placeholder handlers are used for routes not yet implemented.
 func (s *Server) registerRoutes(mux *http.ServeMux) {
-	// Instruments
+	// Instruments — the wildcard handler also dispatches the reference-price sub-resource.
 	mux.HandleFunc("/api/v1/securities/instruments", s.handleInstruments)
-	mux.HandleFunc("/api/v1/securities/instruments/", s.handleInstrument)
+	mux.HandleFunc("/api/v1/securities/instruments/", s.handleInstrumentOrReferencePrice)
 
 	// Orders — mass-cancel must be registered before the wildcard orders/ route.
 	mux.HandleFunc("/api/v1/securities/orders/mass-cancel", s.handleMassCancel)
@@ -223,6 +230,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Tick tables (Part B)
 	mux.HandleFunc("/api/v1/securities/tick-tables", s.handleTickTables)
 	mux.HandleFunc("/api/v1/securities/tick-tables/", s.handleTickTable)
+
+	// Positions (P2c Part E) — must be registered before the instruments/ wildcard above,
+	// but positions is its own top-level path so order does not conflict.
+	mux.HandleFunc("/api/v1/securities/positions", s.handlePositions)
+
+	// Pending changes (P2c Part C)
+	mux.HandleFunc("/api/v1/securities/pending-changes", s.handlePendingChanges)
+	mux.HandleFunc("/api/v1/securities/pending-changes/", s.handlePendingChange)
+
 }
 
 // --- Health endpoints ---
@@ -264,6 +280,16 @@ func (s *Server) handleInstruments(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
+}
+
+// handleInstrumentOrReferencePrice is the wildcard handler for /api/v1/securities/instruments/.
+// It dispatches to the reference-price sub-resource handler or the standard instrument handler.
+func (s *Server) handleInstrumentOrReferencePrice(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/reference-price") {
+		s.handleReferencePrice(w, r)
+		return
+	}
+	s.handleInstrument(w, r)
 }
 
 // handleInstrument dispatches GET/PATCH /api/v1/securities/instruments/{id}

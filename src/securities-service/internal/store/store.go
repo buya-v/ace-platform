@@ -1262,3 +1262,160 @@ func (s *InMemoryThrottleStore) CheckAndIncrement(firmID string, maxPerSecond in
 	bucket.count++
 	return true, nil
 }
+
+// ── PendingChangeStore (P2c) ──────────────────────────────────────────────────
+
+// PendingChangeStore defines the repository contract for maker/checker pending changes.
+type PendingChangeStore interface {
+	Create(change *types.PendingChange) error
+	Get(id string) (*types.PendingChange, error)
+	ListByStatus(status string) ([]types.PendingChange, error)
+	Approve(id, reviewerID string) error
+	Reject(id, reviewerID, comment string) error
+}
+
+// InMemoryPendingChangeStore is a thread-safe, in-memory implementation of PendingChangeStore.
+type InMemoryPendingChangeStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.PendingChange
+}
+
+// NewInMemoryPendingChangeStore returns an empty InMemoryPendingChangeStore.
+func NewInMemoryPendingChangeStore() *InMemoryPendingChangeStore {
+	return &InMemoryPendingChangeStore{data: make(map[string]*types.PendingChange)}
+}
+
+// Create stores a new pending change.
+func (s *InMemoryPendingChangeStore) Create(change *types.PendingChange) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[change.ID]; exists {
+		return fmt.Errorf("pending change %s already exists", change.ID)
+	}
+	cp := *change
+	if cp.Payload != nil {
+		cp.Payload = copyPayload(change.Payload)
+	}
+	s.data[change.ID] = &cp
+	return nil
+}
+
+// Get retrieves a pending change by ID.
+func (s *InMemoryPendingChangeStore) Get(id string) (*types.PendingChange, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *c
+	if c.Payload != nil {
+		cp.Payload = copyPayload(c.Payload)
+	}
+	return &cp, nil
+}
+
+// ListByStatus returns all pending changes with the given status.
+// If status is empty, all records are returned.
+func (s *InMemoryPendingChangeStore) ListByStatus(status string) ([]types.PendingChange, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.PendingChange, 0, len(s.data))
+	for _, c := range s.data {
+		if status != "" && c.Status != status {
+			continue
+		}
+		cp := *c
+		if c.Payload != nil {
+			cp.Payload = copyPayload(c.Payload)
+		}
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+// Approve transitions a pending change to APPROVED status.
+// Returns an error if the change is not in PENDING_APPROVAL status.
+func (s *InMemoryPendingChangeStore) Approve(id, reviewerID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if c.Status != "PENDING_APPROVAL" {
+		return fmt.Errorf("pending change %s is not in PENDING_APPROVAL status", id)
+	}
+	c.Status = "APPROVED"
+	c.ReviewedBy = reviewerID
+	c.ReviewedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// Reject transitions a pending change to REJECTED status.
+// Returns an error if the change is not in PENDING_APPROVAL status.
+func (s *InMemoryPendingChangeStore) Reject(id, reviewerID, comment string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if c.Status != "PENDING_APPROVAL" {
+		return fmt.Errorf("pending change %s is not in PENDING_APPROVAL status", id)
+	}
+	c.Status = "REJECTED"
+	c.ReviewedBy = reviewerID
+	c.ReviewComment = comment
+	c.ReviewedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// copyPayload performs a shallow copy of a map[string]interface{}.
+func copyPayload(src map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// ── ReferencePriceStore (P2c) ─────────────────────────────────────────────────
+
+// ReferencePriceStore defines the repository contract for instrument reference prices.
+type ReferencePriceStore interface {
+	Get(instrumentID string) (*types.ReferencePrice, error)
+	Set(rp *types.ReferencePrice) error
+}
+
+// InMemoryReferencePriceStore is a thread-safe, in-memory implementation of ReferencePriceStore.
+type InMemoryReferencePriceStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.ReferencePrice
+}
+
+// NewInMemoryReferencePriceStore returns an empty InMemoryReferencePriceStore.
+func NewInMemoryReferencePriceStore() *InMemoryReferencePriceStore {
+	return &InMemoryReferencePriceStore{data: make(map[string]*types.ReferencePrice)}
+}
+
+// Get retrieves the reference price for an instrument. Returns ErrNotFound if absent.
+func (s *InMemoryReferencePriceStore) Get(instrumentID string) (*types.ReferencePrice, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rp, ok := s.data[instrumentID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *rp
+	return &cp, nil
+}
+
+// Set upserts the reference price for an instrument.
+func (s *InMemoryReferencePriceStore) Set(rp *types.ReferencePrice) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *rp
+	s.data[rp.InstrumentID] = &cp
+	return nil
+}

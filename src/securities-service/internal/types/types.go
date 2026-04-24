@@ -509,3 +509,30 @@ type AuditFilters struct {
 	StartDate  string
 	EndDate    string
 }
+
+// ── Pending Changes (P2c) ──────────────────────────────────────────────────────
+
+// PendingChange represents a maker/checker workflow record for a proposed entity change.
+type PendingChange struct {
+	ID             string                 `json:"id"`
+	EntityType     string                 `json:"entity_type"`
+	EntityID       string                 `json:"entity_id"`
+	ChangeType     string                 `json:"change_type"` // CREATE | UPDATE | DELETE
+	Payload        map[string]interface{} `json:"payload"`
+	SubmittedBy    string                 `json:"submitted_by"`
+	Status         string                 `json:"status"` // PENDING_APPROVAL | APPROVED | REJECTED
+	ReviewedBy     string                 `json:"reviewed_by,omitempty"`
+	ReviewComment  string                 `json:"review_comment,omitempty"`
+	SubmittedAt    string                 `json:"submitted_at"`
+	ReviewedAt     string                 `json:"reviewed_at,omitempty"`
+}
+
+// ReferencePrice represents the official reference price for an instrument,
+// used as the anchor for circuit breaker percentage limits.
+type ReferencePrice struct {
+	InstrumentID          string  `json:"instrument_id"`
+	Price                 float64 `json:"price"`
+	SetBy                 string  `json:"set_by"`
+	SetAt                 string  `json:"set_at"`
+	StaleThresholdMinutes int     `json:"stale_threshold_minutes"`
+}
