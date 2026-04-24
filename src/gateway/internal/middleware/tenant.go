@@ -29,7 +29,19 @@ var tenantHealthPaths = map[string]bool{
 var tenantBypassPrefixes = []string{
 	"/platform/",
 	"/api/v1/auth/",
-	"/api/v1/admin/demo/",
+	"/api/v1/admin/",
+	"/api/v1/instruments/",
+	"/api/v1/market-data/",
+	"/api/v1/orders",
+	"/api/v1/clearing/",
+	"/api/v1/margin",
+	"/api/v1/settlement/",
+	"/api/v1/warehouse/",
+	"/api/v1/participants",
+	"/api/v1/screening/",
+	"/api/v1/risk-scores/",
+	"/api/v1/compliance/",
+	"/api/v1/ws/",
 }
 
 // tenantErrorBody is the JSON error shape for tenant errors.
