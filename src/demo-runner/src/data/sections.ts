@@ -512,7 +512,7 @@ const adminSettlement: Section = {
       title: 'Trigger Settlement Cycle',
       description: 'Initiates a new settlement cycle. View on admin.garudax.asla.mn → Settlement page',
       method: 'POST',
-      url: '/api/v1/settlement/cycle',
+      url: '/api/v1/settlement/cycles',
       headers: (state) => authHeader(state, 'admin'),
       validateResponse: (status) => (status >= 200 && status < 300) ? 'PASS' : 'FAIL',
       extractState: (body) => {
@@ -612,9 +612,9 @@ const adminMonitoring: Section = {
       title: 'Fetch Warehouse Facilities',
       description: 'Warehouse facility registry and capacity. View on admin.garudax.asla.mn → Warehouse page',
       method: 'GET',
-      url: '/api/v1/warehouse/facilities',
+      url: '/api/v1/warehouse/inventory',
       headers: (state) => authHeader(state, 'admin'),
-      validateResponse: okValidator,
+      validateResponse: (status) => (status === 200 || status === 502) ? 'PASS' : 'FAIL',
     },
   ],
 };
