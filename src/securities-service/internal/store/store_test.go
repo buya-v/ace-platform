@@ -1515,3 +1515,317 @@ func TestCircuitBreakerStore_Get_ReturnsCopy(t *testing.T) {
 		t.Error("Get returned a pointer into internal storage instead of a copy")
 	}
 }
+
+// ============================================================
+// FirmStore tests
+// ============================================================
+
+func newFirm(id, name string, status types.FirmStatus) *types.Firm {
+	return &types.Firm{
+		ID:        id,
+		Name:      name,
+		Status:    status,
+		CreatedAt: "2026-04-24T00:00:00Z",
+		UpdatedAt: "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestFirmStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryFirmStore()
+	f := newFirm("MSE-BROKER-1", "Alpha Securities", types.FirmActive)
+
+	if err := s.Create(f); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("MSE-BROKER-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "MSE-BROKER-1" {
+		t.Errorf("ID: want MSE-BROKER-1, got %s", got.ID)
+	}
+	if got.Name != "Alpha Securities" {
+		t.Errorf("Name: want Alpha Securities, got %s", got.Name)
+	}
+	if got.Status != types.FirmActive {
+		t.Errorf("Status: want %s, got %s", types.FirmActive, got.Status)
+	}
+
+	t.Run("get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("NO-SUCH-FIRM")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(f); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestFirmStore_List(t *testing.T) {
+	s := store.NewInMemoryFirmStore()
+
+	// Seed MSE-BROKER-1 (matching the spec requirement).
+	s.Create(newFirm("MSE-BROKER-1", "Alpha Securities", types.FirmActive))
+	s.Create(newFirm("MSE-BROKER-2", "Beta Capital", types.FirmActive))
+	s.Create(newFirm("MSE-BROKER-3", "Gamma Investments", types.FirmSuspended))
+
+	firms, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(firms) != 3 {
+		t.Fatalf("expected 3 firms, got %d", len(firms))
+	}
+
+	// Verify MSE-BROKER-1 is present.
+	found := false
+	for _, f := range firms {
+		if f.ID == "MSE-BROKER-1" {
+			found = true
+			if f.Name != "Alpha Securities" {
+				t.Errorf("MSE-BROKER-1 Name: want Alpha Securities, got %s", f.Name)
+			}
+			if f.Status != types.FirmActive {
+				t.Errorf("MSE-BROKER-1 Status: want %s, got %s", types.FirmActive, f.Status)
+			}
+		}
+	}
+	if !found {
+		t.Error("MSE-BROKER-1 not found in List()")
+	}
+}
+
+func TestFirmStore_UpdateStatus(t *testing.T) {
+	s := store.NewInMemoryFirmStore()
+	s.Create(newFirm("FIRM-UPST", "Delta Markets", types.FirmActive))
+
+	t.Run("FIRM_ACTIVE → FIRM_SUSPENDED", func(t *testing.T) {
+		if err := s.UpdateStatus("FIRM-UPST", types.FirmSuspended); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("FIRM-UPST")
+		if got.Status != types.FirmSuspended {
+			t.Errorf("Status: want %s, got %s", types.FirmSuspended, got.Status)
+		}
+		if got.UpdatedAt == "2026-04-24T00:00:00Z" {
+			// UpdatedAt should have been refreshed.
+			t.Error("UpdatedAt was not updated after status change")
+		}
+	})
+
+	t.Run("FIRM_SUSPENDED → FIRM_DEACTIVATED", func(t *testing.T) {
+		if err := s.UpdateStatus("FIRM-UPST", types.FirmDeactivated); err != nil {
+			t.Fatalf("UpdateStatus: %v", err)
+		}
+		got, _ := s.Get("FIRM-UPST")
+		if got.Status != types.FirmDeactivated {
+			t.Errorf("Status: want %s, got %s", types.FirmDeactivated, got.Status)
+		}
+	})
+
+	t.Run("non-existent ID returns ErrNotFound", func(t *testing.T) {
+		if err := s.UpdateStatus("NO-SUCH-FIRM", types.FirmSuspended); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// ============================================================
+// ParticipantStore tests
+// ============================================================
+
+func newParticipant(id, firmID, name string, status types.ParticipantStatus, perms ...string) *types.ExchangeParticipant {
+	return &types.ExchangeParticipant{
+		ID:          id,
+		FirmID:      firmID,
+		Name:        name,
+		Status:      status,
+		Permissions: perms,
+		CreatedAt:   "2026-04-24T00:00:00Z",
+		UpdatedAt:   "2026-04-24T00:00:00Z",
+	}
+}
+
+func TestParticipantStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryParticipantStore()
+	p := newParticipant("PART-1", "MSE-BROKER-1", "Trader Alice",
+		types.ParticipantActive, types.PermTradeEquity, types.PermTradeBond)
+
+	if err := s.Create(p); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("PART-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "PART-1" {
+		t.Errorf("ID: want PART-1, got %s", got.ID)
+	}
+	if got.FirmID != "MSE-BROKER-1" {
+		t.Errorf("FirmID: want MSE-BROKER-1, got %s", got.FirmID)
+	}
+	if got.Status != types.ParticipantActive {
+		t.Errorf("Status: want %s, got %s", types.ParticipantActive, got.Status)
+	}
+	if len(got.Permissions) != 2 {
+		t.Errorf("Permissions len: want 2, got %d", len(got.Permissions))
+	}
+	// Verify specific permissions.
+	hasEquity := false
+	for _, perm := range got.Permissions {
+		if perm == types.PermTradeEquity {
+			hasEquity = true
+		}
+	}
+	if !hasEquity {
+		t.Errorf("expected %s in permissions, got %v", types.PermTradeEquity, got.Permissions)
+	}
+
+	t.Run("get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("NO-SUCH-PART")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(p); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Get returns copy (mutation does not affect store)", func(t *testing.T) {
+		got2, _ := s.Get("PART-1")
+		got2.Name = "MUTATED"
+		got3, _ := s.Get("PART-1")
+		if got3.Name == "MUTATED" {
+			t.Error("Get returned a pointer into internal storage instead of a copy")
+		}
+	})
+}
+
+func TestParticipantStore_ListByFirm(t *testing.T) {
+	s := store.NewInMemoryParticipantStore()
+
+	// Two participants in firm-A, one in firm-B.
+	s.Create(newParticipant("P-A1", "FIRM-A", "Alice", types.ParticipantActive, types.PermTradeEquity))
+	s.Create(newParticipant("P-A2", "FIRM-A", "Bob", types.ParticipantActive, types.PermTradeBond))
+	s.Create(newParticipant("P-B1", "FIRM-B", "Carol", types.ParticipantSuspended))
+
+	t.Run("filter by FIRM-A returns 2", func(t *testing.T) {
+		results, err := s.List(store.ParticipantFilters{FirmID: "FIRM-A"})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("expected 2 participants for FIRM-A, got %d", len(results))
+		}
+		for _, p := range results {
+			if p.FirmID != "FIRM-A" {
+				t.Errorf("unexpected FirmID %s", p.FirmID)
+			}
+		}
+	})
+
+	t.Run("filter by FIRM-B returns 1", func(t *testing.T) {
+		results, err := s.List(store.ParticipantFilters{FirmID: "FIRM-B"})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("expected 1 participant for FIRM-B, got %d", len(results))
+		}
+		if results[0].ID != "P-B1" {
+			t.Errorf("ID: want P-B1, got %s", results[0].ID)
+		}
+	})
+
+	t.Run("no filter returns all 3", func(t *testing.T) {
+		results, err := s.List(store.ParticipantFilters{})
+		if err != nil {
+			t.Fatalf("List all: %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("expected 3 participants, got %d", len(results))
+		}
+	})
+
+	t.Run("filter by non-existent firm returns empty", func(t *testing.T) {
+		results, err := s.List(store.ParticipantFilters{FirmID: "FIRM-MISSING"})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 participants, got %d", len(results))
+		}
+	})
+}
+
+func TestParticipantStore_UpdatePermissions(t *testing.T) {
+	s := store.NewInMemoryParticipantStore()
+	s.Create(newParticipant("PART-PERM", "FIRM-X", "PermUser",
+		types.ParticipantActive, types.PermTradeEquity))
+
+	t.Run("add TRADE_BOND permission", func(t *testing.T) {
+		newPerms := []string{types.PermTradeEquity, types.PermTradeBond}
+		if err := s.UpdatePermissions("PART-PERM", newPerms); err != nil {
+			t.Fatalf("UpdatePermissions: %v", err)
+		}
+		got, _ := s.Get("PART-PERM")
+		if len(got.Permissions) != 2 {
+			t.Errorf("Permissions len: want 2, got %d", len(got.Permissions))
+		}
+	})
+
+	t.Run("remove all permissions", func(t *testing.T) {
+		if err := s.UpdatePermissions("PART-PERM", []string{}); err != nil {
+			t.Fatalf("UpdatePermissions to empty: %v", err)
+		}
+		got, _ := s.Get("PART-PERM")
+		if len(got.Permissions) != 0 {
+			t.Errorf("expected empty permissions, got %v", got.Permissions)
+		}
+	})
+
+	t.Run("replace with MARKET_MAKER", func(t *testing.T) {
+		if err := s.UpdatePermissions("PART-PERM", []string{types.PermMarketMaker}); err != nil {
+			t.Fatalf("UpdatePermissions: %v", err)
+		}
+		got, _ := s.Get("PART-PERM")
+		if len(got.Permissions) != 1 || got.Permissions[0] != types.PermMarketMaker {
+			t.Errorf("expected [%s], got %v", types.PermMarketMaker, got.Permissions)
+		}
+	})
+
+	t.Run("UpdatedAt is refreshed", func(t *testing.T) {
+		// Create a fresh store so UpdatedAt starts at the static creation timestamp.
+		fresh := store.NewInMemoryParticipantStore()
+		fresh.Create(newParticipant("PART-TS", "FIRM-X", "TSUser",
+			types.ParticipantActive, types.PermTradeEquity))
+
+		const staticCreation = "2026-04-24T00:00:00Z"
+		before, _ := fresh.Get("PART-TS")
+		if before.UpdatedAt != staticCreation {
+			t.Skipf("initial UpdatedAt %q differs from expected %q — skip", before.UpdatedAt, staticCreation)
+		}
+		if err := fresh.UpdatePermissions("PART-TS", []string{types.PermTradeETF}); err != nil {
+			t.Fatalf("UpdatePermissions: %v", err)
+		}
+		after, _ := fresh.Get("PART-TS")
+		if after.UpdatedAt == staticCreation {
+			t.Error("UpdatedAt was not refreshed after UpdatePermissions")
+		}
+	})
+
+	t.Run("non-existent ID returns ErrNotFound", func(t *testing.T) {
+		if err := s.UpdatePermissions("NO-SUCH-PART", []string{types.PermTradeEquity}); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
