@@ -44,6 +44,10 @@ func newOffBookTestServer(t *testing.T) (*httptest.Server, *store.InMemoryOffBoo
 		nil, // investigationStore
 		nil, // replayStore
 		nil, // bondStore
+		nil, // strategyStore
+		nil, // custodyAccountStore
+		nil, // custodyBalanceStore
+		nil, // csdTransferStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -297,6 +301,7 @@ func TestOffBookEndpoints_NotConfigured(t *testing.T) {
 		nil, // offBookTradeStore = nil
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
+		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()

@@ -50,6 +50,10 @@ func newGiveUpTestServer(t *testing.T) (*httptest.Server, *store.InMemoryGiveUpS
 		nil, // investigationStore
 		nil, // replayStore
 		nil, // bondStore
+		nil, // strategyStore
+		nil, // custodyAccountStore
+		nil, // custodyBalanceStore
+		nil, // csdTransferStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

@@ -787,3 +787,99 @@ type Bond struct {
 	CreatedAt          string             `json:"created_at"`
 	UpdatedAt          string             `json:"updated_at"`
 }
+
+// ── Trading Strategies ────────────────────────────────────────────────────────
+
+// StrategyType classifies the pattern of a multi-leg trading strategy.
+type StrategyType string
+
+const (
+	StrategyTypeSpread     StrategyType = "SPREAD"
+	StrategyTypeStraddle   StrategyType = "STRADDLE"
+	StrategyTypeStrangle   StrategyType = "STRANGLE"
+	StrategyTypeButterfly  StrategyType = "BUTTERFLY"
+	StrategyTypeCustom     StrategyType = "CUSTOM"
+)
+
+// StrategyStatus represents the lifecycle state of a trading strategy.
+type StrategyStatus string
+
+const (
+	StrategyStatusActive   StrategyStatus = "STRATEGY_ACTIVE"
+	StrategyStatusInactive StrategyStatus = "STRATEGY_INACTIVE"
+	StrategyStatusDeleted  StrategyStatus = "STRATEGY_DELETED"
+)
+
+// StrategyLeg defines one leg of a multi-leg trading strategy.
+type StrategyLeg struct {
+	InstrumentID string    `json:"instrument_id"`
+	Side         OrderSide `json:"side"`   // BUY or SELL
+	RatioQty     int       `json:"ratio_qty"` // relative quantity ratio (e.g. 1, 2)
+}
+
+// TradingStrategy represents a named multi-leg strategy definition.
+type TradingStrategy struct {
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	StrategyType StrategyType   `json:"strategy_type"`
+	Legs         []StrategyLeg  `json:"legs"`
+	Status       StrategyStatus `json:"status"`
+	TenantID     string         `json:"tenant_id"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+}
+
+// ── CSD — Custody Accounts, Balances, Transfers ───────────────────────────────
+
+// CustodyAccount represents a securities holding account at the central securities depository.
+type CustodyAccount struct {
+	ID        string `json:"id"`
+	FirmID    string `json:"firm_id"`
+	Name      string `json:"name"`
+	Currency  string `json:"currency"`
+	TenantID  string `json:"tenant_id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// CustodyBalance represents the holdings of a single instrument within a custody account.
+type CustodyBalance struct {
+	AccountID    string  `json:"account_id"`
+	InstrumentID string  `json:"instrument_id"`
+	Quantity     int     `json:"quantity"`
+	AvgCost      float64 `json:"avg_cost"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+// CSDTransferType classifies the type of a CSD securities transfer.
+type CSDTransferType string
+
+const (
+	CSDTransferDVP CSDTransferType = "DVP" // Delivery Versus Payment
+	CSDTransferFOP CSDTransferType = "FOP" // Free Of Payment
+)
+
+// CSDTransferStatus represents the lifecycle state of a CSD transfer instruction.
+type CSDTransferStatus string
+
+const (
+	CSDTransferPending   CSDTransferStatus = "CSD_PENDING"
+	CSDTransferCompleted CSDTransferStatus = "CSD_COMPLETED"
+	CSDTransferFailed    CSDTransferStatus = "CSD_FAILED"
+)
+
+// CSDTransfer represents a securities transfer instruction between custody accounts.
+type CSDTransfer struct {
+	ID              string            `json:"id"`
+	FromAccountID   string            `json:"from_account_id"`
+	ToAccountID     string            `json:"to_account_id"`
+	InstrumentID    string            `json:"instrument_id"`
+	Quantity        int               `json:"quantity"`
+	TransferType    CSDTransferType   `json:"transfer_type"`
+	SettlementAmount float64          `json:"settlement_amount,omitempty"` // only for DVP
+	Status          CSDTransferStatus `json:"status"`
+	FailReason      string            `json:"fail_reason,omitempty"`
+	TenantID        string            `json:"tenant_id"`
+	CreatedAt       string            `json:"created_at"`
+	UpdatedAt       string            `json:"updated_at"`
+}

@@ -66,6 +66,10 @@ type Server struct {
 	investigationStore   store.InvestigationStore
 	replayStore          store.ReplayStore
 	bondStore            store.BondStore
+	strategyStore        store.StrategyStore
+	custodyAccountStore  store.CustodyAccountStore
+	custodyBalanceStore  store.CustodyBalanceStore
+	csdTransferStore     store.CSDTransferStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -116,6 +120,10 @@ func New(
 	investigationStore store.InvestigationStore,
 	replayStore store.ReplayStore,
 	bondStore store.BondStore,
+	strategyStore store.StrategyStore,
+	custodyAccountStore store.CustodyAccountStore,
+	custodyBalanceStore store.CustodyBalanceStore,
+	csdTransferStore store.CSDTransferStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -153,6 +161,10 @@ func New(
 		investigationStore:   investigationStore,
 		replayStore:          replayStore,
 		bondStore:            bondStore,
+		strategyStore:        strategyStore,
+		custodyAccountStore:  custodyAccountStore,
+		custodyBalanceStore:  custodyBalanceStore,
+		csdTransferStore:     csdTransferStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -319,6 +331,16 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Fixed-income bonds
 	mux.HandleFunc("/api/v1/securities/bonds", s.handleBonds)
 	mux.HandleFunc("/api/v1/securities/bonds/", s.handleBond)
+
+	// Trading strategies
+	mux.HandleFunc("/api/v1/securities/strategies", s.handleStrategies)
+	mux.HandleFunc("/api/v1/securities/strategies/", s.handleStrategy)
+
+	// CSD — custody accounts, balances, transfers
+	mux.HandleFunc("/api/v1/securities/csd/accounts", s.handleCustodyAccounts)
+	mux.HandleFunc("/api/v1/securities/csd/accounts/", s.handleCustodyAccount)
+	mux.HandleFunc("/api/v1/securities/csd/transfers", s.handleCSDTransfers)
+	mux.HandleFunc("/api/v1/securities/csd/transfers/", s.handleCSDTransfer)
 }
 
 // --- Health endpoints ---

@@ -4044,3 +4044,418 @@ func TestBondStore_Create_List(t *testing.T) {
 		t.Error("Get returned a pointer into internal storage instead of a copy")
 	}
 }
+
+// ============================================================
+// TestStrategyStore_Create_Get_List_Delete
+// ============================================================
+
+func newStrategy(id, name string, legs []types.StrategyLeg) *types.TradingStrategy {
+	return &types.TradingStrategy{
+		ID:           id,
+		Name:         name,
+		StrategyType: types.StrategyTypeSpread,
+		Legs:         legs,
+		Status:       types.StrategyStatusActive,
+		TenantID:     "ace-commodities",
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt:    time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func TestStrategyStore_Create_Get_List_Delete(t *testing.T) {
+	s := store.NewInMemoryStrategyStore()
+
+	legs := []types.StrategyLeg{
+		{InstrumentID: "INST-A", Side: types.OrderSideBuy, RatioQty: 1},
+		{InstrumentID: "INST-B", Side: types.OrderSideSell, RatioQty: 1},
+	}
+	strat := newStrategy("STRAT-1", "Wheat Spread", legs)
+
+	// Create succeeds.
+	if err := s.Create(strat); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Duplicate Create fails.
+	if err := s.Create(strat); err == nil {
+		t.Fatal("expected error on duplicate Create, got nil")
+	}
+
+	// Get returns correct record.
+	got, err := s.Get("STRAT-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Name != "Wheat Spread" {
+		t.Errorf("Name: want 'Wheat Spread', got %q", got.Name)
+	}
+	if len(got.Legs) != 2 {
+		t.Errorf("Legs: want 2, got %d", len(got.Legs))
+	}
+
+	// Get returns a copy — mutation does not affect store.
+	got.Name = "MUTATED"
+	got2, _ := s.Get("STRAT-1")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage")
+	}
+
+	// Get non-existent returns ErrNotFound.
+	if _, err := s.Get("NO-STRAT"); err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+
+	// List returns all for tenant.
+	s.Create(newStrategy("STRAT-2", "Straddle", legs))
+	all, err := s.List("ace-commodities")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("List count: want 2, got %d", len(all))
+	}
+
+	// List with different tenant returns empty.
+	other, _ := s.List("other-tenant")
+	if len(other) != 0 {
+		t.Errorf("List other tenant: want 0, got %d", len(other))
+	}
+
+	// List with empty tenantID returns all.
+	all2, _ := s.List("")
+	if len(all2) != 2 {
+		t.Errorf("List all: want 2, got %d", len(all2))
+	}
+
+	// Delete removes the record.
+	if err := s.Delete("STRAT-1"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := s.Get("STRAT-1"); err != store.ErrNotFound {
+		t.Errorf("Get after Delete: expected ErrNotFound, got %v", err)
+	}
+
+	// Delete non-existent returns ErrNotFound.
+	if err := s.Delete("NO-STRAT"); err != store.ErrNotFound {
+		t.Errorf("Delete missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Concurrent Create is safe.
+	s2 := store.NewInMemoryStrategyStore()
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			st := newStrategy(fmt.Sprintf("CONCURRENT-%d", n), "C", legs)
+			s2.Create(st) //nolint:errcheck
+		}(i)
+	}
+	wg.Wait()
+	all3, _ := s2.List("")
+	if len(all3) != 20 {
+		t.Errorf("concurrent create: want 20, got %d", len(all3))
+	}
+}
+
+// ============================================================
+// TestCustodyAccountStore_Create_ListByFirm
+// ============================================================
+
+func TestCustodyAccountStore_Create_ListByFirm(t *testing.T) {
+	s := store.NewInMemoryCustodyAccountStore()
+
+	acc1 := &types.CustodyAccount{
+		ID:       "ACCT-1",
+		FirmID:   "FIRM-A",
+		Name:     "Main Account",
+		Currency: "MNT",
+		TenantID: "ace-commodities",
+	}
+	acc2 := &types.CustodyAccount{
+		ID:       "ACCT-2",
+		FirmID:   "FIRM-A",
+		Name:     "Secondary Account",
+		Currency: "USD",
+		TenantID: "ace-commodities",
+	}
+	acc3 := &types.CustodyAccount{
+		ID:       "ACCT-3",
+		FirmID:   "FIRM-B",
+		Name:     "Firm B Account",
+		Currency: "MNT",
+		TenantID: "ace-commodities",
+	}
+
+	// Create three accounts.
+	for _, acc := range []*types.CustodyAccount{acc1, acc2, acc3} {
+		if err := s.Create(acc); err != nil {
+			t.Fatalf("Create %s: %v", acc.ID, err)
+		}
+	}
+
+	// Duplicate Create fails.
+	if err := s.Create(acc1); err == nil {
+		t.Fatal("expected error on duplicate Create, got nil")
+	}
+
+	// Get returns correct record.
+	got, err := s.Get("ACCT-1")
+	if err != nil {
+		t.Fatalf("Get ACCT-1: %v", err)
+	}
+	if got.FirmID != "FIRM-A" {
+		t.Errorf("FirmID: want FIRM-A, got %q", got.FirmID)
+	}
+	if got.Currency != "MNT" {
+		t.Errorf("Currency: want MNT, got %q", got.Currency)
+	}
+
+	// Get non-existent returns ErrNotFound.
+	if _, err := s.Get("NO-ACCT"); err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+
+	// ListByFirm(FIRM-A) returns 2 accounts.
+	firmA, err := s.ListByFirm("FIRM-A")
+	if err != nil {
+		t.Fatalf("ListByFirm FIRM-A: %v", err)
+	}
+	if len(firmA) != 2 {
+		t.Errorf("FIRM-A count: want 2, got %d", len(firmA))
+	}
+
+	// ListByFirm(FIRM-B) returns 1 account.
+	firmB, err := s.ListByFirm("FIRM-B")
+	if err != nil {
+		t.Fatalf("ListByFirm FIRM-B: %v", err)
+	}
+	if len(firmB) != 1 {
+		t.Errorf("FIRM-B count: want 1, got %d", len(firmB))
+	}
+
+	// ListByFirm("") returns all.
+	all, _ := s.ListByFirm("")
+	if len(all) != 3 {
+		t.Errorf("ListByFirm all: want 3, got %d", len(all))
+	}
+
+	// Get returns a copy.
+	got.Name = "MUTATED"
+	got2, _ := s.Get("ACCT-1")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage")
+	}
+}
+
+// ============================================================
+// TestCustodyBalanceStore_GetUpdate_ListByAccount
+// ============================================================
+
+func TestCustodyBalanceStore_GetUpdate_ListByAccount(t *testing.T) {
+	s := store.NewInMemoryCustodyBalanceStore()
+
+	// GetOrUpdate creates a new balance record when absent.
+	bal, err := s.GetOrUpdate("ACCT-1", "INST-A", 100, 50.0)
+	if err != nil {
+		t.Fatalf("GetOrUpdate create: %v", err)
+	}
+	if bal.Quantity != 100 {
+		t.Errorf("Quantity after create: want 100, got %d", bal.Quantity)
+	}
+	if bal.AvgCost != 50.0 {
+		t.Errorf("AvgCost after create: want 50.0, got %f", bal.AvgCost)
+	}
+	if bal.UpdatedAt == "" {
+		t.Error("UpdatedAt must be set")
+	}
+
+	// GetOrUpdate increments quantity when record exists.
+	bal2, err := s.GetOrUpdate("ACCT-1", "INST-A", 50, 0)
+	if err != nil {
+		t.Fatalf("GetOrUpdate increment: %v", err)
+	}
+	if bal2.Quantity != 150 {
+		t.Errorf("Quantity after increment: want 150, got %d", bal2.Quantity)
+	}
+	// AvgCost should not change when avgCost arg is 0.
+	if bal2.AvgCost != 50.0 {
+		t.Errorf("AvgCost unchanged: want 50.0, got %f", bal2.AvgCost)
+	}
+
+	// GetOrUpdate with negative delta reduces quantity.
+	bal3, err := s.GetOrUpdate("ACCT-1", "INST-A", -30, 0)
+	if err != nil {
+		t.Fatalf("GetOrUpdate decrement: %v", err)
+	}
+	if bal3.Quantity != 120 {
+		t.Errorf("Quantity after decrement: want 120, got %d", bal3.Quantity)
+	}
+
+	// Add a second instrument to ACCT-1 and a balance on ACCT-2.
+	s.GetOrUpdate("ACCT-1", "INST-B", 200, 25.0) //nolint:errcheck
+	s.GetOrUpdate("ACCT-2", "INST-A", 500, 10.0) //nolint:errcheck
+
+	// ListByAccount(ACCT-1) returns 2 balances.
+	acct1, err := s.ListByAccount("ACCT-1")
+	if err != nil {
+		t.Fatalf("ListByAccount ACCT-1: %v", err)
+	}
+	if len(acct1) != 2 {
+		t.Errorf("ACCT-1 balances: want 2, got %d", len(acct1))
+	}
+
+	// ListByAccount(ACCT-2) returns 1 balance.
+	acct2, err := s.ListByAccount("ACCT-2")
+	if err != nil {
+		t.Fatalf("ListByAccount ACCT-2: %v", err)
+	}
+	if len(acct2) != 1 {
+		t.Errorf("ACCT-2 balances: want 1, got %d", len(acct2))
+	}
+	if acct2[0].Quantity != 500 {
+		t.Errorf("ACCT-2 INST-A quantity: want 500, got %d", acct2[0].Quantity)
+	}
+
+	// ListByAccount on unknown account returns empty (not error).
+	empty, err := s.ListByAccount("NO-ACCT")
+	if err != nil {
+		t.Fatalf("ListByAccount missing: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("missing account: want 0, got %d", len(empty))
+	}
+
+	// Concurrent GetOrUpdate is safe.
+	s2 := store.NewInMemoryCustodyBalanceStore()
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s2.GetOrUpdate("ACCT-X", "INST-Y", 1, 0) //nolint:errcheck
+		}()
+	}
+	wg.Wait()
+	finals, _ := s2.ListByAccount("ACCT-X")
+	if len(finals) != 1 || finals[0].Quantity != 50 {
+		t.Errorf("concurrent update: want qty=50, got %d records qty=%d", len(finals), func() int {
+			if len(finals) > 0 {
+				return finals[0].Quantity
+			}
+			return -1
+		}())
+	}
+}
+
+// ============================================================
+// TestCSDTransferStore_Create_Complete_Fail
+// ============================================================
+
+func TestCSDTransferStore_Create_Complete_Fail(t *testing.T) {
+	s := store.NewInMemoryCSDTransferStore()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	transfer := &types.CSDTransfer{
+		ID:            "TXN-1",
+		FromAccountID: "ACCT-1",
+		ToAccountID:   "ACCT-2",
+		InstrumentID:  "INST-A",
+		Quantity:      100,
+		TransferType:  types.CSDTransferDVP,
+		SettlementAmount: 5000.0,
+		Status:        types.CSDTransferPending,
+		TenantID:      "ace-commodities",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	// Create succeeds.
+	if err := s.Create(transfer); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Duplicate Create fails.
+	if err := s.Create(transfer); err == nil {
+		t.Fatal("expected error on duplicate Create, got nil")
+	}
+
+	// Get returns the record with PENDING status.
+	got, err := s.Get("TXN-1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != types.CSDTransferPending {
+		t.Errorf("initial status: want CSD_PENDING, got %q", got.Status)
+	}
+	if got.Quantity != 100 {
+		t.Errorf("Quantity: want 100, got %d", got.Quantity)
+	}
+	if got.TransferType != types.CSDTransferDVP {
+		t.Errorf("TransferType: want DVP, got %q", got.TransferType)
+	}
+
+	// Complete transitions to COMPLETED.
+	if err := s.Complete("TXN-1"); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	completed, _ := s.Get("TXN-1")
+	if completed.Status != types.CSDTransferCompleted {
+		t.Errorf("after Complete: want CSD_COMPLETED, got %q", completed.Status)
+	}
+	if completed.UpdatedAt == "" {
+		t.Error("UpdatedAt must be set on Complete")
+	}
+
+	// Complete an already-completed transfer returns error.
+	if err := s.Complete("TXN-1"); err == nil {
+		t.Fatal("expected error completing non-PENDING transfer")
+	}
+
+	// Create second transfer for Fail test.
+	t2 := &types.CSDTransfer{
+		ID: "TXN-2", FromAccountID: "ACCT-1", ToAccountID: "ACCT-2",
+		InstrumentID: "INST-B", Quantity: 50, TransferType: types.CSDTransferFOP,
+		Status: types.CSDTransferPending, CreatedAt: now, UpdatedAt: now,
+	}
+	s.Create(t2) //nolint:errcheck
+
+	// Fail transitions to FAILED with reason.
+	if err := s.Fail("TXN-2", "insufficient balance"); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+	failed, _ := s.Get("TXN-2")
+	if failed.Status != types.CSDTransferFailed {
+		t.Errorf("after Fail: want CSD_FAILED, got %q", failed.Status)
+	}
+	if failed.FailReason != "insufficient balance" {
+		t.Errorf("FailReason: want 'insufficient balance', got %q", failed.FailReason)
+	}
+
+	// Fail an already-failed transfer returns error.
+	if err := s.Fail("TXN-2", "again"); err == nil {
+		t.Fatal("expected error failing non-PENDING transfer")
+	}
+
+	// Get non-existent returns ErrNotFound.
+	if _, err := s.Get("NO-TXN"); err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Complete non-existent returns ErrNotFound.
+	if err := s.Complete("NO-TXN"); err != store.ErrNotFound {
+		t.Errorf("Complete missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Fail non-existent returns ErrNotFound.
+	if err := s.Fail("NO-TXN", "x"); err != store.ErrNotFound {
+		t.Errorf("Fail missing: expected ErrNotFound, got %v", err)
+	}
+
+	// Get returns a copy — mutation does not affect store.
+	got.Quantity = 9999
+	got3, _ := s.Get("TXN-1")
+	if got3.Quantity == 9999 {
+		t.Error("Get returned pointer into internal storage")
+	}
+}

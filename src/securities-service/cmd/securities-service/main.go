@@ -154,6 +154,11 @@ func main() {
 		store.NewInMemoryInvestigationStore(),
 		store.NewInMemoryReplayStore(),
 		store.NewInMemoryBondStore(),
+		// Strategy and CSD stores.
+		store.NewInMemoryStrategyStore(),
+		store.NewInMemoryCustodyAccountStore(),
+		store.NewInMemoryCustodyBalanceStore(),
+		store.NewInMemoryCSDTransferStore(),
 		dayManager,
 		matchingEngine,
 		sessionManager,

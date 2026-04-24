@@ -51,6 +51,7 @@ func newFRCServer(t *testing.T, s frcStores) *httptest.Server {
 		nil, // rfqStore
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
+		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil, cfg)
 	srv.SetReady()
 

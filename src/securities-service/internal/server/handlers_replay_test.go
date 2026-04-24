@@ -48,6 +48,10 @@ func newReplayTestServer(t *testing.T) (*httptest.Server, *store.InMemoryReplayS
 		nil, // investigationStore
 		rpStore,
 		nil, // bondStore
+		nil, // strategyStore
+		nil, // custodyAccountStore
+		nil, // custodyBalanceStore
+		nil, // csdTransferStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -280,6 +284,10 @@ func TestReplayEndpoints_NotConfigured(t *testing.T) {
 		nil,        // investigationStore
 		nil,        // replayStore = nil
 		nil,        // bondStore
+		nil, // strategyStore
+		nil, // custodyAccountStore
+		nil, // custodyBalanceStore
+		nil, // csdTransferStore
 		nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()

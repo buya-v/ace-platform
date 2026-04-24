@@ -2266,3 +2266,278 @@ func (s *InMemoryBondStore) UpdateStatus(id string, status types.TradingStatus) 
 	b.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return nil
 }
+
+// ── StrategyStore ─────────────────────────────────────────────────────────────
+
+// StrategyStore defines the repository contract for trading strategies.
+type StrategyStore interface {
+	Create(strategy *types.TradingStrategy) error
+	Get(id string) (*types.TradingStrategy, error)
+	List(tenantID string) ([]types.TradingStrategy, error)
+	Delete(id string) error
+}
+
+// InMemoryStrategyStore is a thread-safe, in-memory implementation of StrategyStore.
+type InMemoryStrategyStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.TradingStrategy
+}
+
+// NewInMemoryStrategyStore returns an empty InMemoryStrategyStore.
+func NewInMemoryStrategyStore() *InMemoryStrategyStore {
+	return &InMemoryStrategyStore{data: make(map[string]*types.TradingStrategy)}
+}
+
+// Create stores a new trading strategy.
+func (s *InMemoryStrategyStore) Create(strategy *types.TradingStrategy) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[strategy.ID]; exists {
+		return fmt.Errorf("strategy %s already exists", strategy.ID)
+	}
+	cp := *strategy
+	cp.Legs = make([]types.StrategyLeg, len(strategy.Legs))
+	copy(cp.Legs, strategy.Legs)
+	s.data[strategy.ID] = &cp
+	return nil
+}
+
+// Get retrieves a trading strategy by ID.
+func (s *InMemoryStrategyStore) Get(id string) (*types.TradingStrategy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *st
+	cp.Legs = make([]types.StrategyLeg, len(st.Legs))
+	copy(cp.Legs, st.Legs)
+	return &cp, nil
+}
+
+// List returns all strategies for the given tenant.
+// If tenantID is empty, all strategies are returned.
+func (s *InMemoryStrategyStore) List(tenantID string) ([]types.TradingStrategy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.TradingStrategy, 0, len(s.data))
+	for _, st := range s.data {
+		if tenantID != "" && st.TenantID != tenantID {
+			continue
+		}
+		cp := *st
+		cp.Legs = make([]types.StrategyLeg, len(st.Legs))
+		copy(cp.Legs, st.Legs)
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+// Delete removes a strategy by ID. Returns ErrNotFound if absent.
+func (s *InMemoryStrategyStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// ── CustodyAccountStore ───────────────────────────────────────────────────────
+
+// CustodyAccountStore defines the repository contract for CSD custody accounts.
+type CustodyAccountStore interface {
+	Create(account *types.CustodyAccount) error
+	Get(id string) (*types.CustodyAccount, error)
+	ListByFirm(firmID string) ([]types.CustodyAccount, error)
+}
+
+// InMemoryCustodyAccountStore is a thread-safe, in-memory implementation of CustodyAccountStore.
+type InMemoryCustodyAccountStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.CustodyAccount
+}
+
+// NewInMemoryCustodyAccountStore returns an empty InMemoryCustodyAccountStore.
+func NewInMemoryCustodyAccountStore() *InMemoryCustodyAccountStore {
+	return &InMemoryCustodyAccountStore{data: make(map[string]*types.CustodyAccount)}
+}
+
+// Create stores a new custody account.
+func (s *InMemoryCustodyAccountStore) Create(account *types.CustodyAccount) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[account.ID]; exists {
+		return fmt.Errorf("custody account %s already exists", account.ID)
+	}
+	cp := *account
+	s.data[account.ID] = &cp
+	return nil
+}
+
+// Get retrieves a custody account by ID.
+func (s *InMemoryCustodyAccountStore) Get(id string) (*types.CustodyAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	acc, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *acc
+	return &cp, nil
+}
+
+// ListByFirm returns all custody accounts for the given firm ID.
+// If firmID is empty, all accounts are returned.
+func (s *InMemoryCustodyAccountStore) ListByFirm(firmID string) ([]types.CustodyAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.CustodyAccount, 0, len(s.data))
+	for _, acc := range s.data {
+		if firmID != "" && acc.FirmID != firmID {
+			continue
+		}
+		out = append(out, *acc)
+	}
+	return out, nil
+}
+
+// ── CustodyBalanceStore ───────────────────────────────────────────────────────
+
+// custodyBalanceKey builds the composite key for a balance record.
+func custodyBalanceKey(accountID, instrumentID string) string {
+	return accountID + ":" + instrumentID
+}
+
+// CustodyBalanceStore defines the repository contract for CSD custody balances.
+type CustodyBalanceStore interface {
+	GetOrUpdate(accountID, instrumentID string, deltaQty int, avgCost float64) (*types.CustodyBalance, error)
+	ListByAccount(accountID string) ([]types.CustodyBalance, error)
+}
+
+// InMemoryCustodyBalanceStore is a thread-safe, in-memory implementation of CustodyBalanceStore.
+type InMemoryCustodyBalanceStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.CustodyBalance
+}
+
+// NewInMemoryCustodyBalanceStore returns an empty InMemoryCustodyBalanceStore.
+func NewInMemoryCustodyBalanceStore() *InMemoryCustodyBalanceStore {
+	return &InMemoryCustodyBalanceStore{data: make(map[string]*types.CustodyBalance)}
+}
+
+// GetOrUpdate retrieves the balance for (accountID, instrumentID), applies deltaQty and avgCost
+// (if non-zero), and returns the updated record. Creates a zero record if absent.
+func (s *InMemoryCustodyBalanceStore) GetOrUpdate(accountID, instrumentID string, deltaQty int, avgCost float64) (*types.CustodyBalance, error) {
+	key := custodyBalanceKey(accountID, instrumentID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bal, ok := s.data[key]
+	if !ok {
+		bal = &types.CustodyBalance{
+			AccountID:    accountID,
+			InstrumentID: instrumentID,
+		}
+		s.data[key] = bal
+	}
+	bal.Quantity += deltaQty
+	if avgCost != 0 {
+		bal.AvgCost = avgCost
+	}
+	bal.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	cp := *bal
+	return &cp, nil
+}
+
+// ListByAccount returns all balances for a given custody account.
+func (s *InMemoryCustodyBalanceStore) ListByAccount(accountID string) ([]types.CustodyBalance, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.CustodyBalance, 0)
+	for _, bal := range s.data {
+		if bal.AccountID == accountID {
+			out = append(out, *bal)
+		}
+	}
+	return out, nil
+}
+
+// ── CSDTransferStore ──────────────────────────────────────────────────────────
+
+// CSDTransferStore defines the repository contract for CSD transfer instructions.
+type CSDTransferStore interface {
+	Create(transfer *types.CSDTransfer) error
+	Get(id string) (*types.CSDTransfer, error)
+	Complete(id string) error
+	Fail(id, reason string) error
+}
+
+// InMemoryCSDTransferStore is a thread-safe, in-memory implementation of CSDTransferStore.
+type InMemoryCSDTransferStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.CSDTransfer
+}
+
+// NewInMemoryCSDTransferStore returns an empty InMemoryCSDTransferStore.
+func NewInMemoryCSDTransferStore() *InMemoryCSDTransferStore {
+	return &InMemoryCSDTransferStore{data: make(map[string]*types.CSDTransfer)}
+}
+
+// Create stores a new CSD transfer instruction.
+func (s *InMemoryCSDTransferStore) Create(transfer *types.CSDTransfer) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[transfer.ID]; exists {
+		return fmt.Errorf("CSD transfer %s already exists", transfer.ID)
+	}
+	cp := *transfer
+	s.data[transfer.ID] = &cp
+	return nil
+}
+
+// Get retrieves a CSD transfer by ID.
+func (s *InMemoryCSDTransferStore) Get(id string) (*types.CSDTransfer, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *t
+	return &cp, nil
+}
+
+// Complete transitions a PENDING transfer to COMPLETED.
+func (s *InMemoryCSDTransferStore) Complete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if t.Status != types.CSDTransferPending {
+		return fmt.Errorf("CSD transfer %s is not in PENDING status", id)
+	}
+	t.Status = types.CSDTransferCompleted
+	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// Fail transitions a PENDING transfer to FAILED, recording the failure reason.
+func (s *InMemoryCSDTransferStore) Fail(id, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if t.Status != types.CSDTransferPending {
+		return fmt.Errorf("CSD transfer %s is not in PENDING status", id)
+	}
+	t.Status = types.CSDTransferFailed
+	t.FailReason = reason
+	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
