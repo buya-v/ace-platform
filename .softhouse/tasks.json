@@ -1,7 +1,44 @@
 {
-  "run_id": null,
-  "feature": null,
-  "requirement": null,
-  "status": "idle",
-  "tasks": []
+  "run_id": "20260423-mse-domain",
+  "feature": "MSE Domain Services",
+  "requirement": "Corporate actions, FRC reporting, bot tenant-scoping per Strategy Directive §4.1-4.2",
+  "status": "planning",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Corporate actions module + FRC reporting",
+      "description": "Add corporate actions and FRC reporting to the securities-service.\n\nRead docs/securities-architecture.md section 8 (CSD Integration — Corporate Actions) for types.\nRead src/securities-service/internal/types/types.go for existing types.\nRead src/securities-service/internal/store/store.go for store patterns.\nRead src/securities-service/internal/server/server.go for route registration.\n\nPart A — Corporate Actions types + store:\nAdd to types.go:\n- CorporateActionType constants: CA_DIVIDEND, CA_STOCK_SPLIT, CA_RIGHTS_ISSUE, CA_MERGER, CA_TENDER_OFFER, CA_SPIN_OFF\n- CorporateAction struct: ID, InstrumentID, ActionType, AnnouncementDate, ExDate, RecordDate, PaymentDate, Details map[string]interface{} (for dividend amount, split ratio, etc.), Status (ANNOUNCED/PROCESSING/COMPLETED/CANCELLED), TenantID, CreatedAt, UpdatedAt — json tags\n- Entitlement struct: ID, CorporateActionID, ParticipantID, InstrumentID, Quantity int, EntitlementValue float64, Status (PENDING/PAID/CANCELLED), CreatedAt — json tags\n- FRCReport struct: ID, TenantID, ReportType (DAILY_SUMMARY/LARGE_TRADER/SUSPICIOUS_ACTIVITY), ReportDate, Data map[string]interface{}, GeneratedAt — json tags\n\nAdd to store.go:\n- CorporateActionStore interface: Create, Get, List(instrumentID, actionType optional), UpdateStatus\n- EntitlementStore interface: Create, ListByAction(actionID), ListByParticipant(participantID)\n- InMemoryCorporateActionStore + InMemoryEntitlementStore\n\nPart B — Corporate Actions handlers:\nCreate src/securities-service/internal/server/handlers_corporate_actions.go:\n- GET /api/v1/securities/corporate-actions — list with filters (instrument_id, action_type, status)\n- POST /api/v1/securities/corporate-actions — announce (admin): create with status ANNOUNCED\n- GET /api/v1/securities/corporate-actions/{id} — get by ID\n- POST /api/v1/securities/corporate-actions/{id}/process — process entitlements: for DIVIDEND, look up all positions for the instrument, create entitlements with quantity * dividend_amount. For STOCK_SPLIT, adjust position quantities by split ratio.\n- Wire routes in server.go\n\nPart C — FRC Reporting:\nCreate src/securities-service/internal/server/handlers_reports.go:\n- GET /api/v1/securities/reports/frc?type=DAILY_SUMMARY&date=2026-04-23 — generate FRC report\n- DAILY_SUMMARY: count of trades, total volume, total value for the date\n- LARGE_TRADER: positions exceeding a threshold (>1000 shares or configurable)\n- SUSPICIOUS_ACTIVITY: trades with unusual patterns (placeholder — return empty list for MVP)\n- Reports are generated on-demand from in-memory data, not stored\n- Wire routes in server.go\n\nPart D — Update main.go to create corporate action + entitlement stores, pass to server.\n\nIMPORTANT: Go at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/server/handlers_corporate_actions.go", "src/securities-service/internal/server/handlers_reports.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T2",
+      "title": "Bot tenant-scoping for all MCP tools",
+      "description": "Add tenant_id parameter to all MCP tools in admin-bot so commands are tenant-scoped.\n\nRead src/admin-bot/mcp-server/src/tools/securities.ts for current securities tools (9 tools).\nRead src/admin-bot/mcp-server/src/tools/platform.ts for current platform tools (6 tools).\nRead src/admin-bot/mcp-server/src/gateway-client.ts for how requests are made.\n\nUpdate securities.ts — add tenant_id parameter to all 9 tools:\n- Each tool gets: tenant_id: z.string().optional().describe('Tenant ID (default: ace-commodities)')\n- In the request, add X-GarudaX-Tenant header: client.request(method, path, body, { 'X-GarudaX-Tenant': tenant_id ?? 'ace-commodities' })\n- Check if GatewayClient.request supports custom headers — if not, update gateway-client.ts to accept optional headers parameter\n- Update response formatting to show tenant_id in output\n\nAlso add 3 new corporate actions tools:\n- list_corporate_actions — GET /api/v1/securities/corporate-actions with tenant_id header\n- announce_corporate_action — POST /api/v1/securities/corporate-actions\n- generate_frc_report — GET /api/v1/securities/reports/frc?type=DAILY_SUMMARY\n\nPlatform tools (platform.ts) do NOT need tenant_id — they are platform-level.\n\nRun: cd src/admin-bot/mcp-server && npx tsc --noEmit\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/admin-bot/mcp-server/src/tools/securities.ts", "src/admin-bot/mcp-server/src/gateway-client.ts"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Unit tests for corporate actions + FRC + verify",
+      "description": "Write tests and verify everything.\n\nPart A — Corporate actions tests at src/securities-service/internal/server/handlers_corporate_actions_test.go:\n- TestAnnounce_Success — POST dividend → 201\n- TestAnnounce_MissingFields → 422\n- TestListCorporateActions — list with filters\n- TestGetCorporateAction_NotFound → 404\n- TestProcessDividend — create instrument + positions + dividend, process → entitlements created\n- TestProcessStockSplit — positions adjusted by ratio\n\nPart B — FRC reporting tests at src/securities-service/internal/server/handlers_reports_test.go:\n- TestFRCDailySummary — create trades, generate report → trade count/volume/value correct\n- TestFRCLargeTrader — create large positions, generate report → positions above threshold\n- TestFRCMissingType → 422\n\nPart C — Store tests (add to store_test.go):\n- TestCorporateActionStore_CRUD\n- TestEntitlementStore_CreateAndList\n\nPart D — Full verification:\n- export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n- cd src/admin-bot/mcp-server && npx tsc --noEmit\n- cd src/admin-ui && npm test -- --run\n\nTarget: 70%+ on handlers_corporate_actions, handlers_reports.\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/handlers_corporate_actions_test.go", "src/securities-service/internal/server/handlers_reports_test.go", "src/securities-service/internal/store/store_test.go"],
+      "dependencies": ["T1", "T2"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
 }
