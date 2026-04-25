@@ -261,6 +261,24 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/give-ups/{id}/reject", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
+	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091
+	fixGatewayBaseURL := fmt.Sprintf("http://%s", cfg.FixGatewayAddr)
+	fixGatewayTarget, err := url.Parse(fixGatewayBaseURL)
+	if err != nil {
+		logger.Error("invalid fix gateway address", slog.String("addr", cfg.FixGatewayAddr), slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	fixGatewayProxy := httputil.NewSingleHostReverseProxy(fixGatewayTarget)
+	fixHandler := func(w http.ResponseWriter, r *http.Request) {
+		fixGatewayProxy.ServeHTTP(w, r)
+	}
+	rt.Handle("GET", "/api/v1/fix/brokers", fixHandler)
+	rt.Handle("POST", "/api/v1/fix/brokers", fixHandler)
+	rt.Handle("GET", "/api/v1/fix/brokers/{id}", fixHandler)
+	rt.Handle("PUT", "/api/v1/fix/brokers/{id}", fixHandler)
+	rt.Handle("GET", "/api/v1/fix/sessions", fixHandler)
+	logger.Info("fix-gateway routes registered (HTTP proxy)", slog.String("upstream", fixGatewayBaseURL))
+
 	// Configure public paths (no auth required)
 	authCfg := &middleware.AuthConfig{
 		PublicPaths: map[string]bool{

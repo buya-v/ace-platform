@@ -358,6 +358,38 @@ services:
       - garudax-network
     restart: unless-stopped
 
+  # ─── FIX Protocol Gateway ──────────────────────────────────────────
+
+  fix-gateway:
+    build:
+      context: ./src/fix-gateway
+      dockerfile: Dockerfile
+    container_name: garudax-fix-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      FIX_LISTEN_ADDR: ":9878"
+      FIX_ADMIN_ADDR: ":8091"
+      FIX_HEALTH_ADDR: ":9091"
+      FIX_TLS_REQUIRED: "false"
+      FIX_TARGET_COMP_ID: "GARUDAX"
+      LOG_LEVEL: "debug"
+    ports:
+      - "9878:9878"
+      - "8091:8091"
+      - "9091:9091"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9091/healthz"]
+      <<: *healthcheck-http
+    networks:
+      - garudax-network
+
   # ─── API Gateway ───────────────────────────────────────────────────
 
   gateway:
@@ -397,6 +429,7 @@ services:
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
       SECURITIES_SERVICE_ADDR: securities-service:50059
       PLATFORM_SERVICE_ADDR: platform-service:8090
+      FIX_GATEWAY_ADDR: fix-gateway:8091
       BOT_ORCHESTRATOR_URL: "http://admin-bot-orchestrator:3100"
     ports:
       - "8080:8080"

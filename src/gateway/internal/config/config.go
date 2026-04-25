@@ -38,6 +38,7 @@ type Config struct {
 	WarehouseServiceAddr  string
 	SecuritiesServiceAddr string
 	PlatformServiceAddr   string
+	FixGatewayAddr        string
 
 	// Rate limiting
 	RateLimitEnabled bool
@@ -81,6 +82,7 @@ func FromEnv() *Config {
 		WarehouseServiceAddr:  envStr("WAREHOUSE_SERVICE_ADDR", "localhost:50058"),
 		SecuritiesServiceAddr: envStr("SECURITIES_SERVICE_ADDR", "localhost:50059"),
 		PlatformServiceAddr:   envStr("PLATFORM_SERVICE_ADDR", "platform-service:8095"),
+		FixGatewayAddr:        envStr("FIX_GATEWAY_ADDR", "fix-gateway:8091"),
 
 		RateLimitEnabled: envBool("RATE_LIMIT_ENABLED", true),
 
