@@ -183,7 +183,10 @@ const instrumentListing: Section = {
       url: '/api/v1/securities/bonds',
       headers: (state) => tenantHeader(state, 'admin'),
       body: () => ({
-        instrument_id: 'GOV-BOND-2028',
+        id: 'GOV-BOND-2028',
+        isin: 'MN0000102030',
+        name: 'Mongolia Government Bond 8.5% 2028',
+        issuer: 'Government of Mongolia',
         maturity_date: '2028-12-31',
         coupon_rate: 8.5,
         coupon_frequency: 'SEMI_ANNUAL',
