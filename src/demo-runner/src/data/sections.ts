@@ -200,7 +200,7 @@ const instrumentListing: Section = {
       title: 'Calculate Accrued Interest',
       description: 'Calculate accrued interest on the government bond for settlement today',
       method: 'GET',
-      url: `/api/v1/securities/bonds/GOV-BOND-2028/accrued-interest?settlement_date=${new Date().toISOString().slice(0, 10)}`,
+      url: `/api/v1/securities/bonds/GOV-BOND-2028/accrued-interest?settlement_date=${new Date().toISOString().slice(0, 10)}&last_coupon_date=2026-01-01`,
       headers: (state) => tenantHeader(state, 'admin'),
       validateResponse: okValidator,
     },
