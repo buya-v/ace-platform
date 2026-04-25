@@ -259,6 +259,11 @@ func main() {
 	rt.Handle("GET", "/api/v1/securities/give-ups", secHandler)
 	rt.Handle("POST", "/api/v1/securities/give-ups/{id}/accept", secHandler)
 	rt.Handle("POST", "/api/v1/securities/give-ups/{id}/reject", secHandler)
+	// Fixed income bonds
+	rt.Handle("GET", "/api/v1/securities/bonds", secHandler)
+	rt.Handle("POST", "/api/v1/securities/bonds", secHandler)
+	rt.Handle("GET", "/api/v1/securities/bonds/{id}", secHandler)
+	rt.Handle("GET", "/api/v1/securities/bonds/{id}/accrued-interest", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091
