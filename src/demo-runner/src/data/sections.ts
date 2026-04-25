@@ -14,16 +14,16 @@ function okValidator(status: number): 'PASS' | 'FAIL' {
   return status >= 200 && status < 500 ? 'PASS' : 'FAIL';
 }
 
-// ─── Section 1: Environment Setup ────────────────────────────────────────────
+// ─── Section 1: Environment & Platform ───────────────────────────────────────
 
 const envSetup: Section = {
   id: 'env-setup',
-  title: 'Environment Setup',
+  title: '1. Environment & Platform',
   steps: [
     {
       id: 'env-1',
       title: 'Check Gateway Health',
-      description: 'Verify the API gateway is running and healthy',
+      description: 'Verify the API gateway is running',
       method: 'GET',
       url: '/healthz',
       validateResponse: okValidator,
@@ -31,9 +31,17 @@ const envSetup: Section = {
     {
       id: 'env-2',
       title: 'Check Readiness',
-      description: 'Verify the gateway is ready to accept requests',
+      description: 'Verify all backend services are ready',
       method: 'GET',
       url: '/readyz',
+      validateResponse: okValidator,
+    },
+    {
+      id: 'env-3',
+      title: 'List Platform Tenants',
+      description: 'Verify MSE tenant is registered on the platform',
+      method: 'GET',
+      url: '/platform/v1/tenants',
       validateResponse: okValidator,
     },
   ],
@@ -43,12 +51,12 @@ const envSetup: Section = {
 
 const registration: Section = {
   id: 'registration',
-  title: 'User Registration & Login',
+  title: '2. User Registration & Login',
   steps: [
     {
       id: 'reg-1',
-      title: 'Register Trader 1',
-      description: 'Create first trader account (buyer)',
+      title: 'Register Trader 1 (Buyer)',
+      description: 'Create first trader account',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader1', password: 'Tr@der1Pass!', email: 'trader1@garudax.mn', role: 'trader' }),
@@ -56,8 +64,8 @@ const registration: Section = {
     },
     {
       id: 'reg-2',
-      title: 'Register Trader 2',
-      description: 'Create second trader account (seller)',
+      title: 'Register Trader 2 (Seller)',
+      description: 'Create second trader account',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader2', password: 'Tr@der2Pass!', email: 'trader2@garudax.mn', role: 'trader' }),
@@ -65,8 +73,8 @@ const registration: Section = {
     },
     {
       id: 'reg-3',
-      title: 'Register Admin',
-      description: 'Create exchange admin account',
+      title: 'Register Exchange Admin',
+      description: 'Create market operations admin',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'admin', password: 'Adm1n@Pass!', email: 'admin@garudax.mn', role: 'admin' }),
@@ -75,7 +83,7 @@ const registration: Section = {
     {
       id: 'reg-4',
       title: 'Login Trader 1',
-      description: 'Authenticate trader1 and store JWT token',
+      description: 'Authenticate and store JWT token',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'trader1@garudax.mn', password: 'Tr@der1Pass!' }),
@@ -89,7 +97,7 @@ const registration: Section = {
     {
       id: 'reg-5',
       title: 'Login Trader 2',
-      description: 'Authenticate trader2 and store JWT token',
+      description: 'Authenticate and store JWT token',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'trader2@garudax.mn', password: 'Tr@der2Pass!' }),
@@ -103,7 +111,7 @@ const registration: Section = {
     {
       id: 'reg-6',
       title: 'Login Admin',
-      description: 'Authenticate admin and store JWT token',
+      description: 'Authenticate exchange admin',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'admin@garudax.mn', password: 'Adm1n@Pass!' }),
@@ -117,16 +125,16 @@ const registration: Section = {
   ],
 };
 
-// ─── Section 3: Securities Instruments ───────────────────────────────────────
+// ─── Section 3: Instrument Listing ───────────────────────────────────────────
 
-const securitiesInstruments: Section = {
-  id: 'securities-instruments',
-  title: 'Securities — Instruments',
+const instrumentListing: Section = {
+  id: 'instrument-listing',
+  title: '3. Instrument Listing',
   steps: [
     {
-      id: 'sec-inst-1',
-      title: 'Create Equity: APU JSC',
-      description: 'List APU JSC (food & beverages) on MSE — lot_size=10, tick_size=1 MNT',
+      id: 'inst-1',
+      title: 'List Equity: APU JSC',
+      description: 'Admin lists APU JSC (food & beverages) — lot=10, tick=1 MNT',
       method: 'POST',
       url: '/api/v1/securities/instruments',
       headers: (state) => tenantHeader(state, 'admin'),
@@ -146,9 +154,9 @@ const securitiesInstruments: Section = {
       },
     },
     {
-      id: 'sec-inst-2',
-      title: 'Create Equity: Govisumber Mining',
-      description: 'List Govisumber Mining on MSE — lot_size=100, tick_size=50 MNT',
+      id: 'inst-2',
+      title: 'List Equity: Govisumber Mining',
+      description: 'Admin lists Govisumber Mining — lot=100, tick=50 MNT',
       method: 'POST',
       url: '/api/v1/securities/instruments',
       headers: (state) => tenantHeader(state, 'admin'),
@@ -168,9 +176,9 @@ const securitiesInstruments: Section = {
       },
     },
     {
-      id: 'sec-inst-3',
-      title: 'List All Instruments',
-      description: 'Verify both instruments are listed on MSE',
+      id: 'inst-3',
+      title: 'Verify Listings',
+      description: 'Confirm both instruments are listed on MSE',
       method: 'GET',
       url: '/api/v1/securities/instruments',
       headers: (state) => tenantHeader(state, 'admin'),
@@ -179,16 +187,61 @@ const securitiesInstruments: Section = {
   ],
 };
 
-// ─── Section 4: Securities Trading ───────────────────────────────────────────
+// ─── Section 4: Start Trading Day ────────────────────────────────────────────
 
-const securitiesTrading: Section = {
-  id: 'securities-trading',
-  title: 'Securities — Order Matching',
+const startDay: Section = {
+  id: 'start-day',
+  title: '4. Start Trading Day',
   steps: [
     {
-      id: 'sec-trade-1',
-      title: 'Submit Buy Order (Trader 1)',
-      description: 'Trader 1 places a limit buy for 100 shares of APU at 850 MNT',
+      id: 'day-1',
+      title: 'Check Day State (should be CLOSED)',
+      description: 'Before starting — day state is CLOSED, no trading allowed',
+      method: 'GET',
+      url: '/api/v1/securities/day/status',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'day-2',
+      title: '▶ Start Day → PRE_OPEN',
+      description: 'Admin starts the trading day — all instruments transition to PRE_OPEN phase. Orders are collected but NOT matched.',
+      method: 'POST',
+      url: '/api/v1/securities/day/start',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'day-3',
+      title: 'Verify Day State = PRE_OPEN',
+      description: 'Day is now in PRE_OPEN — orders collected for opening auction',
+      method: 'GET',
+      url: '/api/v1/securities/day/status',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'day-4',
+      title: 'View Instrument Sessions',
+      description: 'All instruments should be in PRE_OPEN session',
+      method: 'GET',
+      url: '/api/v1/securities/sessions',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 5: Pre-Open Auction Orders ──────────────────────────────────────
+
+const preOpenOrders: Section = {
+  id: 'pre-open-orders',
+  title: '5. Pre-Open Auction Orders',
+  steps: [
+    {
+      id: 'pre-1',
+      title: 'Buyer: Submit Pre-Open Buy @ 850',
+      description: 'Trader 1 submits buy order during PRE_OPEN — order is COLLECTED, not matched',
       method: 'POST',
       url: '/api/v1/securities/orders',
       headers: (state) => tenantHeader(state, 'trader1'),
@@ -198,19 +251,29 @@ const securitiesTrading: Section = {
         order_type: 'LIMIT',
         quantity: 100,
         price: 850,
-        time_in_force: 'GTC',
       }),
       validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        const order = (b.order || b) as Record<string, unknown>;
-        return { buy_order_id: order.id || order.order_id || order.exec_id };
-      },
     },
     {
-      id: 'sec-trade-2',
-      title: 'Submit Matching Sell Order (Trader 2)',
-      description: 'Trader 2 places a matching sell at 850 MNT → trade executes',
+      id: 'pre-2',
+      title: 'Buyer: Submit Pre-Open Buy @ 855',
+      description: 'Another buy at higher price — will compete in auction',
+      method: 'POST',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        side: 'BUY',
+        order_type: 'LIMIT',
+        quantity: 50,
+        price: 855,
+      }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'pre-3',
+      title: 'Seller: Submit Pre-Open Sell @ 845',
+      description: 'Trader 2 submits sell — these orders will match in the opening auction',
       method: 'POST',
       url: '/api/v1/securities/orders',
       headers: (state) => tenantHeader(state, 'trader2'),
@@ -218,45 +281,76 @@ const securitiesTrading: Section = {
         instrument_id: state.apu_id || 'APU',
         side: 'SELL',
         order_type: 'LIMIT',
-        quantity: 100,
-        price: 850,
-        time_in_force: 'GTC',
+        quantity: 80,
+        price: 845,
       }),
       validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        const trades = (b.trades || []) as unknown[];
-        return { trade_count: trades.length, last_trade: trades[0] };
-      },
     },
     {
-      id: 'sec-trade-3',
-      title: 'Submit Market Buy (Trader 1)',
-      description: 'Trader 1 places a market order for 50 shares of APU — fills at best ask',
+      id: 'pre-4',
+      title: 'Seller: Submit Pre-Open Sell @ 850',
+      description: 'Another sell order for the auction',
       method: 'POST',
       url: '/api/v1/securities/orders',
-      headers: (state) => tenantHeader(state, 'trader1'),
+      headers: (state) => tenantHeader(state, 'trader2'),
       body: (state) => ({
         instrument_id: state.apu_id || 'APU',
-        side: 'BUY',
-        order_type: 'MARKET',
-        quantity: 50,
+        side: 'SELL',
+        order_type: 'LIMIT',
+        quantity: 70,
+        price: 850,
       }),
       validateResponse: okValidator,
     },
     {
-      id: 'sec-trade-4',
-      title: 'View Orders',
-      description: 'List all securities orders for the tenant',
+      id: 'pre-5',
+      title: 'Verify: No Trades Yet',
+      description: 'Orders are collected but NO trades executed during PRE_OPEN',
+      method: 'GET',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader1'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 6: Opening Auction + Continuous Trading ─────────────────────────
+
+const startTrading: Section = {
+  id: 'start-trading',
+  title: '6. Opening Auction → Continuous Trading',
+  steps: [
+    {
+      id: 'trade-1',
+      title: '▶ Start Trading → Opening Auction Executes',
+      description: 'Admin starts trading — opening auction runs at clearing price, then CONTINUOUS matching begins. Pre-open orders are matched!',
+      method: 'POST',
+      url: '/api/v1/securities/day/trading',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'trade-2',
+      title: 'Verify Day State = TRADING',
+      description: 'Day is now in TRADING state — continuous matching active',
+      method: 'GET',
+      url: '/api/v1/securities/day/status',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'trade-3',
+      title: 'View Orders (some should be FILLED)',
+      description: 'Pre-open orders that crossed in the auction are now FILLED',
       method: 'GET',
       url: '/api/v1/securities/orders',
       headers: (state) => tenantHeader(state, 'trader1'),
       validateResponse: okValidator,
     },
     {
-      id: 'sec-trade-5',
-      title: 'Submit & Cancel Order',
-      description: 'Place an order then cancel it immediately',
+      id: 'trade-4',
+      title: 'Submit Continuous Buy Order',
+      description: 'Trader 1 submits during continuous trading — matches immediately if price crosses',
       method: 'POST',
       url: '/api/v1/securities/orders',
       headers: (state) => tenantHeader(state, 'trader1'),
@@ -264,66 +358,131 @@ const securitiesTrading: Section = {
         instrument_id: state.apu_id || 'APU',
         side: 'BUY',
         order_type: 'LIMIT',
-        quantity: 10,
-        price: 800,
+        quantity: 30,
+        price: 860,
       }),
       validateResponse: okValidator,
-      extractState: (body) => {
-        const b = body as Record<string, unknown>;
-        const order = (b.order || b) as Record<string, unknown>;
-        return { cancel_order_id: order.id || order.order_id || order.exec_id };
-      },
+    },
+    {
+      id: 'trade-5',
+      title: 'Submit Matching Sell Order',
+      description: 'Trader 2 sells at 860 — instant match, trade executed',
+      method: 'POST',
+      url: '/api/v1/securities/orders',
+      headers: (state) => tenantHeader(state, 'trader2'),
+      body: (state) => ({
+        instrument_id: state.apu_id || 'APU',
+        side: 'SELL',
+        order_type: 'LIMIT',
+        quantity: 30,
+        price: 860,
+      }),
+      validateResponse: okValidator,
     },
   ],
 };
 
-// ─── Section 5: Securities Positions ─────────────────────────────────────────
+// ─── Section 7: End Trading Day ──────────────────────────────────────────────
 
-const securitiesPositions: Section = {
-  id: 'securities-positions',
-  title: 'Securities — Positions & P&L',
+const endDay: Section = {
+  id: 'end-day',
+  title: '7. Close Market → End Day',
   steps: [
     {
-      id: 'sec-pos-1',
-      title: 'View Orders After Trading',
-      description: 'Check all orders — should show filled and pending orders',
+      id: 'close-1',
+      title: '▶ End Trading → Closing Auction',
+      description: 'Admin ends trading — closing auction executes for remaining orders, then instruments close',
+      method: 'POST',
+      url: '/api/v1/securities/day/end-trading',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'close-2',
+      title: 'Verify Day State = POST_CLOSE',
+      description: 'Trading has ended — post-trade processing in progress',
+      method: 'GET',
+      url: '/api/v1/securities/day/status',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'close-3',
+      title: '▶ End Day → CLOSED',
+      description: 'Admin closes the trading day — all processing complete',
+      method: 'POST',
+      url: '/api/v1/securities/day/end',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'close-4',
+      title: 'Verify Day State = CLOSED',
+      description: 'Trading day is complete — ready for next business day',
+      method: 'GET',
+      url: '/api/v1/securities/day/status',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
+  ],
+};
+
+// ─── Section 8: Post-Trade — Settlement & Positions ──────────────────────────
+
+const postTrade: Section = {
+  id: 'post-trade',
+  title: '8. Post-Trade — Settlement & Reporting',
+  steps: [
+    {
+      id: 'post-1',
+      title: 'View All Orders',
+      description: 'Review all orders from today — auction fills + continuous fills',
       method: 'GET',
       url: '/api/v1/securities/orders',
       headers: (state) => tenantHeader(state, 'trader1'),
       validateResponse: okValidator,
     },
     {
-      id: 'sec-pos-2',
-      title: 'View Settlements',
-      description: 'Check T+2 settlement obligations created from trades',
+      id: 'post-2',
+      title: 'View Settlement Obligations',
+      description: 'T+2 settlement obligations created from today\'s trades',
       method: 'GET',
       url: '/api/v1/securities/settlements?status=PENDING',
       headers: (state) => tenantHeader(state, 'admin'),
       validateResponse: okValidator,
     },
     {
-      id: 'sec-pos-3',
+      id: 'post-3',
       title: 'Trigger Settlement Cycle',
-      description: 'Process settlement for today — transitions PENDING → SETTLED',
+      description: 'Process settlement — PENDING → AFFIRMED → NETTED → SETTLED',
       method: 'POST',
       url: '/api/v1/securities/settlements/cycle',
       headers: (state) => tenantHeader(state, 'admin'),
       body: () => ({ date: new Date().toISOString().slice(0, 10) }),
       validateResponse: okValidator,
     },
+    {
+      id: 'post-4',
+      title: 'FRC Daily Trading Summary',
+      description: 'Generate regulatory report — trade count, volume, value',
+      method: 'GET',
+      url: `/api/v1/securities/reports/frc?type=DAILY_SUMMARY&date=${new Date().toISOString().slice(0, 10)}`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: okValidator,
+    },
   ],
 };
 
-// ─── Section 6: Corporate Actions ────────────────────────────────────────────
+// ─── Section 9: Corporate Actions ────────────────────────────────────────────
 
 const corporateActions: Section = {
   id: 'corporate-actions',
-  title: 'Securities — Corporate Actions',
+  title: '9. Corporate Actions',
   steps: [
     {
-      id: 'sec-ca-1',
-      title: 'Announce Dividend',
-      description: 'APU JSC announces 50 MNT per share dividend',
+      id: 'ca-1',
+      title: 'Announce Dividend: APU 50 MNT/share',
+      description: 'APU JSC declares 50 MNT per share cash dividend',
       method: 'POST',
       url: '/api/v1/securities/corporate-actions',
       headers: (state) => tenantHeader(state, 'admin'),
@@ -341,101 +500,27 @@ const corporateActions: Section = {
       },
     },
     {
-      id: 'sec-ca-2',
+      id: 'ca-2',
       title: 'Process Dividend Entitlements',
-      description: 'Calculate and create dividend entitlements for all shareholders',
+      description: 'Calculate dividend payments for all APU shareholders',
       method: 'POST',
-      url: (state) => `/api/v1/securities/corporate-actions/${state.dividend_id || 'DIVIDEND-001'}/process`,
-      headers: (state) => tenantHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'sec-ca-3',
-      title: 'List Corporate Actions',
-      description: 'View all announced corporate actions',
-      method: 'GET',
-      url: '/api/v1/securities/corporate-actions',
+      url: (state) => `/api/v1/securities/corporate-actions/${state.dividend_id || 'DIV-001'}/process`,
       headers: (state) => tenantHeader(state, 'admin'),
       validateResponse: okValidator,
     },
   ],
 };
 
-// ─── Section 7: Market Sessions ──────────────────────────────────────────────
+// ─── Section 10: Admin Operations ────────────────────────────────────────────
 
-const marketSessions: Section = {
-  id: 'market-sessions',
-  title: 'Securities — Market Sessions',
+const adminOps: Section = {
+  id: 'admin-ops',
+  title: '10. Admin Operations',
   steps: [
     {
-      id: 'sec-sess-1',
-      title: 'View Current Sessions',
-      description: 'Check market session state for all instruments',
-      method: 'GET',
-      url: '/api/v1/securities/sessions',
-      headers: (state) => tenantHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'sec-sess-2',
-      title: 'Open Pre-Auction Phase',
-      description: 'Transition APU to PRE_OPEN — orders collected for opening auction',
-      method: 'POST',
-      url: (state) => `/api/v1/securities/sessions/${state.apu_id || 'APU'}/transition`,
-      headers: (state) => tenantHeader(state, 'admin'),
-      body: () => ({ session: 'PRE_OPEN' }),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'sec-sess-3',
-      title: 'Start Continuous Trading',
-      description: 'Transition to CONTINUOUS — opening auction executes, then live matching',
-      method: 'POST',
-      url: (state) => `/api/v1/securities/sessions/${state.apu_id || 'APU'}/transition`,
-      headers: (state) => tenantHeader(state, 'admin'),
-      body: () => ({ session: 'CONTINUOUS' }),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-// ─── Section 8: FRC Reporting ────────────────────────────────────────────────
-
-const frcReporting: Section = {
-  id: 'frc-reporting',
-  title: 'Securities — FRC Reports',
-  steps: [
-    {
-      id: 'sec-frc-1',
-      title: 'Daily Trading Summary',
-      description: 'Generate FRC daily summary report — trade count, volume, value',
-      method: 'GET',
-      url: `/api/v1/securities/reports/frc?type=DAILY_SUMMARY&date=${new Date().toISOString().slice(0, 10)}`,
-      headers: (state) => tenantHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-    {
-      id: 'sec-frc-2',
-      title: 'Large Trader Report',
-      description: 'Generate FRC large trader positions report',
-      method: 'GET',
-      url: '/api/v1/securities/reports/frc?type=LARGE_TRADER',
-      headers: (state) => tenantHeader(state, 'admin'),
-      validateResponse: okValidator,
-    },
-  ],
-};
-
-// ─── Section 9: Instrument Management ────────────────────────────────────────
-
-const instrumentManagement: Section = {
-  id: 'instrument-management',
-  title: 'Securities — Admin Operations',
-  steps: [
-    {
-      id: 'sec-mgmt-1',
+      id: 'admin-1',
       title: 'Halt Trading on APU',
-      description: 'Admin halts trading on APU JSC — no new orders accepted',
+      description: 'Emergency halt — no new orders accepted',
       method: 'PUT',
       url: (state) => `/api/v1/securities/instruments/${state.apu_id || 'APU'}/status`,
       headers: (state) => tenantHeader(state, 'admin'),
@@ -443,9 +528,9 @@ const instrumentManagement: Section = {
       validateResponse: okValidator,
     },
     {
-      id: 'sec-mgmt-2',
+      id: 'admin-2',
       title: 'Resume Trading on APU',
-      description: 'Admin resumes trading after review',
+      description: 'Regulatory review complete — trading resumes',
       method: 'PUT',
       url: (state) => `/api/v1/securities/instruments/${state.apu_id || 'APU'}/status`,
       headers: (state) => tenantHeader(state, 'admin'),
@@ -453,9 +538,9 @@ const instrumentManagement: Section = {
       validateResponse: okValidator,
     },
     {
-      id: 'sec-mgmt-3',
-      title: 'Verify Instrument Status',
-      description: 'Confirm APU is back to ACTIVE trading',
+      id: 'admin-3',
+      title: 'Verify Instruments',
+      description: 'Confirm APU is back to ACTIVE',
       method: 'GET',
       url: '/api/v1/securities/instruments',
       headers: (state) => tenantHeader(state, 'admin'),
@@ -464,44 +549,21 @@ const instrumentManagement: Section = {
   ],
 };
 
-// ─── Section 10: Platform Admin ──────────────────────────────────────────────
-
-const platformAdmin: Section = {
-  id: 'platform-admin',
-  title: 'Platform — Tenant Management',
-  steps: [
-    {
-      id: 'plat-1',
-      title: 'List Tenants',
-      description: 'View all registered trading venues on the platform',
-      method: 'GET',
-      url: '/platform/v1/tenants',
-      validateResponse: okValidator,
-    },
-    {
-      id: 'plat-2',
-      title: 'Get MSE Tenant Details',
-      description: 'View MSE tenant status, governance tier, and flagship flag',
-      method: 'GET',
-      url: '/platform/v1/tenants/mse-equities',
-      validateResponse: okValidator,
-    },
-  ],
-};
-
 // ─── Readiness Checklist ─────────────────────────────────────────────────────
 
 const readinessItems: ChecklistItem[] = [
-  { id: 'sec-1', category: 'Security', description: 'TLS termination on gateway', status: 'Ready' },
-  { id: 'sec-2', category: 'Security', description: 'JWT auth on all securities endpoints', status: 'Ready' },
-  { id: 'sec-3', category: 'Security', description: 'Tenant isolation via X-GarudaX-Tenant', status: 'Ready' },
-  { id: 'perf-1', category: 'Performance', description: 'Order matching < 1ms', status: 'Ready' },
-  { id: 'perf-2', category: 'Performance', description: 'Lot size & tick size validation', status: 'Ready' },
-  { id: 'feat-1', category: 'Features', description: 'T+2 settlement state machine', status: 'Ready' },
-  { id: 'feat-2', category: 'Features', description: 'Corporate actions (dividend, split)', status: 'Ready' },
-  { id: 'feat-3', category: 'Features', description: 'Market sessions (auction + continuous)', status: 'Ready' },
-  { id: 'feat-4', category: 'Features', description: 'FRC regulatory reporting', status: 'Ready' },
-  { id: 'feat-5', category: 'Features', description: 'Multi-tenant platform with MSE as flagship', status: 'Ready' },
+  { id: 'sec-1', category: 'Day Lifecycle', description: 'Start Day → PRE_OPEN → Trading → POST_CLOSE → End Day', status: 'Ready' },
+  { id: 'sec-2', category: 'Day Lifecycle', description: 'Opening auction executes on PRE_OPEN → CONTINUOUS transition', status: 'Ready' },
+  { id: 'sec-3', category: 'Day Lifecycle', description: 'Closing auction executes on CONTINUOUS → CLOSED transition', status: 'Ready' },
+  { id: 'feat-1', category: 'Trading', description: 'Price-time priority continuous matching', status: 'Ready' },
+  { id: 'feat-2', category: 'Trading', description: 'Lot size & tick size validation', status: 'Ready' },
+  { id: 'feat-3', category: 'Trading', description: 'Circuit breakers (static + dynamic)', status: 'Ready' },
+  { id: 'feat-4', category: 'Trading', description: 'Self-trade prevention', status: 'Ready' },
+  { id: 'feat-5', category: 'Settlement', description: 'T+2 settlement state machine', status: 'Ready' },
+  { id: 'feat-6', category: 'Settlement', description: 'Corporate actions (dividend, split)', status: 'Ready' },
+  { id: 'feat-7', category: 'Regulatory', description: 'FRC daily trading summary report', status: 'Ready' },
+  { id: 'feat-8', category: 'Platform', description: 'Multi-tenant with MSE as flagship', status: 'Ready' },
+  { id: 'feat-9', category: 'Connectivity', description: 'FIX 4.4 protocol gateway', status: 'Ready' },
 ];
 
 const readiness: ChecklistSection = {
@@ -515,14 +577,14 @@ const readiness: ChecklistSection = {
 export const allSections: AnySection[] = [
   envSetup,
   registration,
-  securitiesInstruments,
-  securitiesTrading,
-  securitiesPositions,
+  instrumentListing,
+  startDay,
+  preOpenOrders,
+  startTrading,
+  endDay,
+  postTrade,
   corporateActions,
-  marketSessions,
-  frcReporting,
-  instrumentManagement,
-  platformAdmin,
+  adminOps,
   readiness,
 ];
 
