@@ -1,30 +1,18 @@
 {
-  "run_id": "20260424-p4c-multileg-csd",
-  "feature": "MillenniumIT P4c — Multi-Leg Instruments + CSD",
-  "requirement": "Multi-leg strategy instruments, CSD custody accounts and transfers",
+  "run_id": "20260424-p4d-native-protocol",
+  "feature": "MillenniumIT P4d — Native Binary Protocol",
+  "requirement": "Protocol spec, Go codec library, unit tests",
   "status": "planning",
   "tasks": [
     {
       "id": "T1",
-      "title": "Multi-leg instruments + CSD types/stores/handlers/gateway",
-      "description": "Add multi-leg strategies and CSD integration.\n\nAPPEND to types.go:\n- StrategyLeg struct: InstrumentID, Ratio int, Side string (BUY/SELL) — json tags\n- Strategy struct: ID, Name, StrategyType (SPREAD/STRADDLE/STRANGLE/BUTTERFLY/CALENDAR), Legs []StrategyLeg, Status (ACTIVE/SUSPENDED), TenantID, CreatedAt — json tags\n- CustodyAccount struct: ID, FirmID, CSDAccountNumber, AccountType (TRADING/SETTLEMENT/SAFEKEEPING), Status (ACTIVE/FROZEN), CreatedAt — json tags\n- CustodyBalance struct: AccountID, InstrumentID, AvailableQty int, PledgedQty int, PendingSettlementQty int, UpdatedAt — json tags\n- CSDTransfer struct: ID, FromAccountID, ToAccountID, InstrumentID, Quantity int, TransferType (DVP/FOP), Status (PENDING/COMPLETED/FAILED), Reference, CreatedAt, CompletedAt — json tags\n\nAPPEND to store.go:\n- StrategyStore: Create, Get, List, Delete + InMemory\n- CustodyAccountStore: Create, Get, ListByFirm, UpdateStatus + InMemory\n- CustodyBalanceStore: Get(accountID, instrumentID), Update, ListByAccount + InMemory\n- CSDTransferStore: Create, Get, List, Complete(id), Fail(id, reason) + InMemory\n\nCreate handlers:\n- handlers_strategy.go: POST /api/v1/securities/strategies (validate: name, type, at least 2 legs), GET list, GET /{id}, DELETE /{id}\n- handlers_csd.go: POST /api/v1/securities/csd/accounts, GET /csd/accounts (?firm_id=), GET /csd/accounts/{id}/balances, POST /csd/transfers (validate: from+to accounts, instrument, quantity>0, type DVP/FOP), GET /csd/transfers, POST /csd/transfers/{id}/complete, POST /csd/transfers/{id}/fail\n\nUpdate server.go + main.go + gateway routes.\n\nGo at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "title": "Native protocol spec + codec library + tests",
+      "description": "All-in-one: spec doc, Go codec, and tests for the native binary protocol.\n\nPart A — Write docs/native-protocol-spec.md:\n- Binary message format: 14-byte header (msg_type uint16, length uint32, sequence uint64)\n- Message types: Login(0x01), Logout(0x02), Heartbeat(0x03), NewOrder(0x10), CancelOrder(0x11), ModifyOrder(0x12), ExecutionReport(0x20), OrderBookUpdate(0x21), Reject(0x30)\n- Field encoding: fixed-length, big-endian, strings padded with spaces to fixed width\n- Session: login with CompID+password, sequence numbers per session, heartbeat every 30s\n- Keep spec under 500 lines\n\nPart B — Create src/securities-service/internal/protocol/:\n- message.go: Header struct (MsgType uint16, Length uint32, Sequence uint64), Message interface with Encode()/Type()/Sequence()\n- codec.go: Encoder (Write Message to io.Writer), Decoder (Read Message from io.Reader), header encode/decode with encoding/binary BigEndian\n- messages.go: LoginMsg, LogoutMsg, HeartbeatMsg, NewOrderMsg (InstrumentID[12], Side byte, OrderType byte, Quantity uint32, Price uint64 as fixed-point *10000), CancelOrderMsg, ExecutionReportMsg, RejectMsg — each implements Message interface\n- All zero-dep (encoding/binary + io only)\n\nPart C — Create src/securities-service/internal/protocol/codec_test.go:\n- TestHeader_EncodeDecode — round-trip header\n- TestLoginMsg_EncodeDecode — round-trip with CompID + password\n- TestNewOrderMsg_EncodeDecode — round-trip with all fields, verify fixed-point price\n- TestExecutionReport_EncodeDecode\n- TestHeartbeat_EncodeDecode\n- TestDecoder_MalformedInput — truncated header → error\n- TestDecoder_UnknownMsgType → error\n- TestSequenceNumber_Validation — out-of-order → detectable\n- TestPriceFixedPoint — 850.25 → uint64 8502500, round-trip\n\nGo at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go build ./... && go test ./internal/protocol/... -race -cover -v\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
-      "model": "sonnet",
+      "model": "opus",
       "target": "backend",
-      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/server/", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
+      "files_hint": ["docs/native-protocol-spec.md", "src/securities-service/internal/protocol/"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T2",
-      "title": "Unit tests for multi-leg + CSD",
-      "description": "Write tests.\n\n1. store_test.go:\n- TestStrategyStore_Create_Get_List_Delete\n- TestCustodyAccountStore_Create_ListByFirm\n- TestCustodyBalanceStore_GetUpdate\n- TestCSDTransferStore_Create_Complete_Fail\n\n2. handlers_strategy_test.go:\n- TestCreateStrategy → 201\n- TestCreateStrategy_InvalidLegs → 400\n- TestListStrategies\n- TestDeleteStrategy → 200\n\n3. handlers_csd_test.go:\n- TestCreateCustodyAccount → 201\n- TestListAccountsByFirm\n- TestGetBalances\n- TestCreateTransfer_DVP → 201\n- TestCompleteTransfer → 200\n- TestFailTransfer → 200\n\nGo at /usr/local/go/bin/go. Run: export PATH=$PATH:/usr/local/go/bin && cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "test_writer",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/server/"],
-      "dependencies": ["T1"],
       "status": "pending",
       "attempts": 0
     }
