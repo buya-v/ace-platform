@@ -2,6 +2,7 @@ package session
 
 import (
 	"testing"
+	"time"
 )
 
 const (
@@ -299,6 +300,68 @@ func TestSession_MarshalState(t *testing.T) {
 	if got := s.MarshalState(); got != "ACTIVE" {
 		t.Errorf("MarshalState after logon: got %q, want ACTIVE", got)
 	}
+}
+
+// TestSession_UpdateLastRecv verifies that UpdateLastRecv advances the LastRecvTime.
+func TestSession_UpdateLastRecv(t *testing.T) {
+	mgr := NewSessionManager()
+	mgr.CreateSession(testSender, testTarget, testTenant, 30)
+
+	s := mgr.GetSession(testSender, testTarget, testTenant)
+	if s == nil {
+		t.Fatal("GetSession returned nil")
+	}
+
+	before := s.LastRecvTime
+
+	// Small sleep so that the updated time is strictly after before.
+	time.Sleep(2 * time.Millisecond)
+	mgr.UpdateLastRecv(testSender, testTarget, testTenant)
+
+	after := s.LastRecvTime
+	if !after.After(before) {
+		t.Errorf("LastRecvTime not updated: before=%v after=%v", before, after)
+	}
+}
+
+// TestSession_UpdateLastRecv_UnknownSession verifies that UpdateLastRecv is a no-op
+// for a session key that does not exist (must not panic).
+func TestSession_UpdateLastRecv_UnknownSession(t *testing.T) {
+	mgr := NewSessionManager()
+	// Should not panic.
+	mgr.UpdateLastRecv("NO", "SUCH", "SESSION")
+}
+
+// TestSession_RemoveSession verifies that a removed session is no longer retrievable.
+func TestSession_RemoveSession(t *testing.T) {
+	mgr := NewSessionManager()
+	mgr.CreateSession(testSender, testTarget, testTenant, 30)
+
+	// Verify it exists before removal.
+	if mgr.GetSession(testSender, testTarget, testTenant) == nil {
+		t.Fatal("session not found before RemoveSession")
+	}
+	if mgr.SessionCount() != 1 {
+		t.Fatalf("SessionCount before remove: got %d, want 1", mgr.SessionCount())
+	}
+
+	mgr.RemoveSession(testSender, testTarget, testTenant)
+
+	// Must be gone now.
+	if got := mgr.GetSession(testSender, testTarget, testTenant); got != nil {
+		t.Errorf("GetSession after RemoveSession: got %+v, want nil", got)
+	}
+	if mgr.SessionCount() != 0 {
+		t.Errorf("SessionCount after remove: got %d, want 0", mgr.SessionCount())
+	}
+}
+
+// TestSession_RemoveSession_UnknownSession verifies that removing a non-existent session
+// is a no-op (must not panic).
+func TestSession_RemoveSession_UnknownSession(t *testing.T) {
+	mgr := NewSessionManager()
+	// Should not panic.
+	mgr.RemoveSession("NO", "SUCH", "SESSION")
 }
 
 // TestSession_ConcurrentAccess verifies the session manager is safe under concurrent use.
