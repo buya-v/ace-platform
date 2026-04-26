@@ -1,30 +1,42 @@
 {
-  "run_id": "20260425-deep-gap-sprint5",
-  "feature": "Deep Gap Sprint 5 — FIX Gateway TCP",
-  "requirement": "Add TCP listener, FIX session heartbeat, sequence number persistence, order routing to securities-service",
+  "run_id": "20260425-deep-gap-sprint6",
+  "feature": "Deep Gap Sprint 6 — Feature Deepening",
+  "requirement": "6 high-impact upgrades: rich order/trade queries, trading cycles, session extend/shorten, lock/unlock users, market times, firm view",
   "status": "planning",
   "tasks": [
     {
       "id": "T1",
-      "title": "FIX TCP listener + session heartbeat + order routing",
-      "description": "Complete the FIX gateway from codec-only to a functional TCP server.\n\nRead src/fix-gateway/internal/fix/parser.go for message parsing.\nRead src/fix-gateway/internal/fix/mapper.go for order mapping.\nRead src/fix-gateway/internal/session/manager.go for session management.\nRead src/fix-gateway/internal/broker/store.go for broker registry.\nRead src/fix-gateway/cmd/fix-gateway/main.go for current setup.\n\nPart A — TCP listener (create src/fix-gateway/internal/server/tcp.go):\n- FIXServer struct with listener net.Listener, sessionManager, brokerStore, orderRouter\n- Start(addr string) error — listen on TCP port (default 9878)\n- For each connection: spawn goroutine handleConnection(conn net.Conn)\n- handleConnection: read FIX messages in a loop (delimited by SOH), parse, dispatch by MsgType\n- On Logon(A): validate CompID against broker store, create session, send Logon response\n- On NewOrderSingle(D): map to SecurityOrder via mapper, route to securities-service, send ExecutionReport back\n- On OrderCancelRequest(F): route cancel, send response\n- On Heartbeat(0): update session last-recv time\n- On Logout(5): close session, close connection\n- Graceful shutdown: close listener, close all connections\n\nPart B — Heartbeat timer (add to session/manager.go):\n- StartHeartbeat(session, interval time.Duration) — goroutine sends Heartbeat every interval\n- MonitorHeartbeat(session) — if no message received within 2*interval, send TestRequest. If no response within interval, disconnect.\n- Wire into handleConnection: start heartbeat after successful logon\n\nPart C — Order routing (create src/fix-gateway/internal/router/order_router.go):\n- OrderRouter struct with securitiesServiceURL string\n- SubmitOrder(order) (*ExecutionReport, error) — HTTP POST to securities-service /api/v1/securities/orders\n- CancelOrder(orderID) error — HTTP DELETE\n- Add X-GarudaX-Tenant header from session's tenant_id\n\nPart D — Wire into main.go:\n- Create FIXServer with all dependencies\n- Start TCP listener on FIX_PORT (default 9878)\n- Start HTTP admin on 8091\n- Graceful shutdown on SIGTERM\n\nGo at /usr/local/go/bin/go. cd src/fix-gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "title": "Rich order/trade queries + trading cycles + market times",
+      "description": "Upgrade 3 BASIC features to SUBSTANTIAL.\n\nPart A — Rich order query (modify handlers_order.go handleListOrders):\nAdd query params: side, order_type, time_in_force, price_min, price_max, quantity_min, quantity_max, date_from, date_to, client_order_id, firm_id.\nParse all from r.URL.Query(), filter in-memory after loading from store (in-memory store loads all, filter in handler). Return paginated results with total count.\nSame for trade queries in handlers_trade.go: add instrument_id, participant_id, date_from, date_to, price_min, price_max filters.\n\nPart B — Trading cycles (new types + store + handlers):\nAPPEND to types.go:\n- TradingCycle struct: ID, MarketID, Name, SessionSequence []string (e.g. [PRE_OPEN, CONTINUOUS, CLOSING_AUCTION, CLOSED]), IsDefault bool, CreatedAt — json tags\n- Add TradingCycleID string field to Instrument struct\n\nAPPEND to store.go:\n- TradingCycleStore: Create, Get, ListByMarket, Delete + InMemory\n- Seed: 'STANDARD' cycle for MSE with [PRE_OPEN, CONTINUOUS, CLOSING_AUCTION, CLOSED]\n- Seed: 'OFF_BOOK' cycle for MSE with [CONTINUOUS, CLOSED]\n\nCreate handlers_trading_cycle.go:\n- POST /api/v1/securities/trading-cycles\n- GET /api/v1/securities/trading-cycles?market_id=\n- GET /api/v1/securities/trading-cycles/{id}\n- DELETE /api/v1/securities/trading-cycles/{id}\n\nPart C — Market times:\nAdd to Market struct: OpenTime string, CloseTime string, TradingDate string — json tags\nModify handleDayStart: validate current time is within market trading hours (if OpenTime set)\nModify handleDayEnd: set TradingDate to today's date\n\nUpdate server.go + main.go + gateway routes.\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
-      "model": "opus",
+      "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/fix-gateway/internal/server/tcp.go", "src/fix-gateway/internal/session/manager.go", "src/fix-gateway/internal/router/order_router.go", "src/fix-gateway/cmd/fix-gateway/main.go"],
+      "files_hint": ["src/securities-service/internal/server/handlers_order.go", "src/securities-service/internal/server/handlers_trade.go", "src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/server/handlers_trading_cycle.go", "src/securities-service/internal/server/handlers_market.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
       "dependencies": [],
       "status": "pending",
       "attempts": 0
     },
     {
       "id": "T2",
-      "title": "Unit tests for FIX TCP server + order routing",
-      "description": "Write tests for the FIX TCP server, heartbeat, and order routing.\n\n1. server/tcp_test.go:\n- TestFIXServer_Start_Stop — start listener, verify accepting connections, stop gracefully\n- TestFIXServer_Logon — connect, send Logon msg, receive Logon response\n- TestFIXServer_InvalidCompID — send Logon with unknown CompID → Reject + disconnect\n- TestFIXServer_Heartbeat — after logon, send heartbeat → no error\n\n2. router/order_router_test.go:\n- TestOrderRouter_SubmitOrder — mock HTTP server, verify request format\n- TestOrderRouter_CancelOrder — mock HTTP, verify DELETE\n- TestOrderRouter_TenantHeader — verify X-GarudaX-Tenant sent\n\n3. session/manager_test.go — append:\n- TestHeartbeatTimer — start heartbeat, verify heartbeat messages sent\n- TestHeartbeatTimeout — no messages → session marked stale\n\nGo at /usr/local/go/bin/go. cd src/fix-gateway && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "title": "Session extend/shorten + lock/unlock + firm view",
+      "description": "Upgrade 3 more features.\n\nPart A — Session extend/shorten:\nAdd to types.go: SessionExtension struct (InstrumentID, ExtendMinutes int, ShortenMinutes int, NewEndTime string, Reason)\nModify handlers_session.go or create new endpoints:\n- POST /api/v1/securities/sessions/{instrument_id}/extend — body: {duration_minutes, reason}\n  Store the extension, set a timer (for MVP: just record the extension, no auto-transition)\n- POST /api/v1/securities/sessions/{instrument_id}/shorten — body: {duration_minutes, reason}\n  Similar — record the shortening\n\nPart B — Lock/unlock users + forced logout:\nAdd to ExchangeParticipant: LockedAt string, LockReason string fields.\nAdd to ParticipantStore: Lock(id, reason) error, Unlock(id) error\nAdd to handlers_participant.go:\n- POST /api/v1/securities/participants/{id}/lock — set status to LOCKED (new status), preserves orders, set LockReason. Log audit.\n- POST /api/v1/securities/participants/{id}/unlock — set status to ACTIVE. Log audit.\n- Enhance existing force-logout: add reason field, log audit entry with reason\n\nPart C — Firm view aggregation:\nCreate handlers_firm_view.go:\n- GET /api/v1/securities/surveillance/firm-view/{firm_id} — returns:\n  {\n    firm_id, firm_name,\n    orders: {total, pending, filled, cancelled},\n    trades: {total, buy_volume, sell_volume, net_volume},\n    positions: [{instrument_id, quantity, avg_cost}],\n    alerts: {total, open, investigating, resolved},\n    recent_orders: [...last 10...],\n    recent_trades: [...last 10...]\n  }\n  Aggregate from orderStore, tradeStore, positionStore, surveillanceStore.\n\nUpdate server.go + gateway routes.\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "backend",
+      "files_hint": ["src/securities-service/internal/server/handlers_session.go", "src/securities-service/internal/server/handlers_participant.go", "src/securities-service/internal/server/handlers_firm_view.go", "src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/server/server.go", "src/gateway/cmd/gateway/main.go"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T3",
+      "title": "Unit tests for all Sprint 6 features",
+      "description": "Write tests for all 6 upgraded features.\n\n1. Order/trade query tests:\n- TestOrderQuery_FilterBySide — side=BUY → only buys\n- TestOrderQuery_FilterByPriceRange — price_min=800&price_max=900\n- TestOrderQuery_FilterByDateRange\n- TestTradeQuery_FilterByInstrument\n\n2. Trading cycle tests:\n- TestTradingCycleStore_Create_List\n- TestCreateTradingCycle → 201\n- TestListByMarket → seeded STANDARD + OFF_BOOK\n\n3. Session extend/shorten:\n- TestExtendSession → 200\n- TestShortenSession → 200\n\n4. Lock/unlock:\n- TestLockParticipant → status LOCKED, orders preserved\n- TestUnlockParticipant → status ACTIVE\n\n5. Market times:\n- TestMarketWithTimes → OpenTime/CloseTime in response\n\n6. Firm view:\n- TestFirmView → aggregated counts correct\n- TestFirmView_EmptyFirm → zeros\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
       "agent_role": "test_writer",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/fix-gateway/internal/server/tcp_test.go", "src/fix-gateway/internal/router/", "src/fix-gateway/internal/session/"],
-      "dependencies": ["T1"],
+      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/server/"],
+      "dependencies": ["T1", "T2"],
       "status": "pending",
       "attempts": 0
     }
