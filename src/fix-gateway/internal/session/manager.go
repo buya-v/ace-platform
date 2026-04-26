@@ -180,6 +180,24 @@ func (m *SessionManager) ListSessions() []*Session {
 	return result
 }
 
+// UpdateLastRecv updates the LastRecvTime for a session to now.
+func (m *SessionManager) UpdateLastRecv(senderCompID, targetCompID, tenantID string) {
+	key := fmt.Sprintf("%s:%s:%s", senderCompID, targetCompID, tenantID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s, ok := m.sessions[key]; ok {
+		s.LastRecvTime = time.Now()
+	}
+}
+
+// RemoveSession removes a session by its composite key.
+func (m *SessionManager) RemoveSession(senderCompID, targetCompID, tenantID string) {
+	key := fmt.Sprintf("%s:%s:%s", senderCompID, targetCompID, tenantID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, key)
+}
+
 // SessionCount returns the number of tracked sessions.
 func (m *SessionManager) SessionCount() int {
 	m.mu.RLock()
