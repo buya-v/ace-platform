@@ -2,31 +2,27 @@
   "run_id": "20260426-demo-polish",
   "feature": "Demo Polish & Stabilization Sprint",
   "requirement": "Make securities exchange demo bulletproof, add Sprint 1-8 feature demos, fix reset, stabilize",
-  "status": "planning",
+  "status": "executing",
   "tasks": [
     {
       "id": "T1",
       "title": "Securities-service demo reset endpoint",
-      "description": "Add a POST /api/v1/securities/demo/reset endpoint that clears ALL in-memory state.\n\nIn src/securities-service/internal/server/:\n1. Create handlers_demo.go with handleDemoReset(w, r).\n2. The handler must call store.Reset() (or equivalent) on ALL stores in the Server struct. Since InMemory stores use a map, the simplest approach is to re-initialize them.\n3. Add a Reset() method to each store interface in store.go (append to each interface). For InMemory implementations, Reset() locks the mutex, replaces the data map with a fresh empty map, and unlocks.\n4. Register route: mux.HandleFunc(\"/api/v1/securities/demo/reset\", s.handleDemoReset)\n5. The handler should return 200 with {\"status\": \"reset\", \"message\": \"All securities data cleared\"}.\n\nIn src/gateway/cmd/gateway/main.go:\n1. Add route: rt.Handle(\"POST\", \"/api/v1/securities/demo/reset\", secHandler)\n2. Add \"/api/v1/securities/demo/reset\" to public paths (no auth required, like the existing /api/v1/admin/demo/reset)\n\nIn src/demo-runner/src/data/sections.ts:\n1. In the reset flow (useDemoRunner.ts), add a second reset call to /api/v1/securities/demo/reset after the existing auth reset call.\n\nGo at /usr/local/go/bin/go. Build and test:\ncd src/securities-service && go build ./... && go test ./...\ncd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/securities-service/internal/store/store.go", "src/securities-service/internal/server/server.go", "src/securities-service/internal/server/handlers_demo.go", "src/gateway/cmd/gateway/main.go", "src/demo-runner/src/hooks/useDemoRunner.ts"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T2",
       "title": "Demo steps for Sprint 1-8 features",
-      "description": "Add new demo steps to src/demo-runner/src/data/sections.ts showcasing Sprint 1-8 features. These steps go AFTER the existing admin-ops section and BEFORE the readiness checklist.\n\nAdd a new section: 'Advanced Platform Features' (id: 'advanced-features') with these steps:\n\n1. `adv-1`: Create Market Index — POST /api/v1/securities/indices\n   body: {id: 'MSE-TOP20', name: 'MSE Top 20 Index', instrument_weights: {'{apu_id}': 0.6, '{gov_id}': 0.4}, base_value: 1000}\n   Uses tenantHeader(state, 'admin'). Extract index_id.\n\n2. `adv-2`: Calculate Index Value — POST /api/v1/securities/indices/{index_id}/calculate\n   Uses tenantHeader(state, 'admin'). Validate response has current_value > 0.\n\n3. `adv-3`: Create Instrument Folder — POST /api/v1/securities/folders\n   body: {id: 'EQUITIES', name: 'Equities', parent_id: ''}\n   Uses tenantHeader(state, 'admin').\n\n4. `adv-4`: Create Sub-Folder — POST /api/v1/securities/folders\n   body: {id: 'MINING', name: 'Mining Sector', parent_id: 'EQUITIES'}\n   Uses tenantHeader(state, 'admin').\n\n5. `adv-5`: List Folder Children — GET /api/v1/securities/folders/EQUITIES/children\n   Uses tenantHeader(state, 'admin'). Validate MINING is in children.\n\n6. `adv-6`: Set Entity Permissions — PUT /api/v1/securities/entity-permissions\n   body: {role_id: 'TRADER', entity_type: 'INSTRUMENT', allow_create: false, allow_view: true, allow_edit: false, allow_delete: false, allow_approve: false}\n   Uses tenantHeader(state, 'admin').\n\n7. `adv-7`: View Entity Permissions — GET /api/v1/securities/entity-permissions?role_id=TRADER\n   Uses tenantHeader(state, 'admin'). Validate permissions list is non-empty.\n\n8. `adv-8`: Configure Trading Parameters — POST /api/v1/securities/trading-params\n   body: {id: 'APU-PARAMS', instrument_id: '{apu_id}', name: 'APU Trading Parameters', min_order_size: 10, max_order_size: 100000, max_order_value: 500000000, short_selling_allowed: false}\n   Uses tenantHeader(state, 'admin').\n\n9. `adv-9`: View Surveillance Dashboard — GET /api/v1/securities/surveillance/dashboard\n   Uses tenantHeader(state, 'admin'). Validate response has alert counts.\n\n10. `adv-10`: List Warnings — GET /api/v1/securities/warnings?acknowledged=false\n    Uses tenantHeader(state, 'admin'). Validate response is array.\n\nAll steps use the tenantHeader() helper. Each step validates the response status (200/201) and checks key response fields.\n\nAlso verify: existing sections still reference correct endpoints. Do NOT modify existing steps.\n\nAfter editing sections.ts, run: cd src/demo-runner && npm test\n\nWrite handoff to .softhouse/handoff/T2.md",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": ["src/demo-runner/src/data/sections.ts"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T3",
