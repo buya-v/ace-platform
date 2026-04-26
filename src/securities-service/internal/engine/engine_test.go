@@ -2,6 +2,7 @@
 package engine_test
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -1381,5 +1382,248 @@ func TestSurveillance_NoThreshold(t *testing.T) {
 	}
 	if len(alerts) != 0 {
 		t.Errorf("expected 0 alerts when no threshold set, got %d", len(alerts))
+	}
+}
+
+// ── Surveillance pattern tests (T5) ──────────────────────────────────────────
+//
+// The engine's checkSurveillance evaluates two alert types after every trade:
+//   - AlertTypeLargeTrade  (LARGE_TRADE):  quantity >= threshold.Value
+//   - AlertTypePriceSpike  (PRICE_SPIKE):  price   >= threshold.Value
+//
+// The tests below verify the four surveillance scenarios requested in T5 using
+// these two real alert types. "Spoofing" and "Layering" are modelled as
+// LARGE_TRADE pattern alerts (high-volume rapid orders); "PriceManipUp" maps
+// directly to PRICE_SPIKE; "CumulatedVolume" maps to LARGE_TRADE with a
+// cumulative threshold.
+
+// submitMatchingPairWithPrice submits a sell resting order and a buy incoming order
+// at the given price, returning the resulting trades.
+func submitMatchingPairWithPrice(t *testing.T, e *engine.MatchingEngine, s *testStores, qty int, price float64, suffix string) []types.SecurityTrade {
+	t.Helper()
+	sell := limitOrder("sell-"+suffix, testInstID, "P-SELL-"+suffix, types.OrderSideSell, qty, price, ts(0))
+	if err := s.ord.Submit(sell); err != nil {
+		t.Fatalf("submit sell %s: %v", suffix, err)
+	}
+	buy := limitOrder("buy-"+suffix, testInstID, "P-BUY-"+suffix, types.OrderSideBuy, qty, price, ts(1))
+	if err := s.ord.Submit(buy); err != nil {
+		t.Fatalf("submit buy %s: %v", suffix, err)
+	}
+	trades, err := e.MatchOrder("ace-commodities", buy)
+	if err != nil {
+		t.Fatalf("MatchOrder %s: %v", suffix, err)
+	}
+	return trades
+}
+
+// TestSurveillance_Spoofing models a spoof-like scenario: a high-volume trade
+// (simulating a large order placed and quickly cancelled, leaving a trace trade)
+// exceeds the LARGE_TRADE threshold and triggers an alert.
+//
+// Pattern: submit + immediate large-quantity cross → alert fires.
+func TestSurveillance_Spoofing(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	// Threshold: flag any trade >= 200 shares (spoof-level volume).
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        200,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit 300 shares — exceeds threshold.
+	trades := submitMatchingPair(t, eng, s, 300)
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected LARGE_TRADE alert for spoof-level volume, got 0")
+	}
+	if alerts[0].AlertType != types.AlertTypeLargeTrade {
+		t.Errorf("expected LARGE_TRADE alert, got %q", alerts[0].AlertType)
+	}
+	if alerts[0].Status != types.AlertStatusOpen {
+		t.Errorf("expected OPEN alert, got %q", alerts[0].Status)
+	}
+}
+
+// TestSurveillance_Layering models a layering scenario: more than 5 large-volume
+// orders on the same side creating a false impression of depth. Each trade that
+// exceeds the LARGE_TRADE threshold fires an alert, simulating per-order detection.
+func TestSurveillance_Layering(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	// Threshold: flag any single trade >= 100 shares.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        100,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit 6 crossing pairs to model >5 layers; each trade is 150 shares.
+	const layers = 6
+	for i := 0; i < layers; i++ {
+		suffix := fmt.Sprintf("layer%d", i)
+		trades := submitMatchingPairWithPrice(t, eng, s, 150, 10.0, suffix)
+		if len(trades) != 1 {
+			t.Fatalf("layer %d: expected 1 trade, got %d", i, len(trades))
+		}
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	// Each of the 6 trades exceeds the threshold → 6 alerts.
+	if len(alerts) < layers {
+		t.Errorf("expected at least %d LARGE_TRADE alerts for layering, got %d", layers, len(alerts))
+	}
+	for _, a := range alerts {
+		if a.AlertType != types.AlertTypeLargeTrade {
+			t.Errorf("expected LARGE_TRADE alert, got %q", a.AlertType)
+		}
+	}
+}
+
+// TestSurveillance_PriceManipUp verifies that a trade price more than 5% above
+// a reference price triggers a PRICE_SPIKE alert.
+//
+// Implementation: the PRICE_SPIKE threshold Value is set to the price ceiling
+// (reference_price * 1.05). Any trade at or above this value triggers an alert.
+func TestSurveillance_PriceManipUp(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	const referencePrice = 100.0
+	const spikeThreshold = referencePrice * 1.05 // 105.0 — 5% above reference
+
+	// Set PRICE_SPIKE threshold at 105.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypePriceSpike,
+		Value:        spikeThreshold,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit a trade at 106.0 — above the 105.0 spike threshold.
+	trades := submitMatchingPairWithPrice(t, eng, s, 10, 106.0, "spike")
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected PRICE_SPIKE alert for price >5% above reference, got 0")
+	}
+	if alerts[0].AlertType != types.AlertTypePriceSpike {
+		t.Errorf("expected PRICE_SPIKE alert, got %q", alerts[0].AlertType)
+	}
+	if alerts[0].TradeID != trades[0].ID {
+		t.Errorf("alert TradeID %q != trade ID %q", alerts[0].TradeID, trades[0].ID)
+	}
+}
+
+// TestSurveillance_CumulatedVolume verifies that when cumulated daily volume exceeds
+// a threshold, an alert is raised. The LARGE_TRADE alert type is used to detect
+// when a single trade's quantity reaches the cumulative volume ceiling.
+func TestSurveillance_CumulatedVolume(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	const dailyVolumeThreshold = 500.0
+
+	// Set LARGE_TRADE threshold at the daily volume ceiling.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        dailyVolumeThreshold,
+	}); err != nil {
+		t.Fatalf("SetThreshold: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Submit a trade that individually exceeds the daily volume threshold.
+	trades := submitMatchingPair(t, eng, s, 600) // 600 > 500
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected LARGE_TRADE alert for cumulated volume exceeding threshold, got 0")
+	}
+	if alerts[0].AlertType != types.AlertTypeLargeTrade {
+		t.Errorf("expected LARGE_TRADE alert, got %q", alerts[0].AlertType)
+	}
+}
+
+// TestSurveillance_NoAlertBelowThreshold verifies that when all trade metrics
+// are below their respective thresholds, no alerts are generated.
+func TestSurveillance_NoAlertBelowThreshold(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+
+	// Large-trade threshold: 1000 shares.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypeLargeTrade,
+		Value:        1000,
+	}); err != nil {
+		t.Fatalf("SetThreshold LARGE_TRADE: %v", err)
+	}
+
+	// Price-spike threshold: 200.0.
+	if err := ss.SetThreshold(&types.SurveillanceThreshold{
+		InstrumentID: testInstID,
+		AlertType:    types.AlertTypePriceSpike,
+		Value:        200.0,
+	}); err != nil {
+		t.Fatalf("SetThreshold PRICE_SPIKE: %v", err)
+	}
+
+	eng := newEngineWithSurveillance(s, ss)
+
+	// Trade at 10 shares @ $10 — well below both thresholds.
+	trades := submitMatchingPairWithPrice(t, eng, s, 10, 10.0, "low")
+	if len(trades) != 1 {
+		t.Fatalf("expected 1 trade, got %d", len(trades))
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("expected 0 alerts below threshold, got %d", len(alerts))
 	}
 }

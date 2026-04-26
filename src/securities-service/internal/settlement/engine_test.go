@@ -280,3 +280,134 @@ func TestProcessSettlementCycle_AlreadyAffirmed(t *testing.T) {
 		t.Errorf("second cycle: expected settled=0, got %d", result2.Settled)
 	}
 }
+
+// ── Accrued interest tests (T5) ───────────────────────────────────────────────
+
+// TestSettlement_BondAccruedInterest verifies that when a bond instrument is
+// traded and the settlement engine has a BondStore configured, the settlement
+// obligation's NetAmount includes accrued interest computed via the bond's
+// day-count convention (ACT/365, defaulting to 30 days since last coupon).
+//
+// Formula (ACT/365, 30 days):
+//
+//	accrued = 30 * couponRate * parValue / 365 * quantity
+func TestSettlement_BondAccruedInterest(t *testing.T) {
+	orderStore, settlementStore := setupStores(t)
+
+	const bondInstID = "BOND-001"
+	const couponRate = 0.05  // 5% annual
+	const parValue = 1000.0  // MNT 1,000 par
+	const tradeQty = 10      // 10 bonds
+	const tradePricePerBond = 990.0
+
+	// Create buy/sell orders for the bond instrument.
+	buyOrder := &types.SecurityOrder{
+		ID:            "BOND-BUY-001",
+		InstrumentID:  bondInstID,
+		ParticipantID: "BUYER-BOND",
+		Side:          types.OrderSideBuy,
+		OrderType:     types.OrderTypeLimit,
+		Quantity:      tradeQty,
+		Price:         tradePricePerBond,
+		Status:        types.OrderStatusFilled,
+		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+	}
+	sellOrder := &types.SecurityOrder{
+		ID:            "BOND-SELL-001",
+		InstrumentID:  bondInstID,
+		ParticipantID: "SELLER-BOND",
+		Side:          types.OrderSideSell,
+		OrderType:     types.OrderTypeLimit,
+		Quantity:      tradeQty,
+		Price:         tradePricePerBond,
+		Status:        types.OrderStatusFilled,
+		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := orderStore.Submit(buyOrder); err != nil {
+		t.Fatalf("submit buy order: %v", err)
+	}
+	if err := orderStore.Submit(sellOrder); err != nil {
+		t.Fatalf("submit sell order: %v", err)
+	}
+
+	// Set up bond store with the test bond.
+	bondStore := store.NewInMemoryBondStore()
+	bond := &types.Bond{
+		ID:                 bondInstID,
+		CouponRate:         couponRate,
+		ParValue:           parValue,
+		DayCountConvention: types.DayCountACT365,
+	}
+	if err := bondStore.Create(bond); err != nil {
+		t.Fatalf("create bond: %v", err)
+	}
+
+	// Wire settlement engine with bond store.
+	eng := settlement.NewSettlementEngine(orderStore, settlementStore)
+	eng.SetBondStore(bondStore)
+
+	settlDate := "2026-04-28"
+	trades := []types.SecurityTrade{
+		{
+			ID:             "BOND-TRADE-001",
+			BuyOrderID:     buyOrder.ID,
+			SellOrderID:    sellOrder.ID,
+			InstrumentID:   bondInstID,
+			Price:          tradePricePerBond,
+			Quantity:       tradeQty,
+			TradeDate:      "2026-04-26",
+			SettlementDate: settlDate,
+			Status:         types.TradeStatusPending,
+			CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+	if err := eng.CreateObligationsFromTrades(trades); err != nil {
+		t.Fatalf("CreateObligationsFromTrades: %v", err)
+	}
+
+	// Run settlement cycle — this triggers accrued interest calculation.
+	result, err := eng.ProcessSettlementCycle(settlDate)
+	if err != nil {
+		t.Fatalf("ProcessSettlementCycle: %v", err)
+	}
+	if result.Settled != 1 {
+		t.Fatalf("expected settled=1, got %d", result.Settled)
+	}
+
+	// Fetch the settled obligation and verify NetAmount includes accrued interest.
+	obligations, err := settlementStore.ListByDate(settlDate)
+	if err != nil {
+		t.Fatalf("ListByDate: %v", err)
+	}
+	if len(obligations) != 1 {
+		t.Fatalf("expected 1 obligation, got %d", len(obligations))
+	}
+
+	ob := obligations[0]
+
+	// Base net amount: price * quantity.
+	baseAmount := tradePricePerBond * float64(tradeQty)
+
+	// Expected accrued interest per bond (ACT/365, 30 days default):
+	//   accrued_per_bond = 30 * 0.05 * 1000 / 365 = 4.1095...
+	//   total accrued    = accrued_per_bond * quantity = 41.095...
+	const defaultDays = 30
+	accruedPerBond := float64(defaultDays) * couponRate * parValue / 365.0
+	totalAccrued := accruedPerBond * float64(tradeQty)
+	expectedNetAmount := baseAmount + totalAccrued
+
+	if ob.AccruedInterest == 0 {
+		t.Error("expected non-zero AccruedInterest for bond settlement")
+	}
+	const epsilon = 0.001
+	diff := ob.AccruedInterest - totalAccrued
+	if diff < -epsilon || diff > epsilon {
+		t.Errorf("AccruedInterest: want %.4f, got %.4f", totalAccrued, ob.AccruedInterest)
+	}
+
+	netDiff := ob.NetAmount - expectedNetAmount
+	if netDiff < -epsilon || netDiff > epsilon {
+		t.Errorf("NetAmount: want %.4f (base %.2f + accrued %.4f), got %.4f",
+			expectedNetAmount, baseAmount, totalAccrued, ob.NetAmount)
+	}
+}
