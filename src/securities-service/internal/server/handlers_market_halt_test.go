@@ -73,6 +73,8 @@ func newHaltTestServer(t *testing.T) (
 		nil, // sessionManager
 		nil, // settlementEngine
 		nil, // producer
+		nil, // privilegeEngine
+		nil, // roleStore
 		cfg,
 	)
 	srv.SetReady()

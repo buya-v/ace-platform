@@ -63,6 +63,10 @@ type createAnnouncementRequest struct {
 // handleCreateAnnouncement handles POST /api/v1/securities/announcements.
 // Required: title, body. Audience defaults to PUBLIC.
 func (s *Server) handleCreateAnnouncement(w http.ResponseWriter, r *http.Request) {
+	if err := s.checkPermission(r, types.PermAdminAnnouncements); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	// Resolve tenant.
 	tenantID := ""
 	if t, ok := middleware.TenantFromContext(r.Context()); ok {

@@ -52,6 +52,10 @@ var validOrderTypes = map[types.OrderType]bool{
 //   - CreatedAt and UpdatedAt set to current UTC time
 //   - TimeInForce defaults to GTC if empty
 func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
+	if err := s.checkPermission(r, types.PermOrderCreate); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	// Extract tenant from context (set by TenantMiddleware).
 	tenantID, ok := middleware.TenantFromContext(r.Context())
 	if !ok {
@@ -391,6 +395,10 @@ func (s *Server) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 // An order may only be cancelled if its status is PENDING or PARTIALLY_FILLED.
 // Returns 409 CONFLICT if the order is in any other state.
 func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
+	if err := s.checkPermission(r, types.PermOrderCancel); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	// Extract tenant from context (set by TenantMiddleware).
 	tenantID, ok := middleware.TenantFromContext(r.Context())
 	if !ok {
@@ -478,6 +486,10 @@ type massCancelResponse struct {
 func (s *Server) handleMassCancel(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+	if err := s.checkPermission(r, types.PermOrderMassCancel); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
 		return
 	}
 

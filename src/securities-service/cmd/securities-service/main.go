@@ -168,6 +168,13 @@ func main() {
 		sessionManager,
 		settlementEngine,
 		producer,
+		// privilegeEngine and roleStore: wired with in-memory stores.
+		// participantStore is shared with the main store above.
+		func() *engine.PrivilegeEngine {
+			rs := store.NewInMemoryRoleStore()
+			return engine.NewPrivilegeEngine(participantStore, rs)
+		}(),
+		store.NewInMemoryRoleStore(),
 		cfg,
 	)
 

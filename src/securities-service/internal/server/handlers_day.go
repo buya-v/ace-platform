@@ -3,6 +3,8 @@ package server
 
 import (
 	"net/http"
+
+	"github.com/garudax-platform/securities-service/internal/types"
 )
 
 // handleDayStatus handles GET /api/v1/securities/day/status.
@@ -27,6 +29,10 @@ func (s *Server) handleDayStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDayStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+	if err := s.checkPermission(r, types.PermMarketStartDay); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
 		return
 	}
 	if s.dayManager == nil {
@@ -87,6 +93,10 @@ func (s *Server) handleDayEndTrading(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDayEnd(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+	if err := s.checkPermission(r, types.PermMarketEndDay); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
 		return
 	}
 	if s.dayManager == nil {

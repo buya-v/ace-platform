@@ -951,3 +951,75 @@ type PasswordPolicy struct {
 	RequireSpecial   bool   `json:"require_special"`
 	MaxAgeDays       int    `json:"max_age_days"`
 }
+
+// ── RBAC — Roles and Fine-Grained Permissions ─────────────────────────────────
+
+// Permission constants for fine-grained RBAC enforcement across the platform.
+// These supplement the coarse-grained participant capabilities (PermTradeEquity, etc.)
+// with operator / admin-level action gates.
+const (
+	// Instrument lifecycle
+	PermInstrumentCreate = "INSTRUMENT_CREATE"
+	PermInstrumentUpdate = "INSTRUMENT_UPDATE"
+	PermInstrumentDelete = "INSTRUMENT_DELETE"
+	PermInstrumentHalt   = "INSTRUMENT_HALT"
+
+	// Order management
+	PermOrderCreate     = "ORDER_CREATE"
+	PermOrderCancel     = "ORDER_CANCEL"
+	PermOrderMassCancel = "ORDER_MASS_CANCEL"
+	PermOrderView       = "ORDER_VIEW"
+
+	// Trade management
+	PermTradeBust     = "TRADE_BUST"
+	PermTradeCorrect  = "TRADE_CORRECT"
+	PermTradeReinstate = "TRADE_REINSTATE"
+	PermTradeView      = "TRADE_VIEW"
+
+	// Market / session control
+	PermMarketStartDay   = "MARKET_START_DAY"
+	PermMarketEndDay     = "MARKET_END_DAY"
+	PermMarketStartTrading = "MARKET_START_TRADING"
+	PermMarketEndTrading   = "MARKET_END_TRADING"
+	PermMarketHalt         = "MARKET_HALT"
+
+	// Settlement
+	PermSettlementTrigger = "SETTLEMENT_TRIGGER"
+	PermSettlementView    = "SETTLEMENT_VIEW"
+
+	// Corporate actions
+	PermCorporateActionCreate  = "CORPORATE_ACTION_CREATE"
+	PermCorporateActionProcess = "CORPORATE_ACTION_PROCESS"
+
+	// Participants & firms
+	PermParticipantCreate  = "PARTICIPANT_CREATE"
+	PermParticipantSuspend = "PARTICIPANT_SUSPEND"
+	PermParticipantView    = "PARTICIPANT_VIEW"
+	PermFirmCreate         = "FIRM_CREATE"
+	PermFirmView           = "FIRM_VIEW"
+
+	// Surveillance
+	PermSurveillanceView    = "SURVEILLANCE_VIEW"
+	PermSurveillanceResolve = "SURVEILLANCE_RESOLVE"
+	PermSurveillanceInvestigate = "SURVEILLANCE_INVESTIGATE"
+
+	// Admin
+	PermAdminAnnouncements = "ADMIN_ANNOUNCEMENTS"
+	PermAdminForceLogout   = "ADMIN_FORCE_LOGOUT"
+	PermAdminAuditView     = "ADMIN_AUDIT_VIEW"
+	PermAdminRoleManage    = "ADMIN_ROLE_MANAGE"
+
+	// Reference data
+	PermRefDataView  = "REF_DATA_VIEW"
+	PermRefDataWrite = "REF_DATA_WRITE"
+)
+
+// Role defines a named set of permissions that can be assigned to participants.
+type Role struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Permissions []string `json:"permissions"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
+}

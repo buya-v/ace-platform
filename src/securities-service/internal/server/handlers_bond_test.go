@@ -65,6 +65,8 @@ func newBondTestServer(t *testing.T) (*httptest.Server, *store.InMemoryBondStore
 		nil, // sessionManager
 		nil, // settlementEngine
 		nil, // producer
+		nil, // privilegeEngine
+		nil, // roleStore
 		cfg,
 	)
 	srv.SetReady()
@@ -378,7 +380,7 @@ func TestBondEndpoints_NotConfigured(t *testing.T) {
 		nil,  // bondStore = nil
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, cfg,
+		nil, me, nil, nil, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

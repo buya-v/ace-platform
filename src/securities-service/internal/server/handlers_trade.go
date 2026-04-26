@@ -134,6 +134,10 @@ type bustTradeRequest struct {
 //   - reason is required
 //   - trade must exist and not already be busted
 func (s *Server) handleBustTrade(w http.ResponseWriter, r *http.Request, tradeID string) {
+	if err := s.checkPermission(r, types.PermTradeBust); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	var req bustTradeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)

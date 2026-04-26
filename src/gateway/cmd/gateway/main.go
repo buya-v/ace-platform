@@ -297,6 +297,12 @@ func main() {
 	// Password policy (Part D)
 	rt.Handle("GET", "/password-policy", secHandler)
 	rt.Handle("PUT", "/password-policy", secHandler)
+	// RBAC Roles
+	rt.Handle("GET", "/api/v1/securities/roles", secHandler)
+	rt.Handle("POST", "/api/v1/securities/roles", secHandler)
+	rt.Handle("GET", "/api/v1/securities/roles/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/roles/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/roles/{id}", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091

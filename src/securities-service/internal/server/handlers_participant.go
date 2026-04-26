@@ -467,6 +467,10 @@ func (s *Server) forceLogoutOrSuspend(w http.ResponseWriter, r *http.Request, ac
 // handleForceLogout handles POST /api/v1/securities/participants/{id}/force-logout.
 // Suspends the participant and cancels all PENDING orders.
 func (s *Server) handleForceLogout(w http.ResponseWriter, r *http.Request) {
+	if err := s.checkPermission(r, types.PermAdminForceLogout); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	s.forceLogoutOrSuspend(w, r, "FORCE_LOGOUT")
 }
 

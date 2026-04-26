@@ -139,6 +139,10 @@ func (s *Server) handleGetInstrument(w http.ResponseWriter, r *http.Request) {
 //   - Sets CreatedAt and UpdatedAt to the current UTC time
 //   - Defaults TradingStatus to ACTIVE if not provided
 func (s *Server) handleCreateInstrument(w http.ResponseWriter, r *http.Request) {
+	if err := s.checkPermission(r, types.PermInstrumentCreate); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 	var inst types.Instrument
 	if err := json.NewDecoder(r.Body).Decode(&inst); err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)

@@ -83,6 +83,8 @@ type Server struct {
 	producer             kafka.Producer
 	db                   *sql.DB
 	ready                atomic.Int32
+	privilegeEngine      *engine.PrivilegeEngine
+	roleStore            store.RoleStore
 }
 
 // New creates a new Server with the given stores, matching engine, and configuration.
@@ -100,6 +102,7 @@ type Server struct {
 // investigationStore, replayStore, and bondStore may be nil; if so, those endpoints return 503.
 // throttleConfigStore may be nil; if so, order throttle falls back to the default 100 orders/sec.
 // watchListStore, ipRestrictionStore, and passwordPolicyStore may be nil; if so, those endpoints return 503.
+// privilegeEngine and roleStore may be nil; if so, permission checks are skipped (backwards compat).
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -143,6 +146,8 @@ func New(
 	sessionManager *engine.SessionManager,
 	settlementEngine *settlement.SettlementEngine,
 	producer kafka.Producer,
+	privilegeEngine *engine.PrivilegeEngine,
+	roleStore store.RoleStore,
 	cfg Config,
 ) *Server {
 	return &Server{
@@ -189,7 +194,27 @@ func New(
 		sessionManager:       sessionManager,
 		settlementEngine:     settlementEngine,
 		producer:             producer,
+		privilegeEngine:      privilegeEngine,
+		roleStore:            roleStore,
 	}
+}
+
+// checkPermission validates that the caller identified by X-Participant-ID holds
+// requiredPerm.  Returns nil when:
+//   - X-Participant-ID header is absent (backwards compat — public/system endpoint)
+//   - privilegeEngine is nil (RBAC not configured)
+//   - The participant holds the permission
+//
+// Returns an error when the participant exists but lacks the permission.
+func (s *Server) checkPermission(r *http.Request, requiredPerm string) error {
+	if s.privilegeEngine == nil {
+		return nil
+	}
+	participantID := r.Header.Get("X-Participant-ID")
+	if participantID == "" {
+		return nil
+	}
+	return s.privilegeEngine.HasPermission(participantID, requiredPerm)
 }
 
 // SetReady marks the server as ready to serve traffic.
@@ -394,6 +419,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Password policy — per-tenant password complexity and expiry rules.
 	mux.HandleFunc("/password-policy", s.handlePasswordPolicy)
+
+	// RBAC Roles — create, list, get, update, delete.
+	mux.HandleFunc("/api/v1/securities/roles", s.handleRoles)
+	mux.HandleFunc("/api/v1/securities/roles/", s.handleRole)
 }
 
 // --- Health endpoints ---

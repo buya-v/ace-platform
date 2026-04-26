@@ -61,6 +61,10 @@ func (s *Server) handleSettlementCycle(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		return
 	}
+	if err := s.checkPermission(r, types.PermSettlementTrigger); err != nil {
+		s.writeError(w, http.StatusForbidden, "PERMISSION_DENIED", err.Error(), nil)
+		return
+	}
 
 	if s.settlementEngine == nil {
 		s.writeError(w, http.StatusServiceUnavailable, "SETTLEMENT_UNAVAILABLE", "settlement engine not configured", nil)

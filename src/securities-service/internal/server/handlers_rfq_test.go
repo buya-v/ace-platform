@@ -63,6 +63,8 @@ func newRFQTestServer(t *testing.T) (*httptest.Server, *store.InMemoryRFQStore) 
 		nil, // sessionManager
 		nil, // settlementEngine
 		nil, // producer
+		nil, // privilegeEngine
+		nil, // roleStore
 		cfg,
 	)
 	srv.SetReady()

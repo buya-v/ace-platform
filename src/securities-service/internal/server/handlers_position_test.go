@@ -43,6 +43,7 @@ func newPositionTestServer(t *testing.T) (*httptest.Server, *store.InMemoryPosit
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil,
+		nil, nil, // privilegeEngine, roleStore
 		cfg,
 	)
 	srv.SetReady()
@@ -204,6 +205,7 @@ func TestListPositions_NilStore_Returns503(t *testing.T) {
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil,
+		nil, nil, // privilegeEngine, roleStore
 		cfg,
 	)
 	srv.SetReady()
