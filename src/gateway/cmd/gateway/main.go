@@ -257,6 +257,7 @@ func main() {
 	rt.Handle("GET", "/api/v1/securities/nodes/{id}/permissions", secHandler)
 	rt.Handle("PUT", "/api/v1/securities/nodes/{id}/permissions", secHandler)
 	// Surveillance (P3a — ensure routes are registered)
+	rt.Handle("GET", "/api/v1/securities/surveillance/dashboard", secHandler)
 	rt.Handle("GET", "/api/v1/securities/surveillance/alerts", secHandler)
 	rt.Handle("POST", "/api/v1/securities/surveillance/alerts", secHandler)
 	rt.Handle("POST", "/api/v1/securities/surveillance/alerts/{id}/resolve", secHandler)
