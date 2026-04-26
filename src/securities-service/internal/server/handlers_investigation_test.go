@@ -405,3 +405,143 @@ func TestInvestigationEndpoints_NotConfigured(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+// ============================================================
+// TestCreateInvestigationFromAlert
+// ============================================================
+
+// newInvestigationAndSurveillanceTestServer creates a test server wired with
+// both an InvestigationStore and a SurveillanceStore so we can test the
+// alert-status side-effect that fires when an investigation is created with
+// an alert_id.
+func newInvestigationAndSurveillanceTestServer(t *testing.T) (
+	*httptest.Server,
+	*store.InMemoryInvestigationStore,
+	*store.InMemorySurveillanceStore,
+) {
+	t.Helper()
+	instrStore := store.NewInMemoryInstrumentStore()
+	orderStore := store.NewInMemoryOrderStore()
+	tradeStore := store.NewInMemoryTradeStore()
+	positionStore := store.NewInMemoryPositionStore()
+	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil, nil)
+	invStore := store.NewInMemoryInvestigationStore()
+	survStore := store.NewInMemorySurveillanceStore()
+
+	cfg := DefaultConfig()
+	srv := New(
+		instrStore, orderStore, tradeStore, positionStore,
+		nil, // settlementStore
+		store.NewInMemoryCorporateActionStore(),
+		store.NewInMemoryEntitlementStore(),
+		store.NewInMemoryMarketStore(),
+		store.NewInMemorySegmentStore(),
+		store.NewInMemoryCircuitBreakerStore(),
+		store.NewInMemoryFirmStore(),
+		store.NewInMemoryParticipantStore(),
+		nil, // tickTableStore
+		nil, // tradeCorrectionStore
+		nil, // throttleStore
+		nil, // throttleConfigStore
+		nil, // announcementStore
+		nil, // auditStore
+		nil, // pendingChangeStore
+		nil, // referencePriceStore
+		survStore,
+		nil, // instrumentGroupStore
+		nil, // offBookTradeStore
+		nil, // nodeStore
+		nil, // locateStore
+		nil, // rfqStore
+		nil, // giveUpStore
+		invStore,
+		nil, // replayStore
+		nil, // bondStore
+		nil, // strategyStore
+		nil, // custodyAccountStore
+		nil, // custodyBalanceStore
+		nil, // csdTransferStore
+		nil, // watchListStore
+		nil, // ipRestrictionStore
+		nil, // passwordPolicyStore
+		nil, // dayManager
+		me,
+		nil, // sessionManager
+		nil, // settlementEngine
+		nil, // producer
+		nil, // privilegeEngine
+		nil, // roleStore
+		nil, // tradingParamSetStore
+		cfg,
+	)
+	srv.SetReady()
+
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	tenantMW := middleware.TenantMiddleware([]string{testTenant})
+	ts := httptest.NewServer(tenantMW(mux))
+	t.Cleanup(ts.Close)
+	return ts, invStore, survStore
+}
+
+// TestCreateInvestigationFromAlert verifies that creating an investigation with
+// an alert_id causes the referenced surveillance alert's status to transition
+// from OPEN → INVESTIGATING.
+func TestCreateInvestigationFromAlert(t *testing.T) {
+	ts, _, survStore := newInvestigationAndSurveillanceTestServer(t)
+
+	// Seed an OPEN alert that will be linked to the new investigation.
+	const alertID = "alert-for-investigation"
+	seedAlert(t, survStore, &types.SurveillanceAlert{
+		ID:           alertID,
+		InstrumentID: "INST-XY",
+		AlertType:    types.AlertTypeSpoofing,
+		Status:       types.AlertStatusOpen,
+		Message:      "Suspected spoofing on INST-XY",
+		CreatedAt:    "2026-04-26T08:00:00Z",
+	})
+
+	// Verify pre-condition: alert is OPEN.
+	pre, err := survStore.GetAlert(alertID)
+	if err != nil {
+		t.Fatalf("GetAlert before investigation: %v", err)
+	}
+	if pre.Status != types.AlertStatusOpen {
+		t.Fatalf("pre-condition: alert status want OPEN, got %q", pre.Status)
+	}
+
+	// Create investigation referencing the alert.
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/investigations",
+		map[string]interface{}{
+			"id":            "INV-FROM-ALERT-1",
+			"alert_id":      alertID,
+			"subject":       "Investigating spoofing on INST-XY",
+			"instrument_id": "INST-XY",
+			"assigned_to":   "analyst-42",
+		})
+	assertStatus(t, resp, http.StatusCreated)
+
+	var invResult map[string]interface{}
+	decodeBody(t, resp, &invResult)
+
+	// Investigation must be created in OPEN state with the alert_id linked.
+	if invResult["id"] != "INV-FROM-ALERT-1" {
+		t.Errorf("investigation id: want INV-FROM-ALERT-1, got %v", invResult["id"])
+	}
+	if invResult["status"] != "OPEN" {
+		t.Errorf("investigation status: want OPEN, got %v", invResult["status"])
+	}
+	if invResult["alert_id"] != alertID {
+		t.Errorf("investigation alert_id: want %q, got %v", alertID, invResult["alert_id"])
+	}
+
+	// Post-condition: the alert's status must now be INVESTIGATING.
+	post, err := survStore.GetAlert(alertID)
+	if err != nil {
+		t.Fatalf("GetAlert after investigation: %v", err)
+	}
+	if post.Status != types.AlertStatusInvestigating {
+		t.Errorf("alert status after investigation created: want INVESTIGATING, got %q", post.Status)
+	}
+}

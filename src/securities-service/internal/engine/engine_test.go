@@ -1627,3 +1627,149 @@ func TestSurveillance_NoAlertBelowThreshold(t *testing.T) {
 		t.Errorf("expected 0 alerts below threshold, got %d", len(alerts))
 	}
 }
+
+// ── New surveillance tests (T2) ───────────────────────────────────────────────
+
+// TestSurveillance_AllPatternConstants verifies that all 12 AlertType constants
+// are non-empty strings. This prevents accidental zero-value constants from
+// silently passing through store filters or log statements.
+func TestSurveillance_AllPatternConstants(t *testing.T) {
+	constants := []struct {
+		name  string
+		value types.AlertType
+	}{
+		{"AlertTypeLargeTrade", types.AlertTypeLargeTrade},
+		{"AlertTypePriceSpike", types.AlertTypePriceSpike},
+		{"AlertTypeWashTrade", types.AlertTypeWashTrade},
+		{"AlertTypeVolumeAnomaly", types.AlertTypeVolumeAnomaly},
+		{"AlertTypeFrontRunning", types.AlertTypeFrontRunning},
+		{"AlertTypeSpoofing", types.AlertTypeSpoofing},
+		{"AlertTypeLayering", types.AlertTypeLayering},
+		{"AlertTypeInsiderTrading", types.AlertTypeInsiderTrading},
+		{"AlertTypeMarketManipulation", types.AlertTypeMarketManipulation},
+		{"AlertTypeConcentration", types.AlertTypeConcentration},
+		{"AlertTypeUnusualActivity", types.AlertTypeUnusualActivity},
+		{"AlertTypeCrossMarket", types.AlertTypeCrossMarket},
+	}
+	if len(constants) != 12 {
+		t.Fatalf("expected 12 alert type constants, have %d — update test if new constants are added", len(constants))
+	}
+	seen := map[string]struct{}{}
+	for _, c := range constants {
+		if c.value == "" {
+			t.Errorf("%s: alert type constant must not be empty string", c.name)
+		}
+		val := string(c.value)
+		if _, dup := seen[val]; dup {
+			t.Errorf("%s: duplicate constant value %q", c.name, val)
+		}
+		seen[val] = struct{}{}
+	}
+}
+
+// TestSurveillance_Layering_Real verifies the engine's real checkLayering logic:
+// when a participant has more than 5 PENDING resting orders on the same side for
+// the instrument, a LAYERING alert is created after the next trade.
+func TestSurveillance_Layering_Real(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+	eng := newEngineWithSurveillance(s, ss)
+
+	const layerParticipant = "layer-participant"
+	const oppositeParticipant = "opposite-seller"
+
+	// Submit 6 resting BUY orders from layerParticipant — this exceeds the >5 threshold.
+	for i := 0; i < 6; i++ {
+		o := limitOrder(
+			fmt.Sprintf("layer-buy-%d", i),
+			testInstID,
+			layerParticipant,
+			types.OrderSideBuy,
+			10,
+			50.00,
+			ts(i),
+		)
+		submit(t, s, o)
+	}
+
+	// Now have oppositeParticipant submit a SELL that will actually cross
+	// against one of those buys, triggering checkLayering.
+	// We need to submit the sell and use it as the incoming order.
+	incomingSell := limitOrder("trigger-sell", testInstID, oppositeParticipant, types.OrderSideSell, 10, 50.00, ts(10))
+	_, err := submitAndMatch(t, eng, s, incomingSell)
+	if err != nil {
+		t.Fatalf("MatchOrder: %v", err)
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{AlertType: types.AlertTypeLayering})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected at least 1 LAYERING alert, got 0: participant with 6 resting buy orders should trigger checkLayering")
+	}
+	for _, a := range alerts {
+		if a.AlertType != types.AlertTypeLayering {
+			t.Errorf("expected LAYERING alert type, got %q", a.AlertType)
+		}
+		if a.Status != types.AlertStatusOpen {
+			t.Errorf("alert status: want OPEN, got %q", a.Status)
+		}
+	}
+}
+
+// TestSurveillance_Concentration verifies the engine's real checkConcentration logic:
+// when a single participant accounts for more than 20% of daily volume (with at least
+// 5 trades today to qualify), a CONCENTRATION alert is raised.
+func TestSurveillance_Concentration(t *testing.T) {
+	s := newTestStores()
+	createInstrument(t, s, testInstID, types.TradingStatusActive)
+	ss := store.NewInMemorySurveillanceStore()
+	eng := newEngineWithSurveillance(s, ss)
+
+	// We need at least 5 trades today before concentration fires.
+	// Also need a dominant participant with >20% share of total volume.
+	// Strategy: 4 small trades between background participants (10 shares each),
+	// then 1 big buy by the dominant participant (100 shares).
+	// Total: 4*10 + 100 = 140 shares. Dominant = 100/140 ≈ 71% → alert.
+
+	// Background trades: different participants each time so no single one dominates.
+	for i := 0; i < 4; i++ {
+		bgSell := limitOrder(fmt.Sprintf("bg-sell-%d", i), testInstID, fmt.Sprintf("bg-seller-%d", i), types.OrderSideSell, 10, 20.0, ts(i))
+		bgBuy := limitOrder(fmt.Sprintf("bg-buy-%d", i), testInstID, fmt.Sprintf("bg-buyer-%d", i), types.OrderSideBuy, 10, 20.0, ts(i+1))
+		submit(t, s, bgSell)
+		_, err := submitAndMatch(t, eng, s, bgBuy)
+		if err != nil {
+			t.Fatalf("background trade %d MatchOrder: %v", i, err)
+		}
+	}
+
+	// 5th trade: dominant participant buys 100 shares.
+	dominantSell := limitOrder("dom-sell", testInstID, "dom-seller", types.OrderSideSell, 100, 20.0, ts(20))
+	dominantBuy := limitOrder("dom-buy", testInstID, "dominant-participant", types.OrderSideBuy, 100, 20.0, ts(21))
+	submit(t, s, dominantSell)
+	_, err := submitAndMatch(t, eng, s, dominantBuy)
+	if err != nil {
+		t.Fatalf("dominant trade MatchOrder: %v", err)
+	}
+
+	alerts, err := ss.ListAlerts(store.SurveillanceAlertFilters{AlertType: types.AlertTypeConcentration})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(alerts) == 0 {
+		t.Fatal("expected at least 1 CONCENTRATION alert: dominant participant has >20% of daily volume")
+	}
+	for _, a := range alerts {
+		if a.AlertType != types.AlertTypeConcentration {
+			t.Errorf("expected CONCENTRATION alert, got %q", a.AlertType)
+		}
+		if a.Status != types.AlertStatusOpen {
+			t.Errorf("alert status: want OPEN, got %q", a.Status)
+		}
+		if a.InstrumentID != testInstID {
+			t.Errorf("instrument_id: want %q, got %q", testInstID, a.InstrumentID)
+		}
+	}
+}
