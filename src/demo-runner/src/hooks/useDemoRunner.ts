@@ -34,6 +34,15 @@ export function useDemoRunner() {
     } catch {
       // Ignore — backend reset is best-effort
     }
+    // Clear securities-service in-memory state
+    try {
+      await fetch(`${state.gatewayUrl}/api/v1/securities/demo/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      // Ignore — backend reset is best-effort
+    }
     // Clear frontend state
     dispatch({ type: 'RESET_ALL' });
   }, [state.gatewayUrl, dispatch]);

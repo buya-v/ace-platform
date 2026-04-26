@@ -367,6 +367,9 @@ func main() {
 	rt.Handle("GET", "/api/v1/securities/warnings", secHandler)
 	rt.Handle("POST", "/api/v1/securities/warnings/{id}/acknowledge", secHandler)
 
+	// Demo reset — clears all in-memory securities state (no auth required)
+	rt.Handle("POST", "/api/v1/securities/demo/reset", secHandler)
+
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091
@@ -403,6 +406,7 @@ func main() {
 			"/api/v1/market-data/",
 			"/api/v1/ws/",
 			"/api/v1/admin/demo/",
+			"/api/v1/securities/demo/",
 			"/platform/",
 		},
 		// Wire the router as a RouteChecker so unknown paths get 404 before auth runs.

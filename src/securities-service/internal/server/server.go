@@ -532,6 +532,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Sprint 8 Part D — Warnings.
 	mux.HandleFunc("/api/v1/securities/warnings", s.handleWarnings)
 	mux.HandleFunc("/api/v1/securities/warnings/", s.handleWarningItem)
+
+	// Demo reset — clears all in-memory state (no auth required in demo mode).
+	mux.HandleFunc("/api/v1/securities/demo/reset", s.handleDemoReset)
 }
 
 // --- Health endpoints ---
