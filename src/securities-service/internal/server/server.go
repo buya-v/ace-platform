@@ -338,6 +338,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/pending-changes/", s.handlePendingChange)
 
 	// Surveillance
+	mux.HandleFunc("/api/v1/securities/surveillance/dashboard", s.handleSurveillanceDashboard)
 	mux.HandleFunc("/api/v1/securities/surveillance/alerts", s.handleSurveillanceAlerts)
 	mux.HandleFunc("/api/v1/securities/surveillance/alerts/", s.handleSurveillanceAlert)
 	mux.HandleFunc("/api/v1/securities/surveillance/thresholds/", s.handleSurveillanceThresholds)

@@ -23,6 +23,7 @@ type MatchingEngine struct {
 	settlementEngine     *settlement.SettlementEngine
 	circuitBreakerEngine *CircuitBreakerEngine
 	surveillanceStore    store.SurveillanceStore
+	corporateActionStore store.CorporateActionStore
 }
 
 // NewMatchingEngine creates a new MatchingEngine with the given stores.
@@ -55,18 +56,23 @@ func (e *MatchingEngine) SetSurveillanceStore(s store.SurveillanceStore) {
 	e.surveillanceStore = s
 }
 
-// checkSurveillance evaluates a completed trade against active thresholds
-// and creates alerts when thresholds are exceeded.
+// SetCorporateActionStore wires a corporate action store for insider-trading detection.
+// May be called after construction. Nil disables that check.
+func (e *MatchingEngine) SetCorporateActionStore(s store.CorporateActionStore) {
+	e.corporateActionStore = s
+}
+
+// checkSurveillance evaluates a completed trade against active thresholds and
+// heuristic pattern checks, creating alerts when issues are detected.
 // It is called non-fatally after each trade — errors are silently swallowed.
 func (e *MatchingEngine) checkSurveillance(trade *types.SecurityTrade) {
 	if e.surveillanceStore == nil {
 		return
 	}
-	thresholds, err := e.surveillanceStore.GetThresholds(trade.InstrumentID)
-	if err != nil || len(thresholds) == 0 {
-		return
-	}
 	now := time.Now().UTC().Format(time.RFC3339)
+
+	// ── Threshold-based checks ──────────────────────────────────────────────
+	thresholds, _ := e.surveillanceStore.GetThresholds(trade.InstrumentID)
 	for _, th := range thresholds {
 		var triggered bool
 		switch th.AlertType {
@@ -74,22 +80,219 @@ func (e *MatchingEngine) checkSurveillance(trade *types.SecurityTrade) {
 			triggered = float64(trade.Quantity) >= th.Value
 		case types.AlertTypePriceSpike:
 			triggered = trade.Price >= th.Value
+		case types.AlertTypeMarketManipulation:
+			// Also trigger via reference price check below — alias handled there.
 		}
 		if triggered {
-			alertID, err := newUUID()
-			if err != nil {
-				continue
+			e.raiseAlert(trade.InstrumentID, th.AlertType, trade.ID, now,
+				fmt.Sprintf("threshold breached: %s >= %.2f (trade qty=%d price=%.2f)",
+					th.AlertType, th.Value, trade.Quantity, trade.Price))
+		}
+	}
+
+	// ── Heuristic pattern checks (require orderStore) ────────────────────────
+	if e.orderStore != nil {
+		e.checkSpoofing(trade, now)
+		e.checkLayering(trade, now)
+		e.checkConcentration(trade, now)
+	}
+
+	// ── Corporate action insider-trading check ───────────────────────────────
+	if e.corporateActionStore != nil {
+		e.checkInsiderTrading(trade, now)
+	}
+
+	// ── Market manipulation via reference price ──────────────────────────────
+	e.checkMarketManipulation(trade, now)
+}
+
+// raiseAlert is a helper that creates a surveillance alert, silently ignoring errors.
+func (e *MatchingEngine) raiseAlert(instrumentID string, alertType types.AlertType, tradeID, now, message string) {
+	id, err := newUUID()
+	if err != nil {
+		return
+	}
+	_ = e.surveillanceStore.CreateAlert(&types.SurveillanceAlert{
+		ID:           id,
+		InstrumentID: instrumentID,
+		AlertType:    alertType,
+		Status:       types.AlertStatusOpen,
+		Message:      message,
+		TradeID:      tradeID,
+		CreatedAt:    now,
+	})
+}
+
+// checkSpoofing fires SPOOFING if the buy or sell participant has cancelled >3 orders in
+// the last 60 seconds across all instruments (simplified heuristic: count cancelled orders
+// in the store with a CreatedAt timestamp within the window).
+func (e *MatchingEngine) checkSpoofing(trade *types.SecurityTrade, now string) {
+	// Determine both participants.
+	participants := []string{}
+	if buyOrder, err := e.tradeStore.Get(trade.ID); err == nil {
+		_ = buyOrder // we look participants up from the order store below
+	}
+
+	// Resolve participants from the buy/sell order IDs.
+	addParticipant := func(orderID string) {
+		if o, err := e.orderStore.Get(orderID); err == nil {
+			participants = append(participants, o.ParticipantID)
+		}
+	}
+	addParticipant(trade.BuyOrderID)
+	addParticipant(trade.SellOrderID)
+
+	cutoff := time.Now().UTC().Add(-60 * time.Second).Format(time.RFC3339)
+
+	for _, participantID := range participants {
+		cancelled, err := e.orderStore.List(store.OrderFilters{
+			ParticipantID: participantID,
+			Status:        types.OrderStatusCancelled,
+		})
+		if err != nil {
+			continue
+		}
+		recentCancels := 0
+		for _, o := range cancelled {
+			if o.UpdatedAt >= cutoff {
+				recentCancels++
 			}
-			alert := &types.SurveillanceAlert{
-				ID:           alertID,
-				InstrumentID: trade.InstrumentID,
-				AlertType:    th.AlertType,
-				Status:       types.AlertStatusOpen,
-				Message:      fmt.Sprintf("threshold breached: %s >= %.2f (trade qty=%d price=%.2f)", th.AlertType, th.Value, trade.Quantity, trade.Price),
-				TradeID:      trade.ID,
-				CreatedAt:    now,
+		}
+		if recentCancels > 3 {
+			e.raiseAlert(trade.InstrumentID, types.AlertTypeSpoofing, trade.ID, now,
+				fmt.Sprintf("spoofing suspected: participant %s cancelled %d orders in last 60s",
+					participantID, recentCancels))
+		}
+	}
+}
+
+// checkLayering fires LAYERING if either participant has >5 resting (PENDING) orders
+// on the same side for the same instrument.
+func (e *MatchingEngine) checkLayering(trade *types.SecurityTrade, now string) {
+	checkParticipantSide := func(participantID string, side types.OrderSide) {
+		resting, err := e.orderStore.List(store.OrderFilters{
+			InstrumentID:  trade.InstrumentID,
+			ParticipantID: participantID,
+			Status:        types.OrderStatusPending,
+		})
+		if err != nil {
+			return
+		}
+		count := 0
+		for _, o := range resting {
+			if o.Side == side {
+				count++
 			}
-			_ = e.surveillanceStore.CreateAlert(alert)
+		}
+		if count > 5 {
+			e.raiseAlert(trade.InstrumentID, types.AlertTypeLayering, trade.ID, now,
+				fmt.Sprintf("layering suspected: participant %s has %d resting %s orders on %s",
+					participantID, count, side, trade.InstrumentID))
+		}
+	}
+
+	if buyOrder, err := e.orderStore.Get(trade.BuyOrderID); err == nil {
+		checkParticipantSide(buyOrder.ParticipantID, types.OrderSideBuy)
+	}
+	if sellOrder, err := e.orderStore.Get(trade.SellOrderID); err == nil {
+		checkParticipantSide(sellOrder.ParticipantID, types.OrderSideSell)
+	}
+}
+
+// checkInsiderTrading fires INSIDER_TRADING if the instrument has a PENDING or ANNOUNCED
+// corporate action, indicating trading may be based on material non-public information.
+func (e *MatchingEngine) checkInsiderTrading(trade *types.SecurityTrade, now string) {
+	actions, err := e.corporateActionStore.List(store.CorporateActionFilters{
+		InstrumentID: trade.InstrumentID,
+	})
+	if err != nil {
+		return
+	}
+	for _, ca := range actions {
+		if ca.Status == types.CAStatusAnnounced || ca.Status == types.CAStatusProcessing {
+			e.raiseAlert(trade.InstrumentID, types.AlertTypeInsiderTrading, trade.ID, now,
+				fmt.Sprintf("insider trading suspected: trade on %s with pending corporate action %s (%s)",
+					trade.InstrumentID, ca.ID, ca.ActionType))
+			return // one alert per trade is sufficient
+		}
+	}
+}
+
+// checkMarketManipulation fires MARKET_MANIPULATION when an explicit MARKET_MANIPULATION
+// threshold is set and the trade price deviates more than 5% from that reference value.
+// It does NOT piggyback on PRICE_SPIKE thresholds to avoid conflicting with that check.
+func (e *MatchingEngine) checkMarketManipulation(trade *types.SecurityTrade, now string) {
+	thresholds, err := e.surveillanceStore.GetThresholds(trade.InstrumentID)
+	if err != nil {
+		return
+	}
+	for _, th := range thresholds {
+		if th.AlertType == types.AlertTypeMarketManipulation && th.Value > 0 {
+			refPrice := th.Value
+			if trade.Price > refPrice*1.05 || trade.Price < refPrice*0.95 {
+				e.raiseAlert(trade.InstrumentID, types.AlertTypeMarketManipulation, trade.ID, now,
+					fmt.Sprintf("market manipulation suspected: trade price %.2f deviates >5%% from reference %.2f",
+						trade.Price, refPrice))
+				return
+			}
+		}
+	}
+}
+
+// checkConcentration fires CONCENTRATION if either participant's filled quantity in this
+// trade represents >20% of all trades for the instrument today (simplified daily volume
+// check). To avoid spurious alerts when trading begins, this check only fires when there
+// are at least 5 completed trades today (meaningful market activity).
+func (e *MatchingEngine) checkConcentration(trade *types.SecurityTrade, now string) {
+	allTrades, err := e.tradeStore.ListByInstrument(trade.InstrumentID)
+	if err != nil || len(allTrades) == 0 {
+		return
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+	totalVolume := 0
+	tradeCount := 0
+	participantVolume := map[string]int{}
+
+	// Resolve both participants upfront.
+	buyParticipant := ""
+	sellParticipant := ""
+	if o, err := e.orderStore.Get(trade.BuyOrderID); err == nil {
+		buyParticipant = o.ParticipantID
+	}
+	if o, err := e.orderStore.Get(trade.SellOrderID); err == nil {
+		sellParticipant = o.ParticipantID
+	}
+
+	for _, t := range allTrades {
+		if t.TradeDate != today {
+			continue
+		}
+		tradeCount++
+		totalVolume += t.Quantity
+		// Accumulate per-participant volume from both sides of each trade.
+		if bo, err := e.orderStore.Get(t.BuyOrderID); err == nil {
+			participantVolume[bo.ParticipantID] += t.Quantity
+		}
+		if so, err := e.orderStore.Get(t.SellOrderID); err == nil {
+			participantVolume[so.ParticipantID] += t.Quantity
+		}
+	}
+
+	// Require meaningful market activity before firing concentration alerts.
+	if totalVolume == 0 || tradeCount < 5 {
+		return
+	}
+
+	for _, pid := range []string{buyParticipant, sellParticipant} {
+		if pid == "" {
+			continue
+		}
+		vol := participantVolume[pid]
+		if float64(vol)/float64(totalVolume) > 0.20 {
+			e.raiseAlert(trade.InstrumentID, types.AlertTypeConcentration, trade.ID, now,
+				fmt.Sprintf("concentration alert: participant %s accounts for %.0f%% of daily volume on %s",
+					pid, 100*float64(vol)/float64(totalVolume), trade.InstrumentID))
 		}
 	}
 }

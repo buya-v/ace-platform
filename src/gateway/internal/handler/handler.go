@@ -478,6 +478,12 @@ func (h *Handler) CancelSecuritiesOrder(w http.ResponseWriter, r *http.Request) 
 	h.forward(w, r, "securities-service", "SecuritiesService/CancelOrder")
 }
 
+// SecuritiesSurveillanceDashboard proxies GET /api/v1/securities/surveillance/dashboard
+// to the securities-service and returns aggregated alert statistics.
+func (h *Handler) SecuritiesSurveillanceDashboard(w http.ResponseWriter, r *http.Request) {
+	h.forward(w, r, "securities-service", "SecuritiesService/SurveillanceDashboard")
+}
+
 // --- Admin Risk Endpoints (direct DB) ---
 
 // ListOrderLimits returns all configured order limits.

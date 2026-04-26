@@ -550,18 +550,27 @@ type ReferencePrice struct {
 type AlertStatus string
 
 const (
-	AlertStatusOpen     AlertStatus = "OPEN"
-	AlertStatusResolved AlertStatus = "RESOLVED"
+	AlertStatusOpen         AlertStatus = "OPEN"
+	AlertStatusInvestigating AlertStatus = "INVESTIGATING"
+	AlertStatusResolved     AlertStatus = "RESOLVED"
 )
 
 // AlertType represents the category of a surveillance alert.
 type AlertType string
 
 const (
-	AlertTypeLargeTrade    AlertType = "LARGE_TRADE"
-	AlertTypePriceSpike    AlertType = "PRICE_SPIKE"
-	AlertTypeWashTrade     AlertType = "WASH_TRADE"
-	AlertTypeVolumeAnomaly AlertType = "VOLUME_ANOMALY"
+	AlertTypeLargeTrade         AlertType = "LARGE_TRADE"
+	AlertTypePriceSpike         AlertType = "PRICE_SPIKE"
+	AlertTypeWashTrade          AlertType = "WASH_TRADE"
+	AlertTypeVolumeAnomaly      AlertType = "VOLUME_ANOMALY"
+	AlertTypeFrontRunning       AlertType = "FRONT_RUNNING"
+	AlertTypeSpoofing           AlertType = "SPOOFING"
+	AlertTypeLayering           AlertType = "LAYERING"
+	AlertTypeInsiderTrading     AlertType = "INSIDER_TRADING"
+	AlertTypeMarketManipulation AlertType = "MARKET_MANIPULATION"
+	AlertTypeConcentration      AlertType = "CONCENTRATION"
+	AlertTypeUnusualActivity    AlertType = "UNUSUAL_ACTIVITY"
+	AlertTypeCrossMarket        AlertType = "CROSS_MARKET"
 )
 
 // SurveillanceAlert represents a market surveillance alert raised by the engine.
@@ -736,8 +745,9 @@ const (
 // Investigation represents a formal market surveillance investigation into potential rule breaches.
 type Investigation struct {
 	ID           string              `json:"id"`
-	Subject      string              `json:"subject"`       // brief description of what is being investigated
-	InstrumentID string              `json:"instrument_id"` // instrument under investigation (may be empty)
+	AlertID      string              `json:"alert_id,omitempty"` // surveillance alert that triggered this investigation
+	Subject      string              `json:"subject"`             // brief description of what is being investigated
+	InstrumentID string              `json:"instrument_id"`       // instrument under investigation (may be empty)
 	Status       InvestigationStatus `json:"status"`
 	AssignedTo   string              `json:"assigned_to,omitempty"`
 	Findings     string              `json:"findings,omitempty"`

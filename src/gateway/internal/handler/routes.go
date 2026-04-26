@@ -102,6 +102,9 @@ func (h *Handler) RegisterRoutes(rt *router.Router) {
 	rt.Handle("GET", "/api/v1/admin/risk/order-limits", h.ListOrderLimits)
 	rt.Handle("PUT", "/api/v1/admin/risk/order-limits/{instrument_id}", h.UpdateOrderLimits)
 
+	// --- Securities — Surveillance Dashboard ---
+	rt.Handle("GET", "/api/v1/securities/surveillance/dashboard", h.SecuritiesSurveillanceDashboard)
+
 	// --- Securities routes registered via reverse proxy in main.go (not gRPC forward) ---
 
 	// --- Reference Data (direct DB, public) ---

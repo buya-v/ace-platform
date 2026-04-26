@@ -79,6 +79,7 @@ func (s *Server) handleListInvestigations(w http.ResponseWriter, r *http.Request
 func (s *Server) handleCreateInvestigation(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID           string `json:"id"`
+		AlertID      string `json:"alert_id"`
 		Subject      string `json:"subject"`
 		InstrumentID string `json:"instrument_id"`
 		AssignedTo   string `json:"assigned_to"`
@@ -93,6 +94,7 @@ func (s *Server) handleCreateInvestigation(w http.ResponseWriter, r *http.Reques
 	}
 	inv := &types.Investigation{
 		ID:           req.ID,
+		AlertID:      req.AlertID,
 		Subject:      req.Subject,
 		InstrumentID: req.InstrumentID,
 		Status:       types.InvestigationOpen,
@@ -103,6 +105,10 @@ func (s *Server) handleCreateInvestigation(w http.ResponseWriter, r *http.Reques
 	if err := s.investigationStore.Create(inv); err != nil {
 		s.writeError(w, http.StatusConflict, "CONFLICT", err.Error(), nil)
 		return
+	}
+	// If an alert_id was provided, transition that alert to INVESTIGATING.
+	if req.AlertID != "" && s.surveillanceStore != nil {
+		_ = s.surveillanceStore.UpdateAlertStatus(req.AlertID, types.AlertStatusInvestigating)
 	}
 	s.writeJSON(w, http.StatusCreated, inv)
 }

@@ -1467,8 +1467,10 @@ type SurveillanceAlertFilters struct {
 // SurveillanceStore defines the repository contract for market surveillance alerts and thresholds.
 type SurveillanceStore interface {
 	CreateAlert(alert *types.SurveillanceAlert) error
+	GetAlert(id string) (*types.SurveillanceAlert, error)
 	ListAlerts(filters SurveillanceAlertFilters) ([]types.SurveillanceAlert, error)
 	ResolveAlert(id, resolvedBy string) error
+	UpdateAlertStatus(id string, status types.AlertStatus) error
 	SetThreshold(threshold *types.SurveillanceThreshold) error
 	GetThresholds(instrumentID string) ([]types.SurveillanceThreshold, error)
 }
@@ -1502,6 +1504,30 @@ func (s *InMemorySurveillanceStore) CreateAlert(alert *types.SurveillanceAlert) 
 	}
 	cp := *alert
 	s.alerts[alert.ID] = &cp
+	return nil
+}
+
+// GetAlert retrieves a surveillance alert by its ID.
+func (s *InMemorySurveillanceStore) GetAlert(id string) (*types.SurveillanceAlert, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	a, ok := s.alerts[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *a
+	return &cp, nil
+}
+
+// UpdateAlertStatus transitions an alert to the given status.
+func (s *InMemorySurveillanceStore) UpdateAlertStatus(id string, status types.AlertStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.alerts[id]
+	if !ok {
+		return ErrNotFound
+	}
+	a.Status = status
 	return nil
 }
 
