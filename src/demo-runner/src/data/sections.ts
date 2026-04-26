@@ -578,6 +578,156 @@ const adminOps: Section = {
   ],
 };
 
+// ─── Section 11: Advanced Platform Features ──────────────────────────────────
+
+const advancedFeatures: Section = {
+  id: 'advanced-features',
+  title: '11. Advanced Platform Features',
+  steps: [
+    {
+      id: 'adv-1',
+      title: 'Create Market Index',
+      description: 'Admin creates the MSE Top 20 Index weighted by APU and GOV instruments',
+      method: 'POST',
+      url: '/api/v1/securities/indices',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: (state) => ({
+        id: 'MSE-TOP20',
+        name: 'MSE Top 20 Index',
+        instrument_weights: {
+          [state.apu_id as string || 'APU']: 0.6,
+          [state.gov_id as string || 'GOV']: 0.4,
+        },
+        base_value: 1000,
+      }),
+      validateResponse: okValidator,
+      extractState: (body) => {
+        const b = body as Record<string, unknown>;
+        return { index_id: b.id || 'MSE-TOP20' };
+      },
+    },
+    {
+      id: 'adv-2',
+      title: 'Calculate Index Value',
+      description: 'Calculate the current value of the MSE Top 20 Index based on constituent prices',
+      method: 'POST',
+      url: (state) => `/api/v1/securities/indices/${state.index_id || 'MSE-TOP20'}/calculate`,
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: (status, body) => {
+        if (status < 200 || status >= 500) return 'FAIL';
+        const b = body as Record<string, unknown>;
+        return b && 'current_value' in b ? 'PASS' : 'FAIL';
+      },
+    },
+    {
+      id: 'adv-3',
+      title: 'Create Instrument Folder',
+      description: 'Admin creates an Equities top-level folder for instrument classification',
+      method: 'POST',
+      url: '/api/v1/securities/folders',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ id: 'EQUITIES', name: 'Equities' }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'adv-4',
+      title: 'Create Sub-Folder',
+      description: 'Admin creates a Mining Sector sub-folder under Equities',
+      method: 'POST',
+      url: '/api/v1/securities/folders',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({ id: 'MINING', name: 'Mining Sector', parent_id: 'EQUITIES' }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'adv-5',
+      title: 'List Folder Children',
+      description: 'Verify the MINING sub-folder appears under EQUITIES',
+      method: 'GET',
+      url: '/api/v1/securities/folders/EQUITIES/children',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: (status, body) => {
+        if (status < 200 || status >= 500) return 'FAIL';
+        const arr = body as Array<Record<string, unknown>>;
+        return Array.isArray(arr) && arr.some((f) => f.id === 'MINING') ? 'PASS' : 'FAIL';
+      },
+    },
+    {
+      id: 'adv-6',
+      title: 'Set Entity Permissions',
+      description: 'Grant TRADER role view-only access to INSTRUMENT entities',
+      method: 'PUT',
+      url: '/api/v1/securities/entity-permissions',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: () => ({
+        role_id: 'TRADER',
+        entity_type: 'INSTRUMENT',
+        allow_create: false,
+        allow_view: true,
+        allow_edit: false,
+        allow_delete: false,
+        allow_approve: false,
+      }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'adv-7',
+      title: 'View Entity Permissions',
+      description: 'Confirm TRADER role permissions are set on INSTRUMENT entities',
+      method: 'GET',
+      url: '/api/v1/securities/entity-permissions?role_id=TRADER',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: (status, body) => {
+        if (status < 200 || status >= 500) return 'FAIL';
+        const arr = body as Array<unknown>;
+        return Array.isArray(arr) && arr.length > 0 ? 'PASS' : 'FAIL';
+      },
+    },
+    {
+      id: 'adv-8',
+      title: 'Configure Trading Parameters',
+      description: 'Set order size and value limits for APU instrument',
+      method: 'POST',
+      url: '/api/v1/securities/trading-params',
+      headers: (state) => tenantHeader(state, 'admin'),
+      body: (state) => ({
+        id: 'APU-PARAMS',
+        instrument_id: state.apu_id || 'APU',
+        name: 'APU Trading Parameters',
+        min_order_size: 10,
+        max_order_size: 100000,
+        max_order_value: 500000000,
+        short_selling_allowed: false,
+      }),
+      validateResponse: okValidator,
+    },
+    {
+      id: 'adv-9',
+      title: 'View Surveillance Dashboard',
+      description: 'Check the market surveillance dashboard for trading alerts',
+      method: 'GET',
+      url: '/api/v1/securities/surveillance/dashboard',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: (status, body) => {
+        if (status < 200 || status >= 500) return 'FAIL';
+        return body !== null && typeof body === 'object' ? 'PASS' : 'FAIL';
+      },
+    },
+    {
+      id: 'adv-10',
+      title: 'List Warnings',
+      description: 'List all unacknowledged market warnings from surveillance',
+      method: 'GET',
+      url: '/api/v1/securities/warnings?acknowledged=false',
+      headers: (state) => tenantHeader(state, 'admin'),
+      validateResponse: (status, body) => {
+        if (status < 200 || status >= 500) return 'FAIL';
+        return Array.isArray(body) ? 'PASS' : 'FAIL';
+      },
+    },
+  ],
+};
+
 // ─── Readiness Checklist ─────────────────────────────────────────────────────
 
 const readinessItems: ChecklistItem[] = [
@@ -614,6 +764,7 @@ export const allSections: AnySection[] = [
   postTrade,
   corporateActions,
   adminOps,
+  advancedFeatures,
   readiness,
 ];
 
