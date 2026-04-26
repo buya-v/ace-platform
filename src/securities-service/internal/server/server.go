@@ -82,6 +82,10 @@ type Server struct {
 	postTradeParamsStore  store.PostTradeParamsStore // Part B: post-trade parameters
 	configTableStore      store.ConfigTableStore    // Part C: tabular structures
 	clientStore           store.ClientStore         // Part D: client entities
+	indexStore            store.IndexStore            // Sprint 8 Part A: indices
+	entityPermissionStore store.EntityPermissionStore // Sprint 8 Part B: entity permissions
+	folderStore           store.FolderStore           // Sprint 8 Part C: folders
+	warningStore          store.WarningStore          // Sprint 8 Part D: warnings
 	dayManager            *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -236,6 +240,26 @@ func (s *Server) SetConfigTableStore(cs store.ConfigTableStore) {
 // SetClientStore wires the client store into the server after construction (Part D).
 func (s *Server) SetClientStore(cs store.ClientStore) {
 	s.clientStore = cs
+}
+
+// SetIndexStore wires the index store into the server (Sprint 8 Part A).
+func (s *Server) SetIndexStore(is store.IndexStore) {
+	s.indexStore = is
+}
+
+// SetEntityPermissionStore wires the entity permission store into the server (Sprint 8 Part B).
+func (s *Server) SetEntityPermissionStore(eps store.EntityPermissionStore) {
+	s.entityPermissionStore = eps
+}
+
+// SetFolderStore wires the folder store into the server (Sprint 8 Part C).
+func (s *Server) SetFolderStore(fs store.FolderStore) {
+	s.folderStore = fs
+}
+
+// SetWarningStore wires the warning store into the server (Sprint 8 Part D).
+func (s *Server) SetWarningStore(ws store.WarningStore) {
+	s.warningStore = ws
 }
 
 // checkPermission validates that the caller identified by X-Participant-ID holds
@@ -492,6 +516,22 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Part D — Client entities.
 	mux.HandleFunc("/api/v1/securities/clients", s.handleClients)
 	mux.HandleFunc("/api/v1/securities/clients/", s.handleClientItem)
+
+	// Sprint 8 Part A — Indices.
+	mux.HandleFunc("/api/v1/securities/indices", s.handleIndices)
+	mux.HandleFunc("/api/v1/securities/indices/", s.handleIndexItem)
+
+	// Sprint 8 Part B — Entity permissions.
+	mux.HandleFunc("/api/v1/securities/entity-permissions", s.handleEntityPermissions)
+	mux.HandleFunc("/api/v1/securities/entity-permissions/", s.handleEntityPermissionItem)
+
+	// Sprint 8 Part C — Instrument folders.
+	mux.HandleFunc("/api/v1/securities/folders", s.handleFolders)
+	mux.HandleFunc("/api/v1/securities/folders/", s.handleFolderItem)
+
+	// Sprint 8 Part D — Warnings.
+	mux.HandleFunc("/api/v1/securities/warnings", s.handleWarnings)
+	mux.HandleFunc("/api/v1/securities/warnings/", s.handleWarningItem)
 }
 
 // --- Health endpoints ---

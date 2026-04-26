@@ -3654,3 +3654,283 @@ func (s *InMemoryClientStore) Delete(id string) error {
 	delete(s.data, id)
 	return nil
 }
+
+// ── Sprint 8 — Part A: IndexStore ────────────────────────────────────────────
+
+// IndexStore defines the repository contract for market indices.
+type IndexStore interface {
+	Create(index *types.Index) error
+	Get(id string) (*types.Index, error)
+	List() ([]types.Index, error)
+	Update(index *types.Index) error
+	Delete(id string) error
+}
+
+// InMemoryIndexStore is a thread-safe, in-memory implementation of IndexStore.
+type InMemoryIndexStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Index
+}
+
+// NewInMemoryIndexStore returns an empty InMemoryIndexStore.
+func NewInMemoryIndexStore() *InMemoryIndexStore {
+	return &InMemoryIndexStore{data: make(map[string]*types.Index)}
+}
+
+func (s *InMemoryIndexStore) Create(index *types.Index) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[index.ID]; exists {
+		return fmt.Errorf("index %s already exists", index.ID)
+	}
+	c := *index
+	s.data[index.ID] = &c
+	return nil
+}
+
+func (s *InMemoryIndexStore) Get(id string) (*types.Index, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	c := *v
+	return &c, nil
+}
+
+func (s *InMemoryIndexStore) List() ([]types.Index, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Index, 0, len(s.data))
+	for _, v := range s.data {
+		c := *v
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func (s *InMemoryIndexStore) Update(index *types.Index) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[index.ID]; !ok {
+		return ErrNotFound
+	}
+	c := *index
+	s.data[index.ID] = &c
+	return nil
+}
+
+func (s *InMemoryIndexStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// ── Sprint 8 — Part B: EntityPermissionStore ─────────────────────────────────
+
+// EntityPermissionStore defines the repository contract for role entity permissions.
+type EntityPermissionStore interface {
+	Set(ep *types.EntityPermission) error
+	Get(roleID, entityType string) (*types.EntityPermission, error)
+	ListByRole(roleID string) ([]types.EntityPermission, error)
+	Delete(roleID, entityType string) error
+}
+
+// InMemoryEntityPermissionStore is a thread-safe, in-memory implementation of EntityPermissionStore.
+type InMemoryEntityPermissionStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.EntityPermission // key: roleID+":"+entityType
+}
+
+// NewInMemoryEntityPermissionStore returns an empty InMemoryEntityPermissionStore.
+func NewInMemoryEntityPermissionStore() *InMemoryEntityPermissionStore {
+	return &InMemoryEntityPermissionStore{data: make(map[string]*types.EntityPermission)}
+}
+
+func epKey(roleID, entityType string) string {
+	return roleID + ":" + entityType
+}
+
+func (s *InMemoryEntityPermissionStore) Set(ep *types.EntityPermission) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := *ep
+	s.data[epKey(ep.RoleID, ep.EntityType)] = &c
+	return nil
+}
+
+func (s *InMemoryEntityPermissionStore) Get(roleID, entityType string) (*types.EntityPermission, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.data[epKey(roleID, entityType)]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	c := *v
+	return &c, nil
+}
+
+func (s *InMemoryEntityPermissionStore) ListByRole(roleID string) ([]types.EntityPermission, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.EntityPermission, 0)
+	for _, v := range s.data {
+		if v.RoleID == roleID {
+			c := *v
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (s *InMemoryEntityPermissionStore) Delete(roleID, entityType string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := epKey(roleID, entityType)
+	if _, ok := s.data[k]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, k)
+	return nil
+}
+
+// ── Sprint 8 — Part C: FolderStore ───────────────────────────────────────────
+
+// FolderStore defines the repository contract for instrument folders.
+type FolderStore interface {
+	Create(folder *types.Folder) error
+	Get(id string) (*types.Folder, error)
+	List() ([]types.Folder, error)
+	ListChildren(parentID string) ([]types.Folder, error)
+	Delete(id string) error
+}
+
+// InMemoryFolderStore is a thread-safe, in-memory implementation of FolderStore.
+type InMemoryFolderStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Folder
+}
+
+// NewInMemoryFolderStore returns an empty InMemoryFolderStore.
+func NewInMemoryFolderStore() *InMemoryFolderStore {
+	return &InMemoryFolderStore{data: make(map[string]*types.Folder)}
+}
+
+func (s *InMemoryFolderStore) Create(folder *types.Folder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[folder.ID]; exists {
+		return fmt.Errorf("folder %s already exists", folder.ID)
+	}
+	c := *folder
+	s.data[folder.ID] = &c
+	return nil
+}
+
+func (s *InMemoryFolderStore) Get(id string) (*types.Folder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	c := *v
+	return &c, nil
+}
+
+func (s *InMemoryFolderStore) List() ([]types.Folder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Folder, 0, len(s.data))
+	for _, v := range s.data {
+		c := *v
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func (s *InMemoryFolderStore) ListChildren(parentID string) ([]types.Folder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Folder, 0)
+	for _, v := range s.data {
+		if v.ParentID == parentID {
+			c := *v
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (s *InMemoryFolderStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// ── Sprint 8 — Part D: WarningStore ──────────────────────────────────────────
+
+// WarningStore defines the repository contract for system warnings.
+type WarningStore interface {
+	Create(warning *types.Warning) error
+	List(acknowledged bool) ([]types.Warning, error)
+	Acknowledge(id, userID string) error
+}
+
+// InMemoryWarningStore is a thread-safe, in-memory implementation of WarningStore.
+type InMemoryWarningStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Warning
+}
+
+// NewInMemoryWarningStore returns an empty InMemoryWarningStore.
+func NewInMemoryWarningStore() *InMemoryWarningStore {
+	return &InMemoryWarningStore{data: make(map[string]*types.Warning)}
+}
+
+func (s *InMemoryWarningStore) Create(warning *types.Warning) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[warning.ID]; exists {
+		return fmt.Errorf("warning %s already exists", warning.ID)
+	}
+	c := *warning
+	s.data[warning.ID] = &c
+	return nil
+}
+
+// List returns warnings. When acknowledged=false, only unacknowledged warnings are returned.
+// When acknowledged=true, only acknowledged warnings are returned.
+func (s *InMemoryWarningStore) List(acknowledged bool) ([]types.Warning, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Warning, 0)
+	for _, v := range s.data {
+		isAcknowledged := v.AcknowledgedBy != ""
+		if isAcknowledged == acknowledged {
+			c := *v
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (s *InMemoryWarningStore) Acknowledge(id, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	v.AcknowledgedBy = userID
+	return nil
+}

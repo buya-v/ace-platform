@@ -343,6 +343,30 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/clients", secHandler)
 	rt.Handle("GET", "/api/v1/securities/clients/{id}", secHandler)
 	rt.Handle("DELETE", "/api/v1/securities/clients/{id}", secHandler)
+
+	// Sprint 8 — Indices
+	rt.Handle("GET", "/api/v1/securities/indices", secHandler)
+	rt.Handle("POST", "/api/v1/securities/indices", secHandler)
+	rt.Handle("GET", "/api/v1/securities/indices/{id}", secHandler)
+	rt.Handle("POST", "/api/v1/securities/indices/{id}/calculate", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/indices/{id}", secHandler)
+
+	// Sprint 8 — Entity permissions
+	rt.Handle("GET", "/api/v1/securities/entity-permissions", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/entity-permissions", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/entity-permissions/{roleId}/{entityType}", secHandler)
+
+	// Sprint 8 — Instrument folders
+	rt.Handle("GET", "/api/v1/securities/folders", secHandler)
+	rt.Handle("POST", "/api/v1/securities/folders", secHandler)
+	rt.Handle("GET", "/api/v1/securities/folders/{id}", secHandler)
+	rt.Handle("GET", "/api/v1/securities/folders/{id}/children", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/folders/{id}", secHandler)
+
+	// Sprint 8 — Warnings
+	rt.Handle("GET", "/api/v1/securities/warnings", secHandler)
+	rt.Handle("POST", "/api/v1/securities/warnings/{id}/acknowledge", secHandler)
+
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091

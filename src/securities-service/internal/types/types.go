@@ -84,6 +84,7 @@ type Instrument struct {
 	DeletionStatus      string        `json:"deletion_status,omitempty"`
 	DeletionDate        string        `json:"deletion_date,omitempty"`
 	ShortSellRestricted bool          `json:"short_sell_restricted,omitempty"`
+	FolderID            string        `json:"folder_id,omitempty"` // Sprint 8: instrument folder
 	CreatedAt           string        `json:"created_at"`
 	UpdatedAt           string        `json:"updated_at"`
 }
@@ -1159,4 +1160,65 @@ type Client struct {
 	Nationality string     `json:"nationality"`
 	ClientType  ClientType `json:"client_type"`
 	CreatedAt   string     `json:"created_at"`
+}
+
+// ── Sprint 8 — Part A: Index ─────────────────────────────────────────────────
+
+// Index represents a market index calculated from a weighted basket of instruments.
+type Index struct {
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	InstrumentWeights  map[string]float64 `json:"instrument_weights"`
+	BaseValue          float64            `json:"base_value"`
+	CurrentValue       float64            `json:"current_value"`
+	ChangePercent      float64            `json:"change_percent"`
+	LastCalculatedAt   string             `json:"last_calculated_at"`
+	CreatedAt          string             `json:"created_at"`
+}
+
+// ── Sprint 8 — Part B: Entity Permissions ────────────────────────────────────
+
+// EntityPermission defines what a role is allowed to do on a given entity type.
+type EntityPermission struct {
+	ID           string `json:"id"`
+	RoleID       string `json:"role_id"`
+	EntityType   string `json:"entity_type"`
+	AllowCreate  bool   `json:"allow_create"`
+	AllowView    bool   `json:"allow_view"`
+	AllowEdit    bool   `json:"allow_edit"`
+	AllowDelete  bool   `json:"allow_delete"`
+	AllowApprove bool   `json:"allow_approve"`
+}
+
+// ── Sprint 8 — Part C: Instrument Folders ────────────────────────────────────
+
+// Folder represents a hierarchical grouping node for instruments.
+type Folder struct {
+	ID        string `json:"id"`
+	ParentID  string `json:"parent_id,omitempty"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
+// ── Sprint 8 — Part D: Warnings ──────────────────────────────────────────────
+
+// Warning severity and type constants.
+const (
+	WarnDeleteActive         = "WARN_DELETE_ACTIVE"
+	WarnHaltDuringAuction    = "WARN_HALT_DURING_AUCTION"
+	WarnLargeOrder           = "WARN_LARGE_ORDER"
+	WarnCircuitBreakerChange = "WARN_CIRCUIT_BREAKER_CHANGE"
+	WarnRoleDeletion         = "WARN_ROLE_DELETION"
+)
+
+// Warning represents an operator-visible advisory raised by the system.
+type Warning struct {
+	ID             string `json:"id"`
+	WarningType    string `json:"warning_type"`
+	EntityType     string `json:"entity_type"`
+	EntityID       string `json:"entity_id"`
+	Message        string `json:"message"`
+	Severity       string `json:"severity"`
+	AcknowledgedBy string `json:"acknowledged_by,omitempty"`
+	CreatedAt      string `json:"created_at"`
 }

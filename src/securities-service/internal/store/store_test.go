@@ -5853,3 +5853,443 @@ func TestClientStore_Create_Get_ListByFirm_Delete(t *testing.T) {
 		}
 	})
 }
+
+// ============================================================
+// Sprint 8 — IndexStore tests
+// ============================================================
+
+func newIndex(id, name string, baseValue float64) *types.Index {
+	return &types.Index{
+		ID:                id,
+		Name:              name,
+		InstrumentWeights: map[string]float64{"inst-1": 0.5, "inst-2": 0.5},
+		BaseValue:         baseValue,
+		CurrentValue:      baseValue,
+		CreatedAt:         "2026-04-26T00:00:00Z",
+	}
+}
+
+func TestIndexStore_CRUD(t *testing.T) {
+	s := store.NewInMemoryIndexStore()
+
+	t.Run("Create and Get", func(t *testing.T) {
+		idx := newIndex("idx-1", "MSE Top 20", 1000.0)
+		if err := s.Create(idx); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		got, err := s.Get("idx-1")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.Name != "MSE Top 20" {
+			t.Errorf("Name: want MSE Top 20, got %s", got.Name)
+		}
+		if got.BaseValue != 1000.0 {
+			t.Errorf("BaseValue: want 1000.0, got %f", got.BaseValue)
+		}
+	})
+
+	t.Run("Create duplicate returns error", func(t *testing.T) {
+		idx := newIndex("idx-dup", "Dup Index", 500.0)
+		if err := s.Create(idx); err != nil {
+			t.Fatalf("first Create: %v", err)
+		}
+		if err := s.Create(idx); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-such-idx")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("List returns all indices", func(t *testing.T) {
+		fresh := store.NewInMemoryIndexStore()
+		fresh.Create(newIndex("idx-a", "Alpha", 100.0))
+		fresh.Create(newIndex("idx-b", "Beta", 200.0))
+		all, err := fresh.List()
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(all) != 2 {
+			t.Errorf("expected 2 indices, got %d", len(all))
+		}
+	})
+
+	t.Run("Update existing", func(t *testing.T) {
+		fresh := store.NewInMemoryIndexStore()
+		idx := newIndex("idx-upd", "Before", 300.0)
+		fresh.Create(idx)
+		idx.Name = "After"
+		idx.CurrentValue = 350.0
+		if err := fresh.Update(idx); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got, _ := fresh.Get("idx-upd")
+		if got.Name != "After" {
+			t.Errorf("Name after update: want After, got %s", got.Name)
+		}
+		if got.CurrentValue != 350.0 {
+			t.Errorf("CurrentValue after update: want 350.0, got %f", got.CurrentValue)
+		}
+	})
+
+	t.Run("Update non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Update(&types.Index{ID: "no-such-idx"}); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Delete existing", func(t *testing.T) {
+		fresh := store.NewInMemoryIndexStore()
+		fresh.Create(newIndex("idx-del", "To Delete", 100.0))
+		if err := fresh.Delete("idx-del"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := fresh.Get("idx-del")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-such-idx"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Get returns copy not pointer", func(t *testing.T) {
+		fresh := store.NewInMemoryIndexStore()
+		fresh.Create(newIndex("idx-copy", "Copy Test", 100.0))
+		got, _ := fresh.Get("idx-copy")
+		got.Name = "MUTATED"
+		got2, _ := fresh.Get("idx-copy")
+		if got2.Name == "MUTATED" {
+			t.Error("Get returned internal reference instead of copy")
+		}
+	})
+}
+
+// ============================================================
+// Sprint 8 — EntityPermissionStore tests
+// ============================================================
+
+func newEntityPermission(id, roleID, entityType string, allowCreate, allowView bool) *types.EntityPermission {
+	return &types.EntityPermission{
+		ID:          id,
+		RoleID:      roleID,
+		EntityType:  entityType,
+		AllowCreate: allowCreate,
+		AllowView:   allowView,
+		AllowEdit:   true,
+	}
+}
+
+func TestEntityPermissionStore_SetGet_ListByRole(t *testing.T) {
+	s := store.NewInMemoryEntityPermissionStore()
+
+	t.Run("Set and Get", func(t *testing.T) {
+		ep := newEntityPermission("ep-1", "role-admin", "INSTRUMENT", true, true)
+		if err := s.Set(ep); err != nil {
+			t.Fatalf("Set: %v", err)
+		}
+		got, err := s.Get("role-admin", "INSTRUMENT")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.RoleID != "role-admin" {
+			t.Errorf("RoleID: want role-admin, got %s", got.RoleID)
+		}
+		if got.EntityType != "INSTRUMENT" {
+			t.Errorf("EntityType: want INSTRUMENT, got %s", got.EntityType)
+		}
+		if !got.AllowCreate {
+			t.Error("AllowCreate should be true")
+		}
+	})
+
+	t.Run("Set overwrites existing", func(t *testing.T) {
+		ep1 := newEntityPermission("ep-ow1", "role-trader", "ORDER", true, true)
+		s.Set(ep1)
+		ep2 := newEntityPermission("ep-ow2", "role-trader", "ORDER", false, true)
+		s.Set(ep2)
+		got, _ := s.Get("role-trader", "ORDER")
+		if got.AllowCreate {
+			t.Error("AllowCreate should be false after overwrite")
+		}
+	})
+
+	t.Run("Get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-role", "NO_ENTITY")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("ListByRole returns correct entries", func(t *testing.T) {
+		fresh := store.NewInMemoryEntityPermissionStore()
+		fresh.Set(newEntityPermission("ep-r1-a", "role-x", "INSTRUMENT", true, true))
+		fresh.Set(newEntityPermission("ep-r1-b", "role-x", "ORDER", false, true))
+		fresh.Set(newEntityPermission("ep-r2-a", "role-y", "INSTRUMENT", true, false))
+
+		listX, err := fresh.ListByRole("role-x")
+		if err != nil {
+			t.Fatalf("ListByRole: %v", err)
+		}
+		if len(listX) != 2 {
+			t.Errorf("expected 2 entries for role-x, got %d", len(listX))
+		}
+
+		listY, err := fresh.ListByRole("role-y")
+		if err != nil {
+			t.Fatalf("ListByRole: %v", err)
+		}
+		if len(listY) != 1 {
+			t.Errorf("expected 1 entry for role-y, got %d", len(listY))
+		}
+
+		listZ, err := fresh.ListByRole("role-z")
+		if err != nil {
+			t.Fatalf("ListByRole for empty role: %v", err)
+		}
+		if len(listZ) != 0 {
+			t.Errorf("expected 0 entries for role-z, got %d", len(listZ))
+		}
+	})
+
+	t.Run("Delete existing", func(t *testing.T) {
+		fresh := store.NewInMemoryEntityPermissionStore()
+		fresh.Set(newEntityPermission("ep-del", "role-del", "TRADE", true, true))
+		if err := fresh.Delete("role-del", "TRADE"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := fresh.Get("role-del", "TRADE")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-role", "NO_ENTITY"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// ============================================================
+// Sprint 8 — FolderStore tests
+// ============================================================
+
+func newFolder(id, parentID, name string) *types.Folder {
+	return &types.Folder{
+		ID:        id,
+		ParentID:  parentID,
+		Name:      name,
+		CreatedAt: "2026-04-26T00:00:00Z",
+	}
+}
+
+func TestFolderStore_Create_ListChildren(t *testing.T) {
+	s := store.NewInMemoryFolderStore()
+
+	t.Run("Create and Get", func(t *testing.T) {
+		folder := newFolder("fld-1", "", "Root Folder")
+		if err := s.Create(folder); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		got, err := s.Get("fld-1")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.Name != "Root Folder" {
+			t.Errorf("Name: want 'Root Folder', got %s", got.Name)
+		}
+		if got.ParentID != "" {
+			t.Errorf("ParentID: want empty, got %s", got.ParentID)
+		}
+	})
+
+	t.Run("Create duplicate returns error", func(t *testing.T) {
+		s2 := store.NewInMemoryFolderStore()
+		f := newFolder("fld-dup", "", "Dup")
+		s2.Create(f)
+		if err := s2.Create(f); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-such-fld")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("List returns all folders", func(t *testing.T) {
+		fresh := store.NewInMemoryFolderStore()
+		fresh.Create(newFolder("fld-a", "", "A"))
+		fresh.Create(newFolder("fld-b", "fld-a", "B"))
+		fresh.Create(newFolder("fld-c", "fld-a", "C"))
+		all, err := fresh.List()
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(all) != 3 {
+			t.Errorf("expected 3 folders, got %d", len(all))
+		}
+	})
+
+	t.Run("ListChildren returns only direct children", func(t *testing.T) {
+		fresh := store.NewInMemoryFolderStore()
+		fresh.Create(newFolder("root", "", "Root"))
+		fresh.Create(newFolder("child-1", "root", "Child 1"))
+		fresh.Create(newFolder("child-2", "root", "Child 2"))
+		fresh.Create(newFolder("grandchild", "child-1", "Grandchild"))
+
+		children, err := fresh.ListChildren("root")
+		if err != nil {
+			t.Fatalf("ListChildren: %v", err)
+		}
+		if len(children) != 2 {
+			t.Errorf("expected 2 direct children of root, got %d", len(children))
+		}
+
+		grandchildren, err := fresh.ListChildren("child-1")
+		if err != nil {
+			t.Fatalf("ListChildren grandchild: %v", err)
+		}
+		if len(grandchildren) != 1 {
+			t.Errorf("expected 1 grandchild, got %d", len(grandchildren))
+		}
+
+		none, err := fresh.ListChildren("no-such-parent")
+		if err != nil {
+			t.Fatalf("ListChildren empty parent: %v", err)
+		}
+		if len(none) != 0 {
+			t.Errorf("expected 0 children for unknown parent, got %d", len(none))
+		}
+	})
+
+	t.Run("Delete existing", func(t *testing.T) {
+		fresh := store.NewInMemoryFolderStore()
+		fresh.Create(newFolder("fld-del", "", "To Delete"))
+		if err := fresh.Delete("fld-del"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := fresh.Get("fld-del")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-such-fld"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Get returns copy not pointer", func(t *testing.T) {
+		fresh := store.NewInMemoryFolderStore()
+		fresh.Create(newFolder("fld-copy", "", "Copy Test"))
+		got, _ := fresh.Get("fld-copy")
+		got.Name = "MUTATED"
+		got2, _ := fresh.Get("fld-copy")
+		if got2.Name == "MUTATED" {
+			t.Error("Get returned internal reference instead of copy")
+		}
+	})
+}
+
+// ============================================================
+// Sprint 8 — WarningStore tests
+// ============================================================
+
+func newWarning(id, warnType, entityType, entityID, message string) *types.Warning {
+	return &types.Warning{
+		ID:          id,
+		WarningType: warnType,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Message:     message,
+		Severity:    "HIGH",
+		CreatedAt:   "2026-04-26T00:00:00Z",
+	}
+}
+
+func TestWarningStore_Create_List_Acknowledge(t *testing.T) {
+	t.Run("Create and List unacknowledged", func(t *testing.T) {
+		s := store.NewInMemoryWarningStore()
+		s.Create(newWarning("warn-1", types.WarnDeleteActive, "INSTRUMENT", "inst-1", "Active instrument flagged for deletion"))
+		s.Create(newWarning("warn-2", types.WarnLargeOrder, "ORDER", "ord-1", "Large order detected"))
+
+		unacked, err := s.List(false)
+		if err != nil {
+			t.Fatalf("List(false): %v", err)
+		}
+		if len(unacked) != 2 {
+			t.Errorf("expected 2 unacknowledged warnings, got %d", len(unacked))
+		}
+
+		acked, err := s.List(true)
+		if err != nil {
+			t.Fatalf("List(true): %v", err)
+		}
+		if len(acked) != 0 {
+			t.Errorf("expected 0 acknowledged warnings, got %d", len(acked))
+		}
+	})
+
+	t.Run("Acknowledge moves warning to acknowledged list", func(t *testing.T) {
+		s := store.NewInMemoryWarningStore()
+		s.Create(newWarning("warn-ack-1", types.WarnHaltDuringAuction, "MARKET", "mkt-1", "Halt during auction"))
+		s.Create(newWarning("warn-ack-2", types.WarnRoleDeletion, "ROLE", "role-1", "Role deletion pending"))
+
+		if err := s.Acknowledge("warn-ack-1", "operator-007"); err != nil {
+			t.Fatalf("Acknowledge: %v", err)
+		}
+
+		unacked, _ := s.List(false)
+		if len(unacked) != 1 {
+			t.Errorf("expected 1 unacknowledged after ack, got %d", len(unacked))
+		}
+
+		acked, _ := s.List(true)
+		if len(acked) != 1 {
+			t.Errorf("expected 1 acknowledged after ack, got %d", len(acked))
+		}
+		if acked[0].AcknowledgedBy != "operator-007" {
+			t.Errorf("AcknowledgedBy: want operator-007, got %s", acked[0].AcknowledgedBy)
+		}
+	})
+
+	t.Run("Acknowledge non-existent returns ErrNotFound", func(t *testing.T) {
+		s := store.NewInMemoryWarningStore()
+		if err := s.Acknowledge("no-such-warn", "user"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Create duplicate returns error", func(t *testing.T) {
+		s := store.NewInMemoryWarningStore()
+		w := newWarning("warn-dup", types.WarnCircuitBreakerChange, "INSTRUMENT", "inst-2", "CB changed")
+		s.Create(w)
+		if err := s.Create(w); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Empty store List returns empty slice", func(t *testing.T) {
+		s := store.NewInMemoryWarningStore()
+		all, err := s.List(false)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(all) != 0 {
+			t.Errorf("expected empty list from empty store, got %d", len(all))
+		}
+	})
+}

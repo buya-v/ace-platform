@@ -197,6 +197,12 @@ func main() {
 	// Part D — Client entity store.
 	srv.SetClientStore(store.NewInMemoryClientStore())
 
+	// Sprint 8 — Index, entity permission, folder, and warning stores.
+	srv.SetIndexStore(store.NewInMemoryIndexStore())
+	srv.SetEntityPermissionStore(store.NewInMemoryEntityPermissionStore())
+	srv.SetFolderStore(store.NewInMemoryFolderStore())
+	srv.SetWarningStore(store.NewInMemoryWarningStore())
+
 	// Start health server on port 9089.
 	go func() {
 		logger.Info("health server starting",
