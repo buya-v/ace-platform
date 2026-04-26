@@ -140,6 +140,7 @@ const instrumentListing: Section = {
       headers: (state) => tenantHeader(state, 'admin'),
       body: () => ({
         ticker: 'APU',
+        isin: 'MN0000100010',
         name: 'APU JSC',
         asset_class: 'EQUITY',
         security_type: 'COMMON',
@@ -164,6 +165,7 @@ const instrumentListing: Section = {
       headers: (state) => tenantHeader(state, 'admin'),
       body: () => ({
         ticker: 'GOV',
+        isin: 'MN0000100020',
         name: 'Govisumber Mining LLC',
         asset_class: 'EQUITY',
         security_type: 'COMMON',
