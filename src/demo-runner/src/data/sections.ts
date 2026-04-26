@@ -146,6 +146,7 @@ const instrumentListing: Section = {
         tick_size: 1,
         currency: 'MNT',
         exchange_code: 'MSE',
+        listing_date: new Date().toISOString().split('T')[0],
       }),
       validateResponse: okValidator,
       extractState: (body) => {
@@ -168,6 +169,7 @@ const instrumentListing: Section = {
         tick_size: 50,
         currency: 'MNT',
         exchange_code: 'MSE',
+        listing_date: new Date().toISOString().split('T')[0],
       }),
       validateResponse: okValidator,
       extractState: (body) => {
