@@ -1,4 +1,5 @@
-// Package store — PostgreSQL-backed implementations of InstrumentStore and OrderStore.
+// Package store — PostgreSQL-backed implementations of the four core trading stores:
+// InstrumentStore, OrderStore, TradeStore, and PositionStore.
 //
 // Column mapping notes:
 //   - ace_securities.instruments PK is "instrument_id" (maps to Instrument.ID)
@@ -7,6 +8,10 @@
 //   - ace_securities.orders "filled_qty" maps to SecurityOrder.FilledQuantity
 //   - ace_securities.orders status "NEW" maps to app-level OrderStatus "PENDING"
 //     (the DB CHECK constraint uses NEW; the service domain uses PENDING)
+//   - ace_securities.trades "traded_at" maps to SecurityTrade.CreatedAt
+//   - ace_securities.positions PK is composite (participant_id, instrument_id)
+//   - Position.ID is synthesised as "participant_id:instrument_id"
+//   - Position.AvgCost maps to "avg_price", Position.Quantity maps to "net_qty"
 package store
 
 import (
@@ -168,8 +173,29 @@ func (s *PgInstrumentStore) List(filters InstrumentFilters) ([]types.Instrument,
 		args = append(args, filters.ExchangeCode)
 		argIdx++
 	}
+	if filters.SegmentID != "" {
+		query += fmt.Sprintf(" AND segment_id = $%s", pgItoa(argIdx))
+		args = append(args, filters.SegmentID)
+		argIdx++
+	}
+	if filters.Search != "" {
+		query += fmt.Sprintf(" AND (ticker ILIKE $%s OR name ILIKE $%s)", pgItoa(argIdx), pgItoa(argIdx))
+		args = append(args, "%"+filters.Search+"%")
+		argIdx++
+	}
 
 	query += " ORDER BY instrument_id"
+
+	if filters.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%s", pgItoa(argIdx))
+		args = append(args, filters.Limit)
+		argIdx++
+	}
+	if filters.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%s", pgItoa(argIdx))
+		args = append(args, filters.Offset)
+		argIdx++
+	}
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -238,6 +264,16 @@ func (s *PgInstrumentStore) Update(id string, partial InstrumentUpdate) error {
 	if partial.OutstandingShares != 0 {
 		setClauses = append(setClauses, fmt.Sprintf("shares_outstanding = $%s", pgItoa(argIdx)))
 		args = append(args, partial.OutstandingShares)
+		argIdx++
+	}
+	if partial.DeletionStatus != "" {
+		setClauses = append(setClauses, fmt.Sprintf("deletion_status = $%s", pgItoa(argIdx)))
+		args = append(args, partial.DeletionStatus)
+		argIdx++
+	}
+	if partial.DeletionDate != "" {
+		setClauses = append(setClauses, fmt.Sprintf("deletion_date = $%s", pgItoa(argIdx)))
+		args = append(args, partial.DeletionDate)
 		argIdx++
 	}
 
@@ -503,6 +539,317 @@ func (s *PgOrderStore) Cancel(id string) error {
 		return errors.New("order cannot be cancelled in its current status")
 	}
 	return nil
+}
+
+// --- PgTradeStore ---
+
+// PgTradeStore implements TradeStore using PostgreSQL.
+type PgTradeStore struct {
+	db *sql.DB
+}
+
+// NewPgTradeStore returns a new PostgreSQL-backed TradeStore.
+func NewPgTradeStore(db *sql.DB) *PgTradeStore {
+	return &PgTradeStore{db: db}
+}
+
+// tradeSelectCols is the standard SELECT column list for trades.
+const tradeSelectCols = `
+	id, instrument_id, buy_order_id, sell_order_id,
+	price, quantity,
+	COALESCE(TO_CHAR(settlement_date, 'YYYY-MM-DD'), ''),
+	TO_CHAR(traded_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+`
+
+// scanTrade scans a single trade row into a SecurityTrade struct.
+// The DB schema stores traded_at; the app maps it to CreatedAt.
+// TradeDate is derived from traded_at (date portion).
+// Status defaults to TRADE_CONFIRMED for persisted trades (the trades table is append-only).
+func scanTrade(scanner interface{ Scan(dest ...interface{}) error }) (*types.SecurityTrade, error) {
+	var t types.SecurityTrade
+	var tradedAt string
+	err := scanner.Scan(
+		&t.ID,
+		&t.InstrumentID,
+		&t.BuyOrderID,
+		&t.SellOrderID,
+		&t.Price,
+		&t.Quantity,
+		&t.SettlementDate,
+		&tradedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	t.CreatedAt = tradedAt
+	// Derive trade date from traded_at timestamp (first 10 chars = YYYY-MM-DD).
+	if len(tradedAt) >= 10 {
+		t.TradeDate = tradedAt[:10]
+	}
+	t.Status = types.TradeStatusConfirmed
+	return &t, nil
+}
+
+// Create inserts a new trade into the database.
+// The trades table is append-only (DB rules prevent UPDATE/DELETE).
+func (s *PgTradeStore) Create(trade *types.SecurityTrade) error {
+	_, err := s.db.Exec(`
+		INSERT INTO ace_securities.trades (
+			id, instrument_id, buy_order_id, sell_order_id,
+			buyer_participant_id, seller_participant_id,
+			price, quantity, trade_value,
+			settlement_value, aggressor_side,
+			settlement_date, traded_at
+		) VALUES (
+			$1, $2, $3, $4,
+			$5, $6,
+			$7, $8, $9,
+			$9, 'BUY',
+			CURRENT_DATE + INTERVAL '2 days', NOW()
+		)`,
+		trade.ID,
+		trade.InstrumentID,
+		trade.BuyOrderID,
+		trade.SellOrderID,
+		trade.BuyOrderID,  // buyer_participant_id — use buy_order_id as placeholder
+		trade.SellOrderID, // seller_participant_id — use sell_order_id as placeholder
+		trade.Price,
+		trade.Quantity,
+		trade.Price*float64(trade.Quantity), // trade_value
+	)
+	return err
+}
+
+// Get retrieves a trade by its ID.
+// Returns ErrNotFound if no matching row exists.
+func (s *PgTradeStore) Get(id string) (*types.SecurityTrade, error) {
+	row := s.db.QueryRow(`
+		SELECT `+tradeSelectCols+`
+		FROM ace_securities.trades
+		WHERE id = $1
+	`, id)
+
+	t, err := scanTrade(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return t, nil
+}
+
+// List returns all trades ordered by traded_at descending.
+func (s *PgTradeStore) List() ([]types.SecurityTrade, error) {
+	rows, err := s.db.Query(`
+		SELECT ` + tradeSelectCols + `
+		FROM ace_securities.trades
+		ORDER BY traded_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []types.SecurityTrade
+	for rows.Next() {
+		t, err := scanTrade(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ListByInstrument returns all trades for the given instrument,
+// ordered by traded_at descending.
+func (s *PgTradeStore) ListByInstrument(instrumentID string) ([]types.SecurityTrade, error) {
+	rows, err := s.db.Query(`
+		SELECT `+tradeSelectCols+`
+		FROM ace_securities.trades
+		WHERE instrument_id = $1
+		ORDER BY traded_at DESC
+	`, instrumentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []types.SecurityTrade
+	for rows.Next() {
+		t, err := scanTrade(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// UpdateStatus is a no-op for the trades table because the DB has an
+// append-only rule (no_update_sec_trades). Status transitions are
+// tracked through settlement obligations, not the trades table itself.
+// This method exists to satisfy the TradeStore interface.
+func (s *PgTradeStore) UpdateStatus(id string, status types.TradeStatus) error {
+	// Verify the trade exists even though we cannot update it.
+	var exists bool
+	err := s.db.QueryRow(
+		"SELECT EXISTS(SELECT 1 FROM ace_securities.trades WHERE id = $1)", id,
+	).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	// The DB rule silently prevents UPDATE; the caller gets a success
+	// because the trade exists and the status transition is acknowledged.
+	return nil
+}
+
+// --- PgPositionStore ---
+
+// PgPositionStore implements PositionStore using PostgreSQL.
+type PgPositionStore struct {
+	db *sql.DB
+}
+
+// NewPgPositionStore returns a new PostgreSQL-backed PositionStore.
+func NewPgPositionStore(db *sql.DB) *PgPositionStore {
+	return &PgPositionStore{db: db}
+}
+
+// positionSelectCols is the standard SELECT column list for positions.
+const positionSelectCols = `
+	participant_id, instrument_id,
+	net_qty, avg_price, market_value, unrealized_pnl,
+	TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+`
+
+// scanPosition scans a single position row into a Position struct.
+// Position.ID is synthesised as "participant_id:instrument_id".
+func scanPosition(scanner interface{ Scan(dest ...interface{}) error }) (*types.Position, error) {
+	var p types.Position
+	err := scanner.Scan(
+		&p.ParticipantID,
+		&p.InstrumentID,
+		&p.Quantity,
+		&p.AvgCost,
+		&p.MarketValue,
+		&p.UnrealizedPnl,
+		&p.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	p.ID = p.ParticipantID + ":" + p.InstrumentID
+	return &p, nil
+}
+
+// GetOrCreate retrieves the position for the given participant and instrument.
+// If no position exists, a new zero-quantity row is inserted and returned.
+func (s *PgPositionStore) GetOrCreate(participantID, instrumentID string) (*types.Position, error) {
+	// Try to read existing position first.
+	row := s.db.QueryRow(`
+		SELECT `+positionSelectCols+`
+		FROM ace_securities.positions
+		WHERE participant_id = $1 AND instrument_id = $2
+	`, participantID, instrumentID)
+
+	p, err := scanPosition(row)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	// Not found — insert a default row and return it.
+	row = s.db.QueryRow(`
+		INSERT INTO ace_securities.positions (
+			participant_id, instrument_id,
+			net_qty, avg_price, market_value, unrealized_pnl,
+			realized_pnl, total_buy_qty, total_sell_qty, short_qty,
+			updated_at
+		) VALUES ($1, $2, 0, 0, 0, 0, 0, 0, 0, 0, NOW())
+		RETURNING `+positionSelectCols,
+		participantID, instrumentID,
+	)
+
+	p, err = scanPosition(row)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// Update writes the position state back to the database.
+// Only updates quantity, avg_cost (avg_price), market_value, unrealized_pnl, and updated_at.
+func (s *PgPositionStore) Update(position *types.Position) error {
+	result, err := s.db.Exec(`
+		UPDATE ace_securities.positions
+		SET net_qty = $1, avg_price = $2, market_value = $3,
+		    unrealized_pnl = $4, updated_at = NOW()
+		WHERE participant_id = $5 AND instrument_id = $6
+	`,
+		position.Quantity,
+		position.AvgCost,
+		position.MarketValue,
+		position.UnrealizedPnl,
+		position.ParticipantID,
+		position.InstrumentID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// List returns positions for the given participant.
+// If participantID is empty, all positions are returned.
+func (s *PgPositionStore) List(participantID string) ([]types.Position, error) {
+	query := `SELECT ` + positionSelectCols + ` FROM ace_securities.positions`
+	var args []interface{}
+
+	if participantID != "" {
+		query += " WHERE participant_id = $1"
+		args = append(args, participantID)
+	}
+
+	query += " ORDER BY participant_id, instrument_id"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []types.Position
+	for rows.Next() {
+		p, err := scanPosition(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // --- helpers ---

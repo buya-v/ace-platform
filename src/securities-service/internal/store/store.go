@@ -19,6 +19,10 @@ type InstrumentFilters struct {
 	AssetClass    types.AssetClass
 	TradingStatus types.TradingStatus
 	ExchangeCode  string
+	SegmentID     string
+	Search        string // ILIKE on ticker and name
+	Limit         int
+	Offset        int
 }
 
 // OrderFilters carries optional filter parameters for listing orders.

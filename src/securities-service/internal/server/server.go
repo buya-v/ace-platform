@@ -2,6 +2,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -80,6 +81,7 @@ type Server struct {
 	sessionManager       *engine.SessionManager
 	settlementEngine     *settlement.SettlementEngine
 	producer             kafka.Producer
+	db                   *sql.DB
 	ready                atomic.Int32
 }
 
@@ -198,6 +200,12 @@ func (s *Server) SetReady() {
 // isReady reports whether the server has been marked ready.
 func (s *Server) isReady() bool {
 	return s.ready.Load() == 1
+}
+
+// SetDB wires an optional *sql.DB into the server so the health endpoint
+// can include a live database connectivity check.
+func (s *Server) SetDB(db *sql.DB) {
+	s.db = db
 }
 
 // StartHealthServer starts the health/readiness HTTP server on HealthPort.
@@ -392,10 +400,29 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	dbStatus := "ok"
+	if s.db != nil {
+		if err := s.db.Ping(); err != nil {
+			dbStatus = "unreachable"
+		}
+	}
+
+	if dbStatus != "ok" && s.db != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":   "degraded",
+			"service":  "securities-service",
+			"database": dbStatus,
+		})
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status":  "ok",
-		"service": "securities-service",
+		"status":   "ok",
+		"service":  "securities-service",
+		"database": dbStatus,
 	})
 }
 

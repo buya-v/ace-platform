@@ -8,8 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-
+	"github.com/garudax-platform/securities-service/internal/db"
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/kafka"
 	"github.com/garudax-platform/securities-service/internal/middleware"
@@ -46,20 +45,18 @@ func main() {
 
 	var instrumentStore store.InstrumentStore
 	var orderStore store.OrderStore
+	var pool *sql.DB
 
 	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		db, err := sql.Open("pgx", databaseURL)
+		var err error
+		pool, err = db.NewPool(databaseURL)
 		if err != nil {
-			logger.Error("failed to open database", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-		if err := db.Ping(); err != nil {
-			logger.Error("database ping failed", slog.String("error", err.Error()))
+			logger.Error("failed to connect to database", slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 		logger.Info("connected to PostgreSQL database")
-		instrumentStore = store.NewPgInstrumentStore(db)
-		orderStore = store.NewPgOrderStore(db)
+		instrumentStore = store.NewPgInstrumentStore(pool)
+		orderStore = store.NewPgOrderStore(pool)
 	} else {
 		logger.Info("DATABASE_URL not set, using in-memory stores")
 		instrumentStore = store.NewInMemoryInstrumentStore()
@@ -174,6 +171,9 @@ func main() {
 		cfg,
 	)
 
+	// Wire DB into server for health checks (nil-safe; no-op when in-memory mode).
+	srv.SetDB(pool)
+
 	// Start health server on port 9089.
 	go func() {
 		logger.Info("health server starting",
@@ -210,6 +210,15 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
 	logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
+
+	// Gracefully close the database pool if one was opened.
+	if pool != nil {
+		if err := pool.Close(); err != nil {
+			logger.Error("error closing database pool", slog.String("error", err.Error()))
+		} else {
+			logger.Info("database pool closed")
+		}
+	}
 }
 
 // parsePort parses a string port number into an int.
