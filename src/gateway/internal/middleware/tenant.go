@@ -42,6 +42,7 @@ var tenantBypassPrefixes = []string{
 	"/api/v1/risk-scores/",
 	"/api/v1/compliance/",
 	"/api/v1/ws/",
+	"/api/v1/securities/demo/",
 }
 
 // tenantErrorBody is the JSON error shape for tenant errors.
