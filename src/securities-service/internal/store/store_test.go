@@ -5092,3 +5092,238 @@ func TestTradingParamSetStore_Delete(t *testing.T) {
 		t.Errorf("expected ErrNotFound on second Delete, got %v", err)
 	}
 }
+
+// ============================================================
+// TradingCycleStore tests
+// ============================================================
+
+func TestTradingCycleStore_Create_ListByMarket(t *testing.T) {
+	s := store.NewInMemoryTradingCycleStore()
+
+	// Constructor pre-seeds two MSE cycles: STANDARD and OFF_BOOK.
+	t.Run("seeded STANDARD exists", func(t *testing.T) {
+		c, err := s.Get("cycle-mse-standard")
+		if err != nil {
+			t.Fatalf("Get cycle-mse-standard: %v", err)
+		}
+		if c.Name != "STANDARD" {
+			t.Errorf("expected Name STANDARD, got %q", c.Name)
+		}
+		if !c.IsDefault {
+			t.Error("expected IsDefault=true for STANDARD cycle")
+		}
+	})
+
+	t.Run("seeded OFF_BOOK exists", func(t *testing.T) {
+		c, err := s.Get("cycle-mse-off-book")
+		if err != nil {
+			t.Fatalf("Get cycle-mse-off-book: %v", err)
+		}
+		if c.Name != "OFF_BOOK" {
+			t.Errorf("expected Name OFF_BOOK, got %q", c.Name)
+		}
+		if c.IsDefault {
+			t.Error("expected IsDefault=false for OFF_BOOK cycle")
+		}
+	})
+
+	t.Run("ListByMarket returns both MSE cycles", func(t *testing.T) {
+		cycles, err := s.ListByMarket("MSE")
+		if err != nil {
+			t.Fatalf("ListByMarket MSE: %v", err)
+		}
+		if len(cycles) != 2 {
+			t.Errorf("expected 2 MSE cycles, got %d", len(cycles))
+		}
+	})
+
+	t.Run("ListByMarket filters other market", func(t *testing.T) {
+		cycles, err := s.ListByMarket("ACE")
+		if err != nil {
+			t.Fatalf("ListByMarket ACE: %v", err)
+		}
+		if len(cycles) != 0 {
+			t.Errorf("expected 0 ACE cycles, got %d", len(cycles))
+		}
+	})
+
+	t.Run("ListByMarket empty string returns all", func(t *testing.T) {
+		cycles, err := s.ListByMarket("")
+		if err != nil {
+			t.Fatalf("ListByMarket all: %v", err)
+		}
+		if len(cycles) < 2 {
+			t.Errorf("expected at least 2 cycles, got %d", len(cycles))
+		}
+	})
+
+	t.Run("Create new cycle then list", func(t *testing.T) {
+		cycle := &types.TradingCycle{
+			ID:              "cycle-ace-standard",
+			MarketID:        "ACE",
+			Name:            "ACE_STANDARD",
+			SessionSequence: []string{"PRE_OPEN", "CONTINUOUS", "CLOSED"},
+			IsDefault:       true,
+			CreatedAt:       "2026-01-01T00:00:00Z",
+		}
+		if err := s.Create(cycle); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		got, err := s.Get("cycle-ace-standard")
+		if err != nil {
+			t.Fatalf("Get after Create: %v", err)
+		}
+		if got.MarketID != "ACE" {
+			t.Errorf("MarketID: want ACE, got %q", got.MarketID)
+		}
+		if len(got.SessionSequence) != 3 {
+			t.Errorf("SessionSequence length: want 3, got %d", len(got.SessionSequence))
+		}
+
+		aceCycles, _ := s.ListByMarket("ACE")
+		if len(aceCycles) != 1 {
+			t.Errorf("expected 1 ACE cycle after create, got %d", len(aceCycles))
+		}
+	})
+
+	t.Run("Create duplicate returns error", func(t *testing.T) {
+		cycle := &types.TradingCycle{
+			ID:              "cycle-mse-standard",
+			MarketID:        "MSE",
+			Name:            "DUP",
+			SessionSequence: []string{"CLOSED"},
+		}
+		if err := s.Create(cycle); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestTradingCycleStore_Delete(t *testing.T) {
+	s := store.NewInMemoryTradingCycleStore()
+
+	// Create a cycle to delete.
+	cycle := &types.TradingCycle{
+		ID:              "cycle-del-test",
+		MarketID:        "TST",
+		Name:            "DELETE_ME",
+		SessionSequence: []string{"PRE_OPEN", "CLOSED"},
+	}
+	if err := s.Create(cycle); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Delete succeeds.
+	if err := s.Delete("cycle-del-test"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// Get returns ErrNotFound after deletion.
+	_, err := s.Get("cycle-del-test")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound after Delete, got %v", err)
+	}
+
+	// ListByMarket no longer includes it.
+	cycles, _ := s.ListByMarket("TST")
+	for _, c := range cycles {
+		if c.ID == "cycle-del-test" {
+			t.Error("deleted cycle still appears in ListByMarket")
+		}
+	}
+
+	// Delete non-existent returns ErrNotFound.
+	if err := s.Delete("cycle-del-test"); err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound on second Delete, got %v", err)
+	}
+}
+
+// ============================================================
+// ParticipantStore Lock/Unlock tests
+// ============================================================
+
+func TestParticipantStore_Lock_Unlock(t *testing.T) {
+	s := store.NewInMemoryParticipantStore()
+
+	// Create a participant to lock/unlock.
+	p := &types.ExchangeParticipant{
+		ID:          "part-lock-001",
+		FirmID:      "firm-A",
+		Name:        "Test Trader",
+		Status:      types.ParticipantActive,
+		Permissions: []string{"ORDER_CREATE"},
+	}
+	if err := s.Create(p); err != nil {
+		t.Fatalf("Create participant: %v", err)
+	}
+
+	t.Run("Lock sets PARTICIPANT_LOCKED and records reason", func(t *testing.T) {
+		reason := "compliance investigation"
+		if err := s.Lock("part-lock-001", reason); err != nil {
+			t.Fatalf("Lock: %v", err)
+		}
+
+		got, err := s.Get("part-lock-001")
+		if err != nil {
+			t.Fatalf("Get after Lock: %v", err)
+		}
+		if got.Status != types.ParticipantLocked {
+			t.Errorf("Status: want PARTICIPANT_LOCKED, got %q", got.Status)
+		}
+		if got.LockReason != reason {
+			t.Errorf("LockReason: want %q, got %q", reason, got.LockReason)
+		}
+		if got.LockedAt == "" {
+			t.Error("LockedAt should be set after Lock")
+		}
+	})
+
+	t.Run("Lock with empty reason is accepted", func(t *testing.T) {
+		if err := s.Lock("part-lock-001", ""); err != nil {
+			t.Fatalf("Lock with empty reason: %v", err)
+		}
+		got, _ := s.Get("part-lock-001")
+		if got.Status != types.ParticipantLocked {
+			t.Errorf("Status: want PARTICIPANT_LOCKED, got %q", got.Status)
+		}
+		if got.LockReason != "" {
+			t.Errorf("LockReason: want empty, got %q", got.LockReason)
+		}
+	})
+
+	t.Run("Unlock clears status and lock fields", func(t *testing.T) {
+		// Ensure locked first.
+		s.Lock("part-lock-001", "test lock")
+
+		if err := s.Unlock("part-lock-001"); err != nil {
+			t.Fatalf("Unlock: %v", err)
+		}
+
+		got, err := s.Get("part-lock-001")
+		if err != nil {
+			t.Fatalf("Get after Unlock: %v", err)
+		}
+		if got.Status != types.ParticipantActive {
+			t.Errorf("Status: want PARTICIPANT_ACTIVE, got %q", got.Status)
+		}
+		if got.LockReason != "" {
+			t.Errorf("LockReason: want empty after Unlock, got %q", got.LockReason)
+		}
+		if got.LockedAt != "" {
+			t.Errorf("LockedAt: want empty after Unlock, got %q", got.LockedAt)
+		}
+	})
+
+	t.Run("Lock on non-existent participant returns ErrNotFound", func(t *testing.T) {
+		if err := s.Lock("no-such-participant", "reason"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Unlock on non-existent participant returns ErrNotFound", func(t *testing.T) {
+		if err := s.Unlock("no-such-participant"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}

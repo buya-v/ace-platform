@@ -893,3 +893,193 @@ func TestOrderValidation_MaxOrderValue(t *testing.T) {
 		t.Errorf("expected ORDER_VALUE_EXCEEDED, got %q", errResp.Error.Code)
 	}
 }
+
+// ============================================================
+// Order query filter tests
+// ============================================================
+
+// seedOrdersForFilter sets up a server pre-seeded with BUY and SELL orders
+// at various prices so we can test rich filtering.
+// Returns (ts, buyOrderID, sellOrderID).
+func seedOrdersForFilter(t *testing.T) (*httptest.Server, string, string) {
+	t.Helper()
+	ts := newTestServer(t)
+	instrID := createInstrForOrders(t, ts, 1, 0.01)
+
+	// BUY order at price 50.00
+	buyID := submitBuyOrder(t, ts, instrID, "LIMIT", 100, 50.00, 0)
+
+	// SELL order at price 80.00
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-001",
+		"side":           "SELL",
+		"order_type":     "LIMIT",
+		"quantity":       100,
+		"price":          80.00,
+	}
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/orders", payload)
+	assertStatus(t, resp, http.StatusCreated)
+	var result map[string]interface{}
+	decodeBody(t, resp, &result)
+	order := result["order"].(map[string]interface{})
+	sellID := order["id"].(string)
+
+	return ts, buyID, sellID
+}
+
+// TestOrderQuery_FilterBySide verifies that ?side=BUY returns only buy orders.
+func TestOrderQuery_FilterBySide(t *testing.T) {
+	ts, _, _ := seedOrdersForFilter(t)
+
+	resp := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders?side=BUY", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	var body map[string]interface{}
+	decodeBody(t, resp, &body)
+
+	data := body["data"].([]interface{})
+	for _, item := range data {
+		o := item.(map[string]interface{})
+		if o["side"] != "BUY" {
+			t.Errorf("expected side=BUY for all results, got %q", o["side"])
+		}
+	}
+	// At least one BUY order should be returned.
+	if len(data) == 0 {
+		t.Error("expected at least one BUY order, got 0")
+	}
+
+	// Verify SELL orders are excluded.
+	resp2 := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders?side=SELL", nil)
+	assertStatus(t, resp2, http.StatusOK)
+
+	var body2 map[string]interface{}
+	decodeBody(t, resp2, &body2)
+	data2 := body2["data"].([]interface{})
+	for _, item := range data2 {
+		o := item.(map[string]interface{})
+		if o["side"] != "SELL" {
+			t.Errorf("expected side=SELL for all results, got %q", o["side"])
+		}
+	}
+}
+
+// TestOrderQuery_FilterByPriceRange verifies that price_min/price_max work correctly.
+func TestOrderQuery_FilterByPriceRange(t *testing.T) {
+	ts, _, _ := seedOrdersForFilter(t)
+
+	// price_min=60 should exclude BUY@50 but include SELL@80.
+	resp := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders?price_min=60", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	var body map[string]interface{}
+	decodeBody(t, resp, &body)
+	data := body["data"].([]interface{})
+	for _, item := range data {
+		o := item.(map[string]interface{})
+		price, ok := o["price"].(float64)
+		if !ok {
+			t.Fatalf("price field not a number: %v", o["price"])
+		}
+		if price < 60.0 {
+			t.Errorf("expected price >= 60, got %v", price)
+		}
+	}
+
+	// price_max=60 should include BUY@50 but exclude SELL@80.
+	resp2 := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders?price_max=60", nil)
+	assertStatus(t, resp2, http.StatusOK)
+
+	var body2 map[string]interface{}
+	decodeBody(t, resp2, &body2)
+	data2 := body2["data"].([]interface{})
+	for _, item := range data2 {
+		o := item.(map[string]interface{})
+		price, ok := o["price"].(float64)
+		if !ok {
+			t.Fatalf("price field not a number: %v", o["price"])
+		}
+		if price > 60.0 {
+			t.Errorf("expected price <= 60, got %v", price)
+		}
+	}
+
+	// price_min=40&price_max=55 should include only BUY@50.
+	resp3 := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders?price_min=40&price_max=55", nil)
+	assertStatus(t, resp3, http.StatusOK)
+
+	var body3 map[string]interface{}
+	decodeBody(t, resp3, &body3)
+	data3 := body3["data"].([]interface{})
+	for _, item := range data3 {
+		o := item.(map[string]interface{})
+		price := o["price"].(float64)
+		if price < 40.0 || price > 55.0 {
+			t.Errorf("expected price in [40,55], got %v", price)
+		}
+	}
+	if len(data3) != 1 {
+		t.Errorf("expected exactly 1 order in price range [40,55], got %d", len(data3))
+	}
+}
+
+// TestOrderQuery_FiltersApplied verifies that the filters_applied array is populated
+// correctly when query parameters are provided.
+func TestOrderQuery_FiltersApplied(t *testing.T) {
+	ts, _, _ := seedOrdersForFilter(t)
+
+	// Request with three filter params.
+	resp := doJSON(t, ts, http.MethodGet,
+		"/api/v1/securities/orders?side=BUY&price_min=10&price_max=100", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	var body map[string]interface{}
+	decodeBody(t, resp, &body)
+
+	rawFilters, ok := body["filters_applied"]
+	if !ok {
+		t.Fatal("response missing filters_applied field")
+	}
+	filtersApplied, ok := rawFilters.([]interface{})
+	if !ok {
+		t.Fatalf("filters_applied is not an array: %T", rawFilters)
+	}
+
+	filterSet := make(map[string]bool, len(filtersApplied))
+	for _, f := range filtersApplied {
+		filterSet[f.(string)] = true
+	}
+
+	for _, want := range []string{"side", "price_min", "price_max"} {
+		if !filterSet[want] {
+			t.Errorf("expected %q in filters_applied, got: %v", want, filtersApplied)
+		}
+	}
+}
+
+// TestOrderQuery_NoFilters verifies that an unfiltered request returns all orders
+// with an empty filters_applied array.
+func TestOrderQuery_NoFilters(t *testing.T) {
+	ts, _, _ := seedOrdersForFilter(t)
+
+	resp := doJSON(t, ts, http.MethodGet, "/api/v1/securities/orders", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	var body map[string]interface{}
+	decodeBody(t, resp, &body)
+
+	filtersApplied, ok := body["filters_applied"].([]interface{})
+	if !ok {
+		t.Fatalf("filters_applied is not an array: %v", body["filters_applied"])
+	}
+	if len(filtersApplied) != 0 {
+		t.Errorf("expected empty filters_applied for unfiltered request, got %v", filtersApplied)
+	}
+
+	// Both BUY and SELL should be present.
+	data := body["data"].([]interface{})
+	if len(data) < 2 {
+		t.Errorf("expected at least 2 orders (buy+sell), got %d", len(data))
+	}
+}
