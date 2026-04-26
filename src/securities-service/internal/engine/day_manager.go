@@ -27,6 +27,13 @@ func NewDayManager(sessionManager *SessionManager, instrumentStore store.Instrum
 	}
 }
 
+// Reset returns the day manager to DAY_CLOSED state for demo reset.
+func (dm *DayManager) Reset() {
+	dm.mu.Lock()
+	defer dm.mu.Unlock()
+	dm.currentState = types.DayClosed
+}
+
 // GetState returns the current day state.
 func (dm *DayManager) GetState() types.DayState {
 	dm.mu.RLock()

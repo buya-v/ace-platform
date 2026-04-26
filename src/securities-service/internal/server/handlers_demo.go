@@ -86,6 +86,26 @@ func (s *Server) handleDemoReset(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Also clear PostgreSQL tables if a database connection is available.
+	if s.db != nil {
+		tables := []string{
+			"ace_securities.trades",
+			"ace_securities.orders",
+			"ace_securities.settlement_obligations",
+			"ace_securities.positions",
+			"ace_securities.instruments",
+			"ace_securities.audit_log",
+		}
+		for _, table := range tables {
+			s.db.Exec("DELETE FROM " + table)
+		}
+	}
+
+	// Reset the day manager state back to CLOSED.
+	if s.dayManager != nil {
+		s.dayManager.Reset()
+	}
+
 	s.writeJSON(w, http.StatusOK, map[string]string{
 		"status":  "reset",
 		"message": "All securities data cleared",
