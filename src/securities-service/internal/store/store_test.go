@@ -5327,3 +5327,529 @@ func TestParticipantStore_Lock_Unlock(t *testing.T) {
 		}
 	})
 }
+
+// ============================================================
+// HistoryStore tests
+// ============================================================
+
+func TestHistoryStore_ArchiveOrder_ListOrders(t *testing.T) {
+	s := store.NewInMemoryHistoryStore()
+
+	base := time.Now().UTC()
+	// Archive 3 orders with timestamps spread across 3 seconds.
+	for i := 0; i < 3; i++ {
+		o := types.SecurityOrder{
+			ID:           fmt.Sprintf("hist-ord-%d", i),
+			InstrumentID: "INST-1",
+			ParticipantID: "P1",
+			Side:         types.OrderSideBuy,
+			OrderType:    types.OrderTypeLimit,
+			Quantity:     100,
+			Price:        10.0,
+			Status:       types.OrderStatusFilled,
+			ArchivedAt:   base.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
+		}
+		if err := s.ArchiveOrder(o); err != nil {
+			t.Fatalf("ArchiveOrder[%d]: %v", i, err)
+		}
+	}
+
+	t.Run("list all (no date bounds)", func(t *testing.T) {
+		orders, err := s.ListOrders("", "")
+		if err != nil {
+			t.Fatalf("ListOrders: %v", err)
+		}
+		if len(orders) != 3 {
+			t.Errorf("expected 3 archived orders, got %d", len(orders))
+		}
+	})
+
+	t.Run("list with dateFrom filters out earlier records", func(t *testing.T) {
+		// Only orders archived at or after second[1] (index 1 and 2).
+		from := base.Add(time.Second).Format(time.RFC3339)
+		orders, err := s.ListOrders(from, "")
+		if err != nil {
+			t.Fatalf("ListOrders: %v", err)
+		}
+		if len(orders) != 2 {
+			t.Errorf("expected 2 orders after dateFrom filter, got %d", len(orders))
+		}
+	})
+
+	t.Run("list with dateTo filters out later records", func(t *testing.T) {
+		// Only orders archived at or before second[1] (index 0 and 1).
+		to := base.Add(time.Second).Format(time.RFC3339)
+		orders, err := s.ListOrders("", to)
+		if err != nil {
+			t.Fatalf("ListOrders: %v", err)
+		}
+		if len(orders) != 2 {
+			t.Errorf("expected 2 orders before dateTo filter, got %d", len(orders))
+		}
+	})
+
+	t.Run("list with both bounds returns only matching", func(t *testing.T) {
+		from := base.Add(time.Second).Format(time.RFC3339)
+		to := base.Add(time.Second).Format(time.RFC3339)
+		orders, err := s.ListOrders(from, to)
+		if err != nil {
+			t.Fatalf("ListOrders: %v", err)
+		}
+		if len(orders) != 1 {
+			t.Errorf("expected 1 order in exact range, got %d", len(orders))
+		}
+	})
+
+	t.Run("ArchivedAt is auto-set if empty", func(t *testing.T) {
+		o := types.SecurityOrder{
+			ID:     "hist-ord-auto",
+			Status: types.OrderStatusCancelled,
+		}
+		if err := s.ArchiveOrder(o); err != nil {
+			t.Fatalf("ArchiveOrder: %v", err)
+		}
+		all, _ := s.ListOrders("", "")
+		var found *types.SecurityOrder
+		for i := range all {
+			if all[i].ID == "hist-ord-auto" {
+				found = &all[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatal("archived order not found in list")
+		}
+		if found.ArchivedAt == "" {
+			t.Error("expected ArchivedAt to be auto-set, got empty string")
+		}
+	})
+}
+
+func TestHistoryStore_ArchiveTrade_ListTrades(t *testing.T) {
+	s := store.NewInMemoryHistoryStore()
+
+	base := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		tr := types.SecurityTrade{
+			ID:           fmt.Sprintf("hist-trd-%d", i),
+			InstrumentID: "INST-2",
+			BuyOrderID:   "buy-1",
+			SellOrderID:  "sell-1",
+			Price:        20.0,
+			Quantity:     50,
+			Status:       types.TradeStatusSettled,
+			ArchivedAt:   base.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
+		}
+		if err := s.ArchiveTrade(tr); err != nil {
+			t.Fatalf("ArchiveTrade[%d]: %v", i, err)
+		}
+	}
+
+	t.Run("list all (no date bounds)", func(t *testing.T) {
+		trades, err := s.ListTrades("", "")
+		if err != nil {
+			t.Fatalf("ListTrades: %v", err)
+		}
+		if len(trades) != 3 {
+			t.Errorf("expected 3 archived trades, got %d", len(trades))
+		}
+	})
+
+	t.Run("list with dateFrom bound", func(t *testing.T) {
+		from := base.Add(time.Second).Format(time.RFC3339)
+		trades, err := s.ListTrades(from, "")
+		if err != nil {
+			t.Fatalf("ListTrades: %v", err)
+		}
+		if len(trades) != 2 {
+			t.Errorf("expected 2 trades after dateFrom, got %d", len(trades))
+		}
+	})
+
+	t.Run("list with dateTo bound", func(t *testing.T) {
+		to := base.Add(time.Second).Format(time.RFC3339)
+		trades, err := s.ListTrades("", to)
+		if err != nil {
+			t.Fatalf("ListTrades: %v", err)
+		}
+		if len(trades) != 2 {
+			t.Errorf("expected 2 trades before dateTo, got %d", len(trades))
+		}
+	})
+
+	t.Run("ArchivedAt auto-set when empty", func(t *testing.T) {
+		tr := types.SecurityTrade{
+			ID:     "hist-trd-auto",
+			Status: types.TradeStatusFailed,
+		}
+		if err := s.ArchiveTrade(tr); err != nil {
+			t.Fatalf("ArchiveTrade: %v", err)
+		}
+		all, _ := s.ListTrades("", "")
+		var found *types.SecurityTrade
+		for i := range all {
+			if all[i].ID == "hist-trd-auto" {
+				found = &all[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatal("archived trade not found in list")
+		}
+		if found.ArchivedAt == "" {
+			t.Error("expected ArchivedAt to be auto-set")
+		}
+	})
+}
+
+// ============================================================
+// PostTradeParamsStore tests
+// ============================================================
+
+func TestPostTradeParamsStore_Create_GetByInstrument(t *testing.T) {
+	s := store.NewInMemoryPostTradeParamsStore()
+
+	p := &types.PostTradeParams{
+		ID:              "ptp-1",
+		InstrumentID:    "INST-A",
+		SettlementCycle: "T+2",
+		ClearingFirmID:  "CF-001",
+		FeeScheduleID:   "FS-001",
+		PenaltyRatePct:  0.5,
+	}
+
+	if err := s.Create(p); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	t.Run("Get by ID", func(t *testing.T) {
+		got, err := s.Get("ptp-1")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.InstrumentID != "INST-A" {
+			t.Errorf("expected InstrumentID INST-A, got %q", got.InstrumentID)
+		}
+		if got.SettlementCycle != "T+2" {
+			t.Errorf("expected SettlementCycle T+2, got %q", got.SettlementCycle)
+		}
+	})
+
+	t.Run("GetByInstrument returns matching record", func(t *testing.T) {
+		got, err := s.GetByInstrument("INST-A")
+		if err != nil {
+			t.Fatalf("GetByInstrument: %v", err)
+		}
+		if got.ID != "ptp-1" {
+			t.Errorf("expected ID ptp-1, got %q", got.ID)
+		}
+	})
+
+	t.Run("GetByInstrument returns ErrNotFound for unknown instrument", func(t *testing.T) {
+		_, err := s.GetByInstrument("UNKNOWN")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(p); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-such-ptp")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestPostTradeParamsStore_Update_Delete(t *testing.T) {
+	s := store.NewInMemoryPostTradeParamsStore()
+
+	p := &types.PostTradeParams{
+		ID:              "ptp-upd",
+		InstrumentID:    "INST-B",
+		SettlementCycle: "T+2",
+		PenaltyRatePct:  1.0,
+	}
+	if err := s.Create(p); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	t.Run("Update replaces record and stamps UpdatedAt", func(t *testing.T) {
+		updated := &types.PostTradeParams{
+			ID:              "ptp-upd",
+			InstrumentID:    "INST-B",
+			SettlementCycle: "T+3",
+			PenaltyRatePct:  2.5,
+		}
+		if err := s.Update(updated); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got, _ := s.Get("ptp-upd")
+		if got.SettlementCycle != "T+3" {
+			t.Errorf("expected SettlementCycle T+3, got %q", got.SettlementCycle)
+		}
+		if got.PenaltyRatePct != 2.5 {
+			t.Errorf("expected PenaltyRatePct 2.5, got %f", got.PenaltyRatePct)
+		}
+		if got.UpdatedAt == "" {
+			t.Error("expected UpdatedAt to be set after Update")
+		}
+	})
+
+	t.Run("Update non-existent returns ErrNotFound", func(t *testing.T) {
+		missing := &types.PostTradeParams{ID: "no-such"}
+		if err := s.Update(missing); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Delete removes record", func(t *testing.T) {
+		if err := s.Delete("ptp-upd"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := s.Get("ptp-upd")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-such-ptp"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// ============================================================
+// ConfigTableStore tests
+// ============================================================
+
+func TestConfigTableStore_Create_ListByType(t *testing.T) {
+	s := store.NewInMemoryConfigTableStore()
+
+	fee := &types.ConfigTable{
+		ID:        "ct-fee-1",
+		TableType: types.ConfigTableTypeFeeSchedule,
+		Name:      "Standard Fee Schedule",
+		Rows:      []map[string]interface{}{{"tier": "A", "rate": 0.001}},
+	}
+	tax := &types.ConfigTable{
+		ID:        "ct-tax-1",
+		TableType: types.ConfigTableTypeTaxRate,
+		Name:      "Withholding Tax",
+		Rows:      []map[string]interface{}{{"instrument": "BOND", "rate": 0.05}},
+	}
+	fee2 := &types.ConfigTable{
+		ID:        "ct-fee-2",
+		TableType: types.ConfigTableTypeFeeSchedule,
+		Name:      "Premium Fee Schedule",
+		Rows:      []map[string]interface{}{},
+	}
+
+	for _, ct := range []*types.ConfigTable{fee, tax, fee2} {
+		if err := s.Create(ct); err != nil {
+			t.Fatalf("Create(%s): %v", ct.ID, err)
+		}
+	}
+
+	t.Run("ListByType with specific type returns only matching", func(t *testing.T) {
+		tables, err := s.ListByType(types.ConfigTableTypeFeeSchedule)
+		if err != nil {
+			t.Fatalf("ListByType: %v", err)
+		}
+		if len(tables) != 2 {
+			t.Errorf("expected 2 FEE_SCHEDULE tables, got %d", len(tables))
+		}
+		for _, tbl := range tables {
+			if tbl.TableType != types.ConfigTableTypeFeeSchedule {
+				t.Errorf("unexpected table type %q in FEE_SCHEDULE list", tbl.TableType)
+			}
+		}
+	})
+
+	t.Run("ListByType empty string returns all", func(t *testing.T) {
+		all, err := s.ListByType("")
+		if err != nil {
+			t.Fatalf("ListByType: %v", err)
+		}
+		if len(all) != 3 {
+			t.Errorf("expected 3 tables total, got %d", len(all))
+		}
+	})
+
+	t.Run("Get returns deep copy (mutations do not affect store)", func(t *testing.T) {
+		got, err := s.Get("ct-fee-1")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		got.Name = "MUTATED"
+		got2, _ := s.Get("ct-fee-1")
+		if got2.Name == "MUTATED" {
+			t.Error("Get returned a pointer into internal storage instead of a copy")
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(fee); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+}
+
+func TestConfigTableStore_Update_Delete(t *testing.T) {
+	s := store.NewInMemoryConfigTableStore()
+
+	ct := &types.ConfigTable{
+		ID:        "ct-upd",
+		TableType: types.ConfigTableTypeCustom,
+		Name:      "Original",
+		Rows:      []map[string]interface{}{},
+	}
+	if err := s.Create(ct); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	t.Run("Update replaces record and stamps UpdatedAt", func(t *testing.T) {
+		updated := &types.ConfigTable{
+			ID:        "ct-upd",
+			TableType: types.ConfigTableTypeCustom,
+			Name:      "Updated Name",
+			Rows:      []map[string]interface{}{{"key": "value"}},
+		}
+		if err := s.Update(updated); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+		got, _ := s.Get("ct-upd")
+		if got.Name != "Updated Name" {
+			t.Errorf("expected name 'Updated Name', got %q", got.Name)
+		}
+		if len(got.Rows) != 1 {
+			t.Errorf("expected 1 row after update, got %d", len(got.Rows))
+		}
+		if got.UpdatedAt == "" {
+			t.Error("expected UpdatedAt to be set after Update")
+		}
+	})
+
+	t.Run("Update non-existent returns ErrNotFound", func(t *testing.T) {
+		missing := &types.ConfigTable{ID: "no-such"}
+		if err := s.Update(missing); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("Delete removes record", func(t *testing.T) {
+		if err := s.Delete("ct-upd"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := s.Get("ct-upd")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-such-ct"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// ============================================================
+// ClientStore tests
+// ============================================================
+
+func TestClientStore_Create_Get_ListByFirm_Delete(t *testing.T) {
+	s := store.NewInMemoryClientStore()
+
+	clients := []*types.Client{
+		{ID: "cli-1", FirmID: "FIRM-A", Name: "Alice Corp", ClientType: types.ClientTypeInstitutional, Nationality: "MN"},
+		{ID: "cli-2", FirmID: "FIRM-A", Name: "Bob Inc", ClientType: types.ClientTypeIndividual, Nationality: "US"},
+		{ID: "cli-3", FirmID: "FIRM-B", Name: "Carol Ltd", ClientType: types.ClientTypeProprietary, Nationality: "CN"},
+	}
+
+	for _, c := range clients {
+		if err := s.Create(c); err != nil {
+			t.Fatalf("Create(%s): %v", c.ID, err)
+		}
+	}
+
+	t.Run("Get returns correct client", func(t *testing.T) {
+		got, err := s.Get("cli-1")
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.Name != "Alice Corp" {
+			t.Errorf("expected Name 'Alice Corp', got %q", got.Name)
+		}
+		if got.FirmID != "FIRM-A" {
+			t.Errorf("expected FirmID FIRM-A, got %q", got.FirmID)
+		}
+	})
+
+	t.Run("Get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("no-such")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("ListByFirm returns only clients for specified firm", func(t *testing.T) {
+		firmA, err := s.ListByFirm("FIRM-A")
+		if err != nil {
+			t.Fatalf("ListByFirm(FIRM-A): %v", err)
+		}
+		if len(firmA) != 2 {
+			t.Errorf("expected 2 clients for FIRM-A, got %d", len(firmA))
+		}
+		firmB, err := s.ListByFirm("FIRM-B")
+		if err != nil {
+			t.Fatalf("ListByFirm(FIRM-B): %v", err)
+		}
+		if len(firmB) != 1 {
+			t.Errorf("expected 1 client for FIRM-B, got %d", len(firmB))
+		}
+	})
+
+	t.Run("ListByFirm empty firmID returns all clients", func(t *testing.T) {
+		all, err := s.ListByFirm("")
+		if err != nil {
+			t.Fatalf("ListByFirm(''): %v", err)
+		}
+		if len(all) != 3 {
+			t.Errorf("expected 3 clients total, got %d", len(all))
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(clients[0]); err == nil {
+			t.Error("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Delete removes client", func(t *testing.T) {
+		if err := s.Delete("cli-2"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		_, err := s.Get("cli-2")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound after Delete, got %v", err)
+		}
+		// FIRM-A should now have only 1 client
+		firmA, _ := s.ListByFirm("FIRM-A")
+		if len(firmA) != 1 {
+			t.Errorf("expected 1 client for FIRM-A after delete, got %d", len(firmA))
+		}
+	})
+
+	t.Run("Delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("no-such-client"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
