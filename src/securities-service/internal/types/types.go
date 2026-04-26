@@ -71,6 +71,7 @@ type Instrument struct {
 	Ticker            string        `json:"ticker"`
 	Name              string        `json:"name"`
 	AssetClass        AssetClass    `json:"asset_class"`
+	SecurityType      string        `json:"security_type,omitempty"`
 	ExchangeCode      string        `json:"exchange_code"`
 	LotSize           int           `json:"lot_size"`
 	TickSize          float64       `json:"tick_size"`

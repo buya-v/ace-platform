@@ -65,16 +65,20 @@ func NewPgInstrumentStore(db *sql.DB) *PgInstrumentStore {
 
 // Create inserts a new instrument into the database.
 func (s *PgInstrumentStore) Create(instrument *types.Instrument) error {
+	secType := instrument.SecurityType
+	if secType == "" {
+		secType = "COMMON"
+	}
 	_, err := s.db.Exec(`
 		INSERT INTO ace_securities.instruments (
 			instrument_id, isin, cusip, sedol, ticker, name,
-			asset_class, exchange_code, lot_size, tick_size,
+			asset_class, security_type, exchange_code, lot_size, tick_size,
 			currency, listing_date, trading_status, shares_outstanding,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
-			$7, $8, $9, $10,
-			$11, $12, $13, $14,
+			$7, $8, $9, $10, $11,
+			$12, $13, $14, $15,
 			NOW(), NOW()
 		)`,
 		instrument.ID,
@@ -84,6 +88,7 @@ func (s *PgInstrumentStore) Create(instrument *types.Instrument) error {
 		instrument.Ticker,
 		instrument.Name,
 		string(instrument.AssetClass),
+		secType,
 		instrument.ExchangeCode,
 		instrument.LotSize,
 		instrument.TickSize,
