@@ -59,6 +59,7 @@ func newLocateTestServer(t *testing.T) (*httptest.Server, *store.InMemoryLocateS
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

@@ -77,6 +77,7 @@ type Server struct {
 	ipRestrictionStore    store.IPRestrictionStore
 	passwordPolicyStore   store.PasswordPolicyStore
 	tradingParamSetStore  store.TradingParamSetStore
+	tradingCycleStore     store.TradingCycleStore // T1: trading cycle management
 	dayManager            *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -143,6 +144,7 @@ func New(
 	watchListStore store.WatchListStore,
 	ipRestrictionStore store.IPRestrictionStore,
 	passwordPolicyStore store.PasswordPolicyStore,
+	tradingCycleStore store.TradingCycleStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -189,10 +191,11 @@ func New(
 		custodyAccountStore:  custodyAccountStore,
 		custodyBalanceStore:  custodyBalanceStore,
 		csdTransferStore:     csdTransferStore,
-		watchListStore:       watchListStore,
-		ipRestrictionStore:   ipRestrictionStore,
-		passwordPolicyStore:  passwordPolicyStore,
-		dayManager:           dayManager,
+		watchListStore:      watchListStore,
+		ipRestrictionStore:  ipRestrictionStore,
+		passwordPolicyStore: passwordPolicyStore,
+		tradingCycleStore:   tradingCycleStore,
+		dayManager:          dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
 		settlementEngine:     settlementEngine,
@@ -201,6 +204,12 @@ func New(
 		roleStore:            roleStore,
 		tradingParamSetStore: tradingParamSetStore,
 	}
+}
+
+// SetTradingCycleStore wires the trading cycle store into the server after construction.
+// This is separate from New() to avoid breaking existing test call sites.
+func (s *Server) SetTradingCycleStore(tcs store.TradingCycleStore) {
+	s.tradingCycleStore = tcs
 }
 
 // checkPermission validates that the caller identified by X-Participant-ID holds
@@ -285,7 +294,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Sessions
 	mux.HandleFunc("/api/v1/securities/sessions", s.handleSessions)
-	mux.HandleFunc("/api/v1/securities/sessions/", s.handleSessionTransition)
+	mux.HandleFunc("/api/v1/securities/sessions/", s.handleSessionOrAdjustment)
 
 	// FRC Reports
 	mux.HandleFunc("/api/v1/securities/reports/frc", s.handleFRCReport)
@@ -342,6 +351,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/surveillance/alerts", s.handleSurveillanceAlerts)
 	mux.HandleFunc("/api/v1/securities/surveillance/alerts/", s.handleSurveillanceAlert)
 	mux.HandleFunc("/api/v1/securities/surveillance/thresholds/", s.handleSurveillanceThresholds)
+	// Firm view — must be registered before the wildcard surveillance/ route would conflict.
+	mux.HandleFunc("/api/v1/securities/surveillance/firm-view/", s.handleFirmView)
 
 	// Instrument groups
 	mux.HandleFunc("/api/v1/securities/instrument-groups", s.handleInstrumentGroups)
@@ -434,6 +445,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/trading-params/instrument/", s.handleTradingParamByInstrument)
 	mux.HandleFunc("/api/v1/securities/trading-params", s.handleTradingParams)
 	mux.HandleFunc("/api/v1/securities/trading-params/", s.handleTradingParamItem)
+
+	// Trading cycles (T1) — named session-sequence definitions per market.
+	mux.HandleFunc("/api/v1/securities/trading-cycles", s.handleTradingCycles)
+	mux.HandleFunc("/api/v1/securities/trading-cycles/", s.handleTradingCycle)
 }
 
 // --- Health endpoints ---

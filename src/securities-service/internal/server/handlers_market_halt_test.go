@@ -68,6 +68,7 @@ func newHaltTestServer(t *testing.T) (
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

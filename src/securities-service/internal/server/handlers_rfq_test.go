@@ -58,6 +58,7 @@ func newRFQTestServer(t *testing.T) (*httptest.Server, *store.InMemoryRFQStore) 
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

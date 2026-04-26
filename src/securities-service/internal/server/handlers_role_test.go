@@ -59,6 +59,7 @@ func newRoleTestServer(t *testing.T) (*httptest.Server, store.RoleStore) {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
+		nil,    // tradingCycleStore
 		nil,    // dayManager
 		me,     // matchingEngine
 		nil,    // sessionManager
@@ -338,7 +339,8 @@ func TestRoleHandlers_Unconfigured(t *testing.T) {
 		nil, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil,
-		nil, me, nil, nil, nil,
+		nil, nil, me, nil, nil,
+		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore — intentionally nil
 		nil, // tradingParamSetStore

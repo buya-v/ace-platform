@@ -730,8 +730,8 @@ func newServerWithParamSet(t *testing.T, ps *types.TradingParameterSet) (*httpte
 		nil, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil,
-		nil, me, nil, nil,
-		nil, nil, nil,
+		nil, nil, me, nil,
+		nil, nil, nil, nil, // settlementEngine, producer, privilegeEngine, roleStore
 		paramStore,
 		cfg,
 	)

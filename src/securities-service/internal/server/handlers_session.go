@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/types"
@@ -30,6 +31,22 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"sessions": sessions,
 	})
+}
+
+// handleSessionOrAdjustment is the wildcard dispatcher for /api/v1/securities/sessions/.
+// It routes to transition, extend, or shorten based on the path suffix.
+func (s *Server) handleSessionOrAdjustment(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	switch {
+	case strings.HasSuffix(path, "/transition"):
+		s.handleSessionTransition(w, r)
+	case strings.HasSuffix(path, "/extend"):
+		s.handleSessionExtend(w, r)
+	case strings.HasSuffix(path, "/shorten"):
+		s.handleSessionShorten(w, r)
+	default:
+		s.writeError(w, http.StatusNotFound, "NOT_FOUND", "unknown session sub-resource", nil)
+	}
 }
 
 // handleSessionTransition dispatches POST /api/v1/securities/sessions/{instrumentID}/transition.
@@ -108,4 +125,82 @@ func (s *Server) handleSessionTransition(w http.ResponseWriter, r *http.Request)
 	}
 
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+// handleSessionExtend dispatches POST /api/v1/securities/sessions/{instrument_id}/extend.
+func (s *Server) handleSessionExtend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+	s.handleSessionAdjustment(w, r, "EXTEND")
+}
+
+// handleSessionShorten dispatches POST /api/v1/securities/sessions/{instrument_id}/shorten.
+func (s *Server) handleSessionShorten(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		return
+	}
+	s.handleSessionAdjustment(w, r, "SHORTEN")
+}
+
+// handleSessionAdjustment is the shared implementation for extend and shorten.
+// action is "EXTEND" or "SHORTEN".
+func (s *Server) handleSessionAdjustment(w http.ResponseWriter, r *http.Request, action string) {
+	// Require tenant context.
+	if _, ok := middleware.TenantFromContext(r.Context()); !ok {
+		s.writeError(w, http.StatusUnauthorized, "TENANT_REQUIRED", "X-GarudaX-Tenant header is required", nil)
+		return
+	}
+
+	// Extract instrument_id from path: /api/v1/securities/sessions/{instrument_id}/extend|shorten
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	suffix := strings.ToLower(action) // "extend" or "shorten"
+	if !strings.HasSuffix(path, "/"+suffix) {
+		s.writeError(w, http.StatusNotFound, "NOT_FOUND", "unexpected path suffix", nil)
+		return
+	}
+	path = strings.TrimSuffix(path, "/"+suffix)
+	parts := strings.Split(path, "/")
+	instrumentID := parts[len(parts)-1]
+	if instrumentID == "" || instrumentID == "sessions" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "instrument_id is required", nil)
+		return
+	}
+
+	// Parse request body.
+	var req struct {
+		DurationMinutes int    `json:"duration_minutes"`
+		Reason          string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+		return
+	}
+	if req.DurationMinutes <= 0 {
+		s.writeError(w, http.StatusBadRequest, "INVALID_FIELD", "duration_minutes must be a positive integer", nil)
+		return
+	}
+
+	now := time.Now().UTC()
+	ext := types.SessionExtension{
+		InstrumentID:    instrumentID,
+		Action:          action,
+		DurationMinutes: req.DurationMinutes,
+		Reason:          req.Reason,
+		CreatedAt:       now.Format(time.RFC3339),
+	}
+
+	// Calculate new_end_time as now + duration_minutes.
+	newEndTime := now.Add(time.Duration(req.DurationMinutes) * time.Minute)
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"instrument_id":    ext.InstrumentID,
+		"action":           ext.Action,
+		"duration_minutes": ext.DurationMinutes,
+		"new_end_time":     newEndTime.Format(time.RFC3339),
+		"reason":           ext.Reason,
+		"created_at":       ext.CreatedAt,
+	})
 }

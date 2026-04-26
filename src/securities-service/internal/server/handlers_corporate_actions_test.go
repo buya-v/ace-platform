@@ -56,7 +56,7 @@ func newTestServerWithCA(t *testing.T, s caStores) *httptest.Server {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, nil, nil, nil, cfg)
+		nil, nil, me, nil, nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()

@@ -252,6 +252,24 @@ func (s *Server) handleParticipant(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// Detect /lock sub-resource.
+	if strings.HasSuffix(trimmed, "/lock") {
+		if r.Method == http.MethodPost {
+			s.handleLockParticipant(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
+	// Detect /unlock sub-resource.
+	if strings.HasSuffix(trimmed, "/unlock") {
+		if r.Method == http.MethodPost {
+			s.handleUnlockParticipant(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		s.handleGetParticipant(w, r)
@@ -523,4 +541,114 @@ func (s *Server) handleReinstateParticipant(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.writeJSON(w, http.StatusOK, p)
+}
+
+// ── Lock / Unlock ─────────────────────────────────────────────────────────────
+
+// handleLockParticipant handles POST /api/v1/securities/participants/{id}/lock.
+// Sets participant status to PARTICIPANT_LOCKED and records the reason.
+// Existing orders are preserved (not cancelled) — the participant is locked from
+// new activity but open positions and orders remain intact for audit purposes.
+func (s *Server) handleLockParticipant(w http.ResponseWriter, r *http.Request) {
+	id := extractParticipantID(r.URL.Path)
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "participant id is required", nil)
+		return
+	}
+
+	// Parse request body for reason.
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+		return
+	}
+
+	// Verify participant exists.
+	if _, err := s.participantStore.Get(id); err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("participant %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	if err := s.participantStore.Lock(id, req.Reason); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Log audit entry (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		detail := req.Reason
+		if detail == "" {
+			detail = "no reason provided"
+		}
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "PARTICIPANT",
+			EntityID:   id,
+			Action:     "LOCK",
+			ActorID:    actorFromRequest(r),
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			Detail:     detail,
+		})
+	}
+
+	locked, err := s.participantStore.Get(id)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, locked)
+}
+
+// handleUnlockParticipant handles POST /api/v1/securities/participants/{id}/unlock.
+// Sets participant status back to PARTICIPANT_ACTIVE and clears lock fields.
+func (s *Server) handleUnlockParticipant(w http.ResponseWriter, r *http.Request) {
+	id := extractParticipantID(r.URL.Path)
+	if id == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "participant id is required", nil)
+		return
+	}
+
+	// Verify participant exists.
+	if _, err := s.participantStore.Get(id); err != nil {
+		if err == store.ErrNotFound {
+			s.writeError(w, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("participant %s not found", id), nil)
+			return
+		}
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	if err := s.participantStore.Unlock(id); err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+
+	// Log audit entry (best-effort).
+	if s.auditStore != nil {
+		entryID, _ := newUUID()
+		_ = s.auditStore.Log(types.AuditEntry{
+			ID:         entryID,
+			EntityType: "PARTICIPANT",
+			EntityID:   id,
+			Action:     "UNLOCK",
+			ActorID:    actorFromRequest(r),
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	unlocked, err := s.participantStore.Get(id)
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, unlocked)
 }

@@ -60,6 +60,7 @@ func newTestServerWithAudit(t *testing.T) (*httptest.Server, *store.InMemoryAudi
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

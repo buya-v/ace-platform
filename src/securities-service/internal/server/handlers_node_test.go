@@ -58,6 +58,7 @@ func newNodeTestServer(t *testing.T) (*httptest.Server, *store.InMemoryNodeStore
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -375,7 +376,7 @@ func TestNodeEndpoints_NotConfigured(t *testing.T) {
 		nil, // nodeStore = nil
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, nil, nil, nil, cfg,
+		nil, nil, me, nil, nil, nil, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

@@ -168,6 +168,8 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/corporate-actions/{id}/process", secHandler)
 	rt.Handle("GET", "/api/v1/securities/sessions", secHandler)
 	rt.Handle("POST", "/api/v1/securities/sessions/{id}/transition", secHandler)
+	rt.Handle("POST", "/api/v1/securities/sessions/{id}/extend", secHandler)
+	rt.Handle("POST", "/api/v1/securities/sessions/{id}/shorten", secHandler)
 	rt.Handle("GET", "/api/v1/securities/reports/frc", secHandler)
 	// Markets and Segments (MillenniumIT P1)
 	rt.Handle("GET", "/api/v1/securities/markets", secHandler)
@@ -196,6 +198,8 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/participants/{id}/force-logout", secHandler)
 	rt.Handle("POST", "/api/v1/securities/participants/{id}/suspend", secHandler)
 	rt.Handle("POST", "/api/v1/securities/participants/{id}/reinstate", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants/{id}/lock", secHandler)
+	rt.Handle("POST", "/api/v1/securities/participants/{id}/unlock", secHandler)
 	// Announcements
 	rt.Handle("GET", "/api/v1/securities/announcements", secHandler)
 	rt.Handle("POST", "/api/v1/securities/announcements", secHandler)
@@ -258,6 +262,8 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/surveillance/alerts/{id}/resolve", secHandler)
 	rt.Handle("GET", "/api/v1/securities/surveillance/thresholds/{instrument_id}", secHandler)
 	rt.Handle("PUT", "/api/v1/securities/surveillance/thresholds/{instrument_id}", secHandler)
+	// Firm view — aggregated surveillance snapshot for a single firm.
+	rt.Handle("GET", "/api/v1/securities/surveillance/firm-view/{firm_id}", secHandler)
 	// P4a — Locates (short-sell locate requests)
 	rt.Handle("POST", "/api/v1/securities/locates", secHandler)
 	rt.Handle("GET", "/api/v1/securities/locates", secHandler)
@@ -310,6 +316,11 @@ func main() {
 	rt.Handle("PUT", "/api/v1/securities/trading-params/{id}", secHandler)
 	rt.Handle("DELETE", "/api/v1/securities/trading-params/{id}", secHandler)
 	rt.Handle("GET", "/api/v1/securities/trading-params/instrument/{instrument_id}", secHandler)
+	// Trading cycles (T1) — named session-sequence definitions per market
+	rt.Handle("GET", "/api/v1/securities/trading-cycles", secHandler)
+	rt.Handle("POST", "/api/v1/securities/trading-cycles", secHandler)
+	rt.Handle("GET", "/api/v1/securities/trading-cycles/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/trading-cycles/{id}", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091

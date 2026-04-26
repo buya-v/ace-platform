@@ -50,8 +50,8 @@ func newTradingParamsServer(t *testing.T) (*httptest.Server, store.InstrumentSto
 		nil, nil, nil,      // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil,      // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil,  // dayManager, matchingEngine, sessionManager, settlementEngine
-		nil, nil, nil,      // producer, privilegeEngine, roleStore
+		nil, nil, me, nil,  // tradingCycleStore, dayManager, matchingEngine, sessionManager
+		nil, nil, nil, nil, // settlementEngine, producer, privilegeEngine, roleStore
 		paramStore,
 		cfg,
 	)

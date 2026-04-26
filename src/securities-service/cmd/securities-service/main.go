@@ -163,6 +163,8 @@ func main() {
 		store.NewInMemoryWatchListStore(),
 		store.NewInMemoryIPRestrictionStore(),
 		store.NewInMemoryPasswordPolicyStore(),
+		// Trading cycle store — seeded with MSE STANDARD and OFF_BOOK cycles.
+		store.NewInMemoryTradingCycleStore(),
 		dayManager,
 		matchingEngine,
 		sessionManager,

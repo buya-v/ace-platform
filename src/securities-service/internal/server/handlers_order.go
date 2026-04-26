@@ -357,13 +357,26 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 
 // handleListOrders handles GET /api/v1/securities/orders.
 //
-// Query parameters:
+// Query parameters (all optional):
 //
-//	instrument_id — filter by instrument
-//	status        — filter by OrderStatus enum value
-//	side          — filter by OrderSide enum value (post-store in-memory filter)
-//	limit         — page size (default 50)
-//	offset        — number of records to skip (default 0)
+//	instrument_id   — filter by instrument
+//	participant_id  — filter by participant
+//	status          — filter by OrderStatus enum value
+//	side            — filter by OrderSide (BUY, SELL, SHORT_SELL)
+//	order_type      — filter by OrderType (LIMIT, MARKET, STOP, STOP_LIMIT)
+//	time_in_force   — filter by TimeInForce (GTC, IOC, FOK, DAY, GTD)
+//	price_min       — minimum price (inclusive, float64)
+//	price_max       — maximum price (inclusive, float64)
+//	quantity_min    — minimum quantity (inclusive, int)
+//	quantity_max    — maximum quantity (inclusive, int)
+//	date_from       — created_at >= this RFC3339 or date string
+//	date_to         — created_at <= this RFC3339 or date string
+//	client_order_id — exact match on client_order_id field
+//	firm_id         — exact match on firm_id field
+//	limit           — page size (default 50)
+//	offset          — number of records to skip (default 0)
+//
+// Response: {data:[...], total:N, filters_applied:[...]}
 func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -386,8 +399,83 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Side filter is applied in-memory (store.OrderFilters has no side field).
+	// --- Parse rich filter params ---
 	sideFilter := types.OrderSide(q.Get("side"))
+	orderTypeFilter := types.OrderType(q.Get("order_type"))
+	tifFilter := types.TimeInForce(q.Get("time_in_force"))
+	clientOrderIDFilter := q.Get("client_order_id")
+	firmIDFilter := q.Get("firm_id")
+	dateFromFilter := q.Get("date_from")
+	dateToFilter := q.Get("date_to")
+
+	var priceMin, priceMax float64
+	var quantityMin, quantityMax int
+
+	if v := q.Get("price_min"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			priceMin = f
+		}
+	}
+	if v := q.Get("price_max"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			priceMax = f
+		}
+	}
+	if v := q.Get("quantity_min"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			quantityMin = i
+		}
+	}
+	if v := q.Get("quantity_max"); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			quantityMax = i
+		}
+	}
+
+	// Track which filter params were actually provided.
+	filtersApplied := make([]string, 0, 12)
+	if filters.InstrumentID != "" {
+		filtersApplied = append(filtersApplied, "instrument_id")
+	}
+	if filters.ParticipantID != "" {
+		filtersApplied = append(filtersApplied, "participant_id")
+	}
+	if filters.Status != "" {
+		filtersApplied = append(filtersApplied, "status")
+	}
+	if sideFilter != "" {
+		filtersApplied = append(filtersApplied, "side")
+	}
+	if orderTypeFilter != "" {
+		filtersApplied = append(filtersApplied, "order_type")
+	}
+	if tifFilter != "" {
+		filtersApplied = append(filtersApplied, "time_in_force")
+	}
+	if priceMin > 0 {
+		filtersApplied = append(filtersApplied, "price_min")
+	}
+	if priceMax > 0 {
+		filtersApplied = append(filtersApplied, "price_max")
+	}
+	if quantityMin > 0 {
+		filtersApplied = append(filtersApplied, "quantity_min")
+	}
+	if quantityMax > 0 {
+		filtersApplied = append(filtersApplied, "quantity_max")
+	}
+	if dateFromFilter != "" {
+		filtersApplied = append(filtersApplied, "date_from")
+	}
+	if dateToFilter != "" {
+		filtersApplied = append(filtersApplied, "date_to")
+	}
+	if clientOrderIDFilter != "" {
+		filtersApplied = append(filtersApplied, "client_order_id")
+	}
+	if firmIDFilter != "" {
+		filtersApplied = append(filtersApplied, "firm_id")
+	}
 
 	all, err := s.orderStore.List(filters)
 	if err != nil {
@@ -395,16 +483,45 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply in-memory side filter.
-	if sideFilter != "" {
-		filtered := all[:0]
-		for _, o := range all {
-			if o.Side == sideFilter {
-				filtered = append(filtered, o)
-			}
+	// Apply in-memory filters.
+	filtered := all[:0]
+	for _, o := range all {
+		if sideFilter != "" && o.Side != sideFilter {
+			continue
 		}
-		all = filtered
+		if orderTypeFilter != "" && o.OrderType != orderTypeFilter {
+			continue
+		}
+		if tifFilter != "" && o.TimeInForce != tifFilter {
+			continue
+		}
+		if priceMin > 0 && o.Price < priceMin {
+			continue
+		}
+		if priceMax > 0 && o.Price > priceMax {
+			continue
+		}
+		if quantityMin > 0 && o.Quantity < quantityMin {
+			continue
+		}
+		if quantityMax > 0 && o.Quantity > quantityMax {
+			continue
+		}
+		if dateFromFilter != "" && o.CreatedAt < dateFromFilter {
+			continue
+		}
+		if dateToFilter != "" && o.CreatedAt > dateToFilter {
+			continue
+		}
+		if clientOrderIDFilter != "" && o.ClientOrderID != clientOrderIDFilter {
+			continue
+		}
+		if firmIDFilter != "" && o.FirmID != firmIDFilter {
+			continue
+		}
+		filtered = append(filtered, o)
 	}
+	all = filtered
 
 	total := len(all)
 
@@ -426,10 +543,11 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":   all,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"data":             all,
+		"total":            total,
+		"limit":            limit,
+		"offset":           offset,
+		"filters_applied":  filtersApplied,
 	})
 }
 

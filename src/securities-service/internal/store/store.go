@@ -108,6 +108,8 @@ type ParticipantStore interface {
 	Create(p *types.ExchangeParticipant) error
 	UpdateStatus(id string, status types.ParticipantStatus) error
 	UpdatePermissions(id string, permissions []string) error
+	Lock(id, reason string) error
+	Unlock(id string) error
 }
 
 // InMemoryParticipantStore is a thread-safe, in-memory implementation of ParticipantStore.
@@ -186,6 +188,39 @@ func (s *InMemoryParticipantStore) UpdatePermissions(id string, permissions []st
 	copy(perms, permissions)
 	p.Permissions = perms
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// Lock sets the participant status to PARTICIPANT_LOCKED and records the reason and timestamp.
+// Existing orders are preserved (not cancelled); that decision is left to the caller.
+func (s *InMemoryParticipantStore) Lock(id, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	p.Status = types.ParticipantLocked
+	p.LockReason = reason
+	p.LockedAt = now
+	p.UpdatedAt = now
+	return nil
+}
+
+// Unlock sets the participant status back to PARTICIPANT_ACTIVE and clears lock fields.
+func (s *InMemoryParticipantStore) Unlock(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	p.Status = types.ParticipantActive
+	p.LockReason = ""
+	p.LockedAt = ""
+	p.UpdatedAt = now
 	return nil
 }
 
@@ -864,6 +899,9 @@ type MarketStore interface {
 	Get(id string) (*types.Market, error)
 	List() ([]types.Market, error)
 	UpdateStatus(id, status string) error
+	// SetTradingDate sets the trading_date field on all markets to the given ISO date.
+	// Called by DayManager/handleDayStart to stamp today's trading date.
+	SetTradingDate(date string) error
 }
 
 type InMemoryMarketStore struct {
@@ -908,6 +946,18 @@ func (s *InMemoryMarketStore) UpdateStatus(id, status string) error {
 	m, ok := s.data[id]
 	if !ok { return fmt.Errorf("market %s not found", id) }
 	m.Status = status; m.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// SetTradingDate stamps all markets with the given ISO date as the current trading date.
+func (s *InMemoryMarketStore) SetTradingDate(date string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, m := range s.data {
+		m.TradingDate = date
+		m.UpdatedAt = now
+	}
 	return nil
 }
 
@@ -3149,6 +3199,120 @@ func copyTradingParamSet(ps *types.TradingParameterSet) *types.TradingParameterS
 	if ps.AllowedTimeInForce != nil {
 		cp.AllowedTimeInForce = make([]string, len(ps.AllowedTimeInForce))
 		copy(cp.AllowedTimeInForce, ps.AllowedTimeInForce)
+	}
+	return &cp
+}
+
+// ── TradingCycleStore (T1) ────────────────────────────────────────────────────
+
+// TradingCycleStore defines the repository contract for trading cycles.
+type TradingCycleStore interface {
+	Create(cycle *types.TradingCycle) error
+	Get(id string) (*types.TradingCycle, error)
+	ListByMarket(marketID string) ([]types.TradingCycle, error)
+	Delete(id string) error
+}
+
+// InMemoryTradingCycleStore is a thread-safe, in-memory implementation of TradingCycleStore.
+// On construction it is pre-seeded with two MSE standard cycles.
+type InMemoryTradingCycleStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.TradingCycle
+}
+
+// NewInMemoryTradingCycleStore returns a TradingCycleStore pre-seeded with MSE standard cycles.
+func NewInMemoryTradingCycleStore() *InMemoryTradingCycleStore {
+	s := &InMemoryTradingCycleStore{
+		data: make(map[string]*types.TradingCycle),
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	// STANDARD — normal continuous auction cycle for MSE equities.
+	standard := &types.TradingCycle{
+		ID:       "cycle-mse-standard",
+		MarketID: "MSE",
+		Name:     "STANDARD",
+		SessionSequence: []string{
+			"PRE_OPEN",
+			"CONTINUOUS",
+			"CLOSING_AUCTION",
+			"CLOSED",
+		},
+		IsDefault: true,
+		CreatedAt: now,
+	}
+	// OFF_BOOK — off-book negotiated deal cycle (no continuous matching).
+	offBook := &types.TradingCycle{
+		ID:       "cycle-mse-off-book",
+		MarketID: "MSE",
+		Name:     "OFF_BOOK",
+		SessionSequence: []string{
+			"PRE_OPEN",
+			"CLOSED",
+		},
+		IsDefault: false,
+		CreatedAt: now,
+	}
+	s.data[standard.ID] = standard
+	s.data[offBook.ID] = offBook
+	return s
+}
+
+// Create stores a new TradingCycle. Returns an error if one with the same ID already exists.
+func (s *InMemoryTradingCycleStore) Create(cycle *types.TradingCycle) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[cycle.ID]; exists {
+		return errors.New("trading cycle already exists: " + cycle.ID)
+	}
+	cp := copyTradingCycle(cycle)
+	s.data[cycle.ID] = cp
+	return nil
+}
+
+// Get retrieves a TradingCycle by ID.
+func (s *InMemoryTradingCycleStore) Get(id string) (*types.TradingCycle, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := copyTradingCycle(c)
+	return cp, nil
+}
+
+// ListByMarket returns all TradingCycles for the given market.
+// Pass empty string to return all cycles across all markets.
+func (s *InMemoryTradingCycleStore) ListByMarket(marketID string) ([]types.TradingCycle, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.TradingCycle, 0, len(s.data))
+	for _, c := range s.data {
+		if marketID != "" && c.MarketID != marketID {
+			continue
+		}
+		out = append(out, *copyTradingCycle(c))
+	}
+	return out, nil
+}
+
+// Delete removes a TradingCycle by ID.
+func (s *InMemoryTradingCycleStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// copyTradingCycle performs a deep copy of a TradingCycle (SessionSequence is a slice).
+func copyTradingCycle(c *types.TradingCycle) *types.TradingCycle {
+	cp := *c
+	if c.SessionSequence != nil {
+		cp.SessionSequence = make([]string, len(c.SessionSequence))
+		copy(cp.SessionSequence, c.SessionSequence)
 	}
 	return &cp
 }

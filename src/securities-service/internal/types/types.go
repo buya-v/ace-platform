@@ -79,6 +79,7 @@ type Instrument struct {
 	TradingStatus     TradingStatus `json:"trading_status"`
 	OutstandingShares int64         `json:"outstanding_shares"`
 	SegmentID         string        `json:"segment_id,omitempty"`
+	TradingCycleID    string        `json:"trading_cycle_id,omitempty"` // T1: links instrument to a TradingCycle
 	STPMode           STPMode       `json:"stp_mode,omitempty"`
 	DeletionStatus      string        `json:"deletion_status,omitempty"`
 	DeletionDate        string        `json:"deletion_date,omitempty"`
@@ -99,16 +100,18 @@ type BondDetails struct {
 
 // SecurityOrder represents an order submitted against a listed security.
 type SecurityOrder struct {
-	ID             string      `json:"id"`
-	InstrumentID   string      `json:"instrument_id"`
-	ParticipantID  string      `json:"participant_id"`
-	Side           OrderSide   `json:"side"`
-	OrderType      OrderType   `json:"order_type"`
-	Quantity       int         `json:"quantity"`
-	Price          float64     `json:"price"`
-	StopPrice      float64     `json:"stop_price"`
-	TimeInForce    TimeInForce `json:"time_in_force"`
-	Status         OrderStatus `json:"status"`
+	ID              string      `json:"id"`
+	InstrumentID    string      `json:"instrument_id"`
+	ParticipantID   string      `json:"participant_id"`
+	FirmID          string      `json:"firm_id,omitempty"`          // T1: originating firm
+	ClientOrderID   string      `json:"client_order_id,omitempty"` // T1: client-assigned order id
+	Side            OrderSide   `json:"side"`
+	OrderType       OrderType   `json:"order_type"`
+	Quantity        int         `json:"quantity"`
+	Price           float64     `json:"price"`
+	StopPrice       float64     `json:"stop_price"`
+	TimeInForce     TimeInForce `json:"time_in_force"`
+	Status          OrderStatus `json:"status"`
 	FilledQuantity  int         `json:"filled_quantity"`
 	AvgFillPrice    float64     `json:"avg_fill_price"`
 	VisibleQuantity int         `json:"visible_quantity,omitempty"` // Iceberg: visible (displayed) quantity
@@ -307,6 +310,7 @@ type ParticipantStatus string
 const (
 	ParticipantActive    ParticipantStatus = "PARTICIPANT_ACTIVE"
 	ParticipantSuspended ParticipantStatus = "PARTICIPANT_SUSPENDED"
+	ParticipantLocked    ParticipantStatus = "PARTICIPANT_LOCKED"
 )
 
 // Permission constants for exchange participant capabilities.
@@ -326,6 +330,8 @@ type ExchangeParticipant struct {
 	Role        string            `json:"role,omitempty"`
 	Status      ParticipantStatus `json:"status"`
 	Permissions []string          `json:"permissions"`
+	LockedAt    string            `json:"locked_at,omitempty"`
+	LockReason  string            `json:"lock_reason,omitempty"`
 	CreatedAt   string            `json:"created_at"`
 	UpdatedAt   string            `json:"updated_at"`
 }
@@ -370,12 +376,15 @@ const (
 )
 
 type Market struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Timezone  string `json:"timezone"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Status      string `json:"status"`
+	Timezone    string `json:"timezone"`
+	OpenTime    string `json:"open_time,omitempty"`    // T1: HH:MM in market timezone
+	CloseTime   string `json:"close_time,omitempty"`   // T1: HH:MM in market timezone
+	TradingDate string `json:"trading_date,omitempty"` // T1: set to today ISO date on StartDay
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type Segment struct {
@@ -1034,6 +1043,17 @@ type Role struct {
 	UpdatedAt   string   `json:"updated_at"`
 }
 
+// ── Session Extension ─────────────────────────────────────────────────────────
+
+// SessionExtension records an operator-initiated extend or shorten of a trading session.
+type SessionExtension struct {
+	InstrumentID    string `json:"instrument_id"`
+	Action          string `json:"action"`           // EXTEND | SHORTEN
+	DurationMinutes int    `json:"duration_minutes"`
+	Reason          string `json:"reason"`
+	CreatedAt       string `json:"created_at"`
+}
+
 // ── Trading Parameter Sets ────────────────────────────────────────────────────
 
 // AuctionConfig holds auction-phase parameters for a trading parameter set.
@@ -1062,4 +1082,19 @@ type TradingParameterSet struct {
 	ShortSellingAllowed bool          `json:"short_selling_allowed"`
 	CreatedAt           string        `json:"created_at"`
 	UpdatedAt           string        `json:"updated_at"`
+}
+
+// ── Trading Cycles (T1) ───────────────────────────────────────────────────────
+
+// TradingCycle defines a named sequence of trading sessions (phases) for a market.
+// Instruments reference a TradingCycle via TradingCycleID.
+// Example cycles: "STANDARD" (pre-open → continuous → closing auction → closed),
+// "OFF_BOOK" (off-book only, no continuous auction).
+type TradingCycle struct {
+	ID              string   `json:"id"`
+	MarketID        string   `json:"market_id"`
+	Name            string   `json:"name"`
+	SessionSequence []string `json:"session_sequence"` // ordered list of MarketSession values
+	IsDefault       bool     `json:"is_default"`
+	CreatedAt       string   `json:"created_at"`
 }

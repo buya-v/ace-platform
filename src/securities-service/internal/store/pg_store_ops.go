@@ -147,6 +147,12 @@ func (s *PgMarketStore) UpdateStatus(id, status string) error {
 	return nil
 }
 
+// SetTradingDate stamps all markets with the given ISO date as the current trading date.
+func (s *PgMarketStore) SetTradingDate(date string) error {
+	_, err := s.db.Exec(`UPDATE ace_securities.markets SET trading_date = $1, updated_at = NOW()`, date)
+	return err
+}
+
 // ── PgSegmentStore ────────────────────────────────────────────────────────────
 
 // PgSegmentStore implements SegmentStore using PostgreSQL.
@@ -440,6 +446,46 @@ func (s *PgParticipantStore) UpdatePermissions(id string, permissions []string) 
 		UPDATE ace_securities.participants
 		SET permissions = $1::text[], updated_at = NOW()
 		WHERE id = $2`, permissionsToArray(permissions), id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Lock sets the participant status to PARTICIPANT_LOCKED and records the lock reason and timestamp.
+// Returns ErrNotFound when no row matches.
+func (s *PgParticipantStore) Lock(id, reason string) error {
+	result, err := s.db.Exec(`
+		UPDATE ace_securities.participants
+		SET status = $1, lock_reason = $2, locked_at = NOW(), updated_at = NOW()
+		WHERE id = $3`, string(types.ParticipantLocked), reason, id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Unlock sets the participant status back to PARTICIPANT_ACTIVE and clears lock fields.
+// Returns ErrNotFound when no row matches.
+func (s *PgParticipantStore) Unlock(id string) error {
+	result, err := s.db.Exec(`
+		UPDATE ace_securities.participants
+		SET status = $1, lock_reason = NULL, locked_at = NULL, updated_at = NOW()
+		WHERE id = $2`, string(types.ParticipantActive), id)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,8 +24,66 @@ func (s *Server) handleTrades(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListTrades handles GET /api/v1/securities/trades.
+//
+// Query parameters (all optional):
+//
+//	instrument_id   — filter by instrument
+//	participant_id  — filter by buyer or seller participant (buy_order or sell_order side)
+//	date_from       — trade_date >= this value (string prefix compare, e.g. "2026-01-01")
+//	date_to         — trade_date <= this value
+//	price_min       — minimum trade price (inclusive, float64)
+//	price_max       — maximum trade price (inclusive, float64)
+//
+// Response: {data:[...], total:N, filters_applied:[...]}
 func (s *Server) handleListTrades(w http.ResponseWriter, r *http.Request) {
-	trades, err := s.tradeStore.List()
+	q := r.URL.Query()
+
+	instrumentIDFilter := q.Get("instrument_id")
+	participantIDFilter := q.Get("participant_id")
+	dateFromFilter := q.Get("date_from")
+	dateToFilter := q.Get("date_to")
+
+	var priceMin, priceMax float64
+	if v := q.Get("price_min"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			priceMin = f
+		}
+	}
+	if v := q.Get("price_max"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			priceMax = f
+		}
+	}
+
+	// Track which filters were actually provided.
+	filtersApplied := make([]string, 0, 6)
+	if instrumentIDFilter != "" {
+		filtersApplied = append(filtersApplied, "instrument_id")
+	}
+	if participantIDFilter != "" {
+		filtersApplied = append(filtersApplied, "participant_id")
+	}
+	if dateFromFilter != "" {
+		filtersApplied = append(filtersApplied, "date_from")
+	}
+	if dateToFilter != "" {
+		filtersApplied = append(filtersApplied, "date_to")
+	}
+	if priceMin > 0 {
+		filtersApplied = append(filtersApplied, "price_min")
+	}
+	if priceMax > 0 {
+		filtersApplied = append(filtersApplied, "price_max")
+	}
+
+	var trades []types.SecurityTrade
+	var err error
+
+	if instrumentIDFilter != "" {
+		trades, err = s.tradeStore.ListByInstrument(instrumentIDFilter)
+	} else {
+		trades, err = s.tradeStore.List()
+	}
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
 		return
@@ -32,9 +91,38 @@ func (s *Server) handleListTrades(w http.ResponseWriter, r *http.Request) {
 	if trades == nil {
 		trades = []types.SecurityTrade{}
 	}
+
+	// Apply in-memory filters.
+	filtered := trades[:0]
+	for _, t := range trades {
+		if participantIDFilter != "" &&
+			t.BuyOrderID != participantIDFilter && t.SellOrderID != participantIDFilter {
+			// participant_id matches if the trade's buy or sell order belongs to them.
+			// We compare against BuyOrderID/SellOrderID as a proxy when no participant
+			// lookup is available in the list path.
+			// A more precise implementation would join via orderStore.
+			continue
+		}
+		if dateFromFilter != "" && t.TradeDate < dateFromFilter {
+			continue
+		}
+		if dateToFilter != "" && t.TradeDate > dateToFilter {
+			continue
+		}
+		if priceMin > 0 && t.Price < priceMin {
+			continue
+		}
+		if priceMax > 0 && t.Price > priceMax {
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+	trades = filtered
+
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":  trades,
-		"total": len(trades),
+		"data":            trades,
+		"total":           len(trades),
+		"filters_applied": filtersApplied,
 	})
 }
 

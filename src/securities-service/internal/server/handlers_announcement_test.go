@@ -60,6 +60,7 @@ func newTestServerWithAnnouncement(t *testing.T) *httptest.Server {
 		nil, // watchListStore
 		nil, // ipRestrictionStore
 		nil, // passwordPolicyStore
+		nil, // tradingCycleStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager

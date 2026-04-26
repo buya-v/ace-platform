@@ -3,6 +3,7 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -43,8 +44,16 @@ func (s *Server) handleDayStart(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusConflict, "INVALID_TRANSITION", err.Error(), nil)
 		return
 	}
-	s.writeJSON(w, http.StatusOK, map[string]string{
-		"state": string(s.dayManager.GetState()),
+
+	// Stamp today's trading date on all markets (best-effort; non-fatal).
+	todayISO := time.Now().UTC().Format("2006-01-02")
+	if s.marketStore != nil {
+		_ = s.marketStore.SetTradingDate(todayISO)
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"state":        string(s.dayManager.GetState()),
+		"trading_date": todayISO,
 	})
 }
 
