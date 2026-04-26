@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
+	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -666,4 +668,228 @@ func TestMethodNotAllowed_Order(t *testing.T) {
 		fmt.Sprintf("/api/v1/securities/orders/%s", orderID), nil)
 	assertStatus(t, resp, http.StatusMethodNotAllowed)
 	resp.Body.Close()
+}
+
+// ============================================================
+// Order validation tests — TradingParameterSet enforcement
+// ============================================================
+
+// newServerWithParamSet builds a test server with a TradingParameterSet wired
+// for a specific instrument. The param set restricts: AllowedOrderTypes, min/max
+// order size, and max order value.  Returns (ts, instrumentID).
+func newServerWithParamSet(t *testing.T, ps *types.TradingParameterSet) (*httptest.Server, string) {
+	t.Helper()
+
+	instrStore := store.NewInMemoryInstrumentStore()
+	orderStore := store.NewInMemoryOrderStore()
+	tradeStore := store.NewInMemoryTradeStore()
+	positionStore := store.NewInMemoryPositionStore()
+	paramStore := store.NewInMemoryTradingParamSetStore()
+
+	// Seed instrument with lot_size=1, tick_size=0.01 for easy test math.
+	inst := &types.Instrument{
+		ID:            "inst-param-test",
+		Ticker:        "PTEST",
+		Name:          "Param Test Corp",
+		AssetClass:    types.AssetClassEquity,
+		TradingStatus: types.TradingStatusActive,
+		LotSize:       1,
+		TickSize:      0.01,
+		CreatedAt:     "2024-01-01T00:00:00Z",
+		UpdatedAt:     "2024-01-01T00:00:00Z",
+	}
+	if err := instrStore.Create(inst); err != nil {
+		t.Fatalf("seed instrument: %v", err)
+	}
+
+	// Seed param set linked to the instrument.
+	ps.InstrumentID = inst.ID
+	if err := paramStore.Create(ps); err != nil {
+		t.Fatalf("seed param set: %v", err)
+	}
+
+	cfg := DefaultConfig()
+	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil, nil)
+	srv := New(
+		instrStore, orderStore, tradeStore, positionStore,
+		nil,
+		store.NewInMemoryCorporateActionStore(),
+		store.NewInMemoryEntitlementStore(),
+		store.NewInMemoryMarketStore(),
+		store.NewInMemorySegmentStore(),
+		store.NewInMemoryCircuitBreakerStore(),
+		store.NewInMemoryFirmStore(),
+		store.NewInMemoryParticipantStore(),
+		nil, nil, nil, nil,
+		nil, nil, nil, nil,
+		nil, nil, nil,
+		nil,                // nodeStore
+		nil,                // locateStore
+		nil,                // rfqStore
+		nil,                // giveUpStore
+		nil, nil, nil,
+		nil, nil, nil, nil,
+		nil, nil, nil,
+		nil, me, nil, nil,
+		nil, nil, nil,
+		paramStore,
+		cfg,
+	)
+	srv.SetReady()
+
+	mux := http.NewServeMux()
+	srv.registerRoutes(mux)
+
+	tenantMW := middleware.TenantMiddleware([]string{testTenant})
+	ts := httptest.NewServer(tenantMW(mux))
+	t.Cleanup(ts.Close)
+	return ts, inst.ID
+}
+
+// submitOrderRaw submits an order and returns the response (caller must close body).
+func submitOrderRaw(t *testing.T, ts *httptest.Server, payload map[string]interface{}) *http.Response {
+	t.Helper()
+	return doJSON(t, ts, http.MethodPost, "/api/v1/securities/orders", payload)
+}
+
+// TestOrderValidation_AllowedOrderType verifies that a LIMIT order succeeds
+// when LIMIT is in the AllowedOrderTypes list.
+func TestOrderValidation_AllowedOrderType(t *testing.T) {
+	ps := &types.TradingParameterSet{
+		ID:                "ps-allowed",
+		Name:              "LIMIT only",
+		AllowedOrderTypes: []string{"LIMIT"},
+		MinOrderSize:      1,
+		MaxOrderSize:      10000,
+	}
+	ts, instrID := newServerWithParamSet(t, ps)
+
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-01",
+		"side":           "BUY",
+		"order_type":     "LIMIT",
+		"quantity":       100,
+		"price":          10.00,
+	}
+	resp := submitOrderRaw(t, ts, payload)
+	assertStatus(t, resp, http.StatusCreated)
+	resp.Body.Close()
+}
+
+// TestOrderValidation_DisallowedOrderType verifies that a STOP order is rejected
+// with 422 ORDER_TYPE_NOT_ALLOWED when STOP is absent from AllowedOrderTypes.
+func TestOrderValidation_DisallowedOrderType(t *testing.T) {
+	ps := &types.TradingParameterSet{
+		ID:                "ps-disallow",
+		Name:              "LIMIT only",
+		AllowedOrderTypes: []string{"LIMIT"},
+		MinOrderSize:      1,
+		MaxOrderSize:      10000,
+	}
+	ts, instrID := newServerWithParamSet(t, ps)
+
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-01",
+		"side":           "BUY",
+		"order_type":     "STOP",
+		"quantity":       100,
+		"stop_price":     10.00,
+	}
+	resp := submitOrderRaw(t, ts, payload)
+	assertStatus(t, resp, http.StatusUnprocessableEntity)
+
+	var errResp types.ErrorResponse
+	decodeBody(t, resp, &errResp)
+	if errResp.Error.Code != "ORDER_TYPE_NOT_ALLOWED" {
+		t.Errorf("expected ORDER_TYPE_NOT_ALLOWED, got %q", errResp.Error.Code)
+	}
+}
+
+// TestOrderValidation_MinOrderSize verifies that an order below MinOrderSize
+// is rejected with 422 ORDER_TOO_SMALL.
+func TestOrderValidation_MinOrderSize(t *testing.T) {
+	ps := &types.TradingParameterSet{
+		ID:           "ps-min",
+		Name:         "Min size 50",
+		MinOrderSize: 50,
+		MaxOrderSize: 10000,
+	}
+	ts, instrID := newServerWithParamSet(t, ps)
+
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-01",
+		"side":           "BUY",
+		"order_type":     "MARKET",
+		"quantity":       10, // below min of 50
+	}
+	resp := submitOrderRaw(t, ts, payload)
+	assertStatus(t, resp, http.StatusUnprocessableEntity)
+
+	var errResp types.ErrorResponse
+	decodeBody(t, resp, &errResp)
+	if errResp.Error.Code != "ORDER_TOO_SMALL" {
+		t.Errorf("expected ORDER_TOO_SMALL, got %q", errResp.Error.Code)
+	}
+}
+
+// TestOrderValidation_MaxOrderSize verifies that an order above MaxOrderSize
+// is rejected with 422 ORDER_TOO_LARGE.
+func TestOrderValidation_MaxOrderSize(t *testing.T) {
+	ps := &types.TradingParameterSet{
+		ID:           "ps-max",
+		Name:         "Max size 100",
+		MinOrderSize: 1,
+		MaxOrderSize: 100,
+	}
+	ts, instrID := newServerWithParamSet(t, ps)
+
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-01",
+		"side":           "BUY",
+		"order_type":     "MARKET",
+		"quantity":       500, // above max of 100
+	}
+	resp := submitOrderRaw(t, ts, payload)
+	assertStatus(t, resp, http.StatusUnprocessableEntity)
+
+	var errResp types.ErrorResponse
+	decodeBody(t, resp, &errResp)
+	if errResp.Error.Code != "ORDER_TOO_LARGE" {
+		t.Errorf("expected ORDER_TOO_LARGE, got %q", errResp.Error.Code)
+	}
+}
+
+// TestOrderValidation_MaxOrderValue verifies that price*quantity > MaxOrderValue
+// is rejected with 422 ORDER_VALUE_EXCEEDED.
+func TestOrderValidation_MaxOrderValue(t *testing.T) {
+	ps := &types.TradingParameterSet{
+		ID:            "ps-maxval",
+		Name:          "Max value 1000",
+		MinOrderSize:  1,
+		MaxOrderSize:  10000,
+		MaxOrderValue: 1000.0, // price*qty must not exceed 1000
+	}
+	ts, instrID := newServerWithParamSet(t, ps)
+
+	// price=10.00, qty=200 → value=2000 > 1000
+	payload := map[string]interface{}{
+		"instrument_id":  instrID,
+		"participant_id": "P-01",
+		"side":           "BUY",
+		"order_type":     "LIMIT",
+		"quantity":       200,
+		"price":          10.00,
+	}
+	resp := submitOrderRaw(t, ts, payload)
+	assertStatus(t, resp, http.StatusUnprocessableEntity)
+
+	var errResp types.ErrorResponse
+	decodeBody(t, resp, &errResp)
+	if errResp.Error.Code != "ORDER_VALUE_EXCEEDED" {
+		t.Errorf("expected ORDER_VALUE_EXCEEDED, got %q", errResp.Error.Code)
+	}
 }

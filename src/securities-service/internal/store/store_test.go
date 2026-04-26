@@ -4903,3 +4903,192 @@ func TestRoleStore_Delete(t *testing.T) {
 		}
 	})
 }
+
+// ============================================================
+// TradingParamSetStore tests
+// ============================================================
+
+func newParamSet(id, instrumentID string) *types.TradingParameterSet {
+	return &types.TradingParameterSet{
+		ID:                 id,
+		InstrumentID:       instrumentID,
+		Name:               "Default Params for " + instrumentID,
+		AllowedOrderTypes:  []string{"LIMIT", "MARKET"},
+		AllowedTimeInForce: []string{"GTC", "DAY"},
+		MinOrderSize:       10,
+		MaxOrderSize:       10000,
+		MaxOrderValue:      500000.0,
+		ShortSellingAllowed: false,
+		CreatedAt:          "2024-01-01T00:00:00Z",
+		UpdatedAt:          "2024-01-01T00:00:00Z",
+	}
+}
+
+func TestTradingParamSetStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryTradingParamSetStore()
+	ps := newParamSet("ps-001", "INST-AAA")
+
+	// Create succeeds.
+	if err := s.Create(ps); err != nil {
+		t.Fatalf("Create: unexpected error: %v", err)
+	}
+
+	// Get returns an equivalent copy.
+	got, err := s.Get("ps-001")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "ps-001" {
+		t.Errorf("expected ID ps-001, got %q", got.ID)
+	}
+	if got.InstrumentID != "INST-AAA" {
+		t.Errorf("expected InstrumentID INST-AAA, got %q", got.InstrumentID)
+	}
+	if got.MinOrderSize != 10 {
+		t.Errorf("expected MinOrderSize 10, got %d", got.MinOrderSize)
+	}
+	if len(got.AllowedOrderTypes) != 2 {
+		t.Errorf("expected 2 AllowedOrderTypes, got %d", len(got.AllowedOrderTypes))
+	}
+
+	// Get returns a copy — mutating it must not affect stored record.
+	got.Name = "MUTATED"
+	got2, _ := s.Get("ps-001")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned internal pointer instead of a copy")
+	}
+
+	// Duplicate Create returns error.
+	if err := s.Create(ps); err == nil {
+		t.Error("expected error on duplicate Create, got nil")
+	}
+
+	// Get non-existent returns ErrNotFound.
+	_, err = s.Get("no-such-id")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound for unknown id, got %v", err)
+	}
+}
+
+func TestTradingParamSetStore_GetByInstrument(t *testing.T) {
+	s := store.NewInMemoryTradingParamSetStore()
+	ps := newParamSet("ps-002", "INST-BBB")
+
+	if err := s.Create(ps); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	t.Run("found", func(t *testing.T) {
+		got, err := s.GetByInstrument("INST-BBB")
+		if err != nil {
+			t.Fatalf("GetByInstrument: %v", err)
+		}
+		if got.ID != "ps-002" {
+			t.Errorf("expected ID ps-002, got %q", got.ID)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := s.GetByInstrument("NO-SUCH-INSTRUMENT")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		got, _ := s.GetByInstrument("INST-BBB")
+		got.AllowedOrderTypes = []string{"STOP"}
+		got2, _ := s.GetByInstrument("INST-BBB")
+		if len(got2.AllowedOrderTypes) == 1 && got2.AllowedOrderTypes[0] == "STOP" {
+			t.Error("GetByInstrument returned internal slice instead of a copy")
+		}
+	})
+}
+
+func TestTradingParamSetStore_Update(t *testing.T) {
+	s := store.NewInMemoryTradingParamSetStore()
+	ps := newParamSet("ps-003", "INST-CCC")
+	s.Create(ps)
+
+	// Update changes the stored record.
+	ps.Name = "Updated Params"
+	ps.MaxOrderSize = 20000
+	ps.InstrumentID = "INST-CCC" // unchanged
+	if err := s.Update(ps); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, _ := s.Get("ps-003")
+	if got.Name != "Updated Params" {
+		t.Errorf("expected Name 'Updated Params', got %q", got.Name)
+	}
+	if got.MaxOrderSize != 20000 {
+		t.Errorf("expected MaxOrderSize 20000, got %d", got.MaxOrderSize)
+	}
+
+	// Instrument mapping follows the updated InstrumentID.
+	ps2 := *ps
+	ps2.InstrumentID = "INST-CCC-NEW"
+	if err := s.Update(&ps2); err != nil {
+		t.Fatalf("Update with new instrumentID: %v", err)
+	}
+	// Old instrument mapping removed.
+	_, err := s.GetByInstrument("INST-CCC")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound for old instrument after update, got %v", err)
+	}
+	// New instrument mapping active.
+	got2, err := s.GetByInstrument("INST-CCC-NEW")
+	if err != nil {
+		t.Fatalf("GetByInstrument after update: %v", err)
+	}
+	if got2.ID != "ps-003" {
+		t.Errorf("expected ps-003 via new instrument, got %q", got2.ID)
+	}
+
+	// Update non-existent returns ErrNotFound.
+	ghost := newParamSet("no-such", "INST-X")
+	if err := s.Update(ghost); err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound for unknown id, got %v", err)
+	}
+}
+
+func TestTradingParamSetStore_Delete(t *testing.T) {
+	s := store.NewInMemoryTradingParamSetStore()
+	ps := newParamSet("ps-004", "INST-DDD")
+	s.Create(ps)
+
+	// List should return 1 before deletion.
+	all, _ := s.List()
+	if len(all) != 1 {
+		t.Errorf("expected 1 param set before delete, got %d", len(all))
+	}
+
+	// Delete succeeds.
+	if err := s.Delete("ps-004"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	// Get returns ErrNotFound after deletion.
+	_, err := s.Get("ps-004")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound after Delete, got %v", err)
+	}
+
+	// GetByInstrument also returns ErrNotFound.
+	_, err = s.GetByInstrument("INST-DDD")
+	if err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound for instrument after Delete, got %v", err)
+	}
+
+	// List returns empty.
+	all, _ = s.List()
+	if len(all) != 0 {
+		t.Errorf("expected 0 param sets after delete, got %d", len(all))
+	}
+
+	// Delete non-existent returns ErrNotFound.
+	if err := s.Delete("ps-004"); err != store.ErrNotFound {
+		t.Errorf("expected ErrNotFound on second Delete, got %v", err)
+	}
+}
