@@ -41,6 +41,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 	positionStore := store.NewInMemoryPositionStore()
 	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil, nil)
 	srv := New(instrStore, orderStore, tradeStore, positionStore, nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -571,6 +572,7 @@ func TestMethodNotAllowed_Instrument(t *testing.T) {
 func TestHealthzEndpoint(t *testing.T) {
 	cfg := DefaultConfig()
 	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -599,6 +601,7 @@ func TestHealthzEndpoint(t *testing.T) {
 func TestReadyzEndpoint_NotReady(t *testing.T) {
 	cfg := DefaultConfig()
 	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -619,6 +622,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 func TestReadyzEndpoint_Ready(t *testing.T) {
 	cfg := DefaultConfig()
 	srv := New(store.NewInMemoryInstrumentStore(), store.NewInMemoryOrderStore(), store.NewInMemoryTradeStore(), store.NewInMemoryPositionStore(), nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore

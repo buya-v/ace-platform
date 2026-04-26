@@ -26,21 +26,35 @@ func (s *Server) handleOffBookTrades(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleOffBookTrade dispatches actions on a specific off-book trade (PUT .../status).
+// handleOffBookTrade dispatches actions on a specific off-book trade.
 func (s *Server) handleOffBookTrade(w http.ResponseWriter, r *http.Request) {
 	if s.offBookTradeStore == nil {
 		s.writeError(w, http.StatusServiceUnavailable, "NOT_CONFIGURED", "off-book trade store not configured", nil)
 		return
 	}
-	if strings.HasSuffix(strings.TrimSuffix(r.URL.Path, "/"), "/status") {
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	switch {
+	case strings.HasSuffix(path, "/status"):
 		if r.Method == http.MethodPut {
 			s.handleUpdateOffBookStatus(w, r)
 		} else {
 			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		}
-		return
+	case strings.HasSuffix(path, "/confirm"):
+		if r.Method == http.MethodPost {
+			s.handleConfirmOffBookTrade(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+	case strings.HasSuffix(path, "/reject"):
+		if r.Method == http.MethodPost {
+			s.handleRejectOffBookTrade(w, r)
+		} else {
+			s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+		}
+	default:
+		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
-	s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 }
 
 // handleListOffBookTrades handles GET /api/v1/securities/off-book-trades.
@@ -145,6 +159,77 @@ func (s *Server) handleUpdateOffBookStatus(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := s.offBookTradeStore.UpdateStatus(tradeID, req.Status); err != nil {
+		s.writeError(w, http.StatusNotFound, "NOT_FOUND", "off-book trade not found", nil)
+		return
+	}
+	trade, _ := s.offBookTradeStore.Get(tradeID)
+	s.writeJSON(w, http.StatusOK, trade)
+}
+
+// confirmOffBookTradeRequest is the request body for POST .../off-book-trades/{id}/confirm.
+type confirmOffBookTradeRequest struct {
+	ConfirmedBy string `json:"confirmed_by"`
+}
+
+// handleConfirmOffBookTrade handles POST /api/v1/securities/trades/off-book/{id}/confirm.
+// Sets Status=CONFIRMED, records ConfirmedBy.
+func (s *Server) handleConfirmOffBookTrade(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	tradeID := parts[len(parts)-2]
+	if tradeID == "" {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PATH", "missing trade id", nil)
+		return
+	}
+
+	var req confirmOffBookTradeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+		return
+	}
+	if req.ConfirmedBy == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "confirmed_by is required", nil)
+		return
+	}
+
+	if err := s.offBookTradeStore.Confirm(tradeID, req.ConfirmedBy); err != nil {
+		s.writeError(w, http.StatusNotFound, "NOT_FOUND", "off-book trade not found", nil)
+		return
+	}
+	trade, _ := s.offBookTradeStore.Get(tradeID)
+	s.writeJSON(w, http.StatusOK, trade)
+}
+
+// rejectOffBookTradeRequest is the request body for POST .../off-book-trades/{id}/reject.
+type rejectOffBookTradeRequest struct {
+	RejectedBy      string `json:"rejected_by"`
+	RejectionReason string `json:"rejection_reason"`
+}
+
+// handleRejectOffBookTrade handles POST /api/v1/securities/trades/off-book/{id}/reject.
+// Sets Status=REJECTED, records RejectedBy and RejectionReason (required).
+func (s *Server) handleRejectOffBookTrade(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	tradeID := parts[len(parts)-2]
+	if tradeID == "" {
+		s.writeError(w, http.StatusBadRequest, "INVALID_PATH", "missing trade id", nil)
+		return
+	}
+
+	var req rejectOffBookTradeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+		return
+	}
+	if req.RejectedBy == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "rejected_by is required", nil)
+		return
+	}
+	if req.RejectionReason == "" {
+		s.writeError(w, http.StatusBadRequest, "MISSING_FIELD", "rejection_reason is required", nil)
+		return
+	}
+
+	if err := s.offBookTradeStore.Reject(tradeID, req.RejectedBy, req.RejectionReason); err != nil {
 		s.writeError(w, http.StatusNotFound, "NOT_FOUND", "off-book trade not found", nil)
 		return
 	}

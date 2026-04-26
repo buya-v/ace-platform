@@ -56,6 +56,7 @@ func newCSDTestServer(t *testing.T) (*httptest.Server, csdTestStores) {
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -481,7 +482,7 @@ func TestCSDEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil,  // bondStore
 		nil,  // strategyStore

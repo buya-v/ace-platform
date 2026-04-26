@@ -54,6 +54,7 @@ func newHaltTestServer(t *testing.T) (
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore

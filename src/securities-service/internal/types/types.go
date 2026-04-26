@@ -629,6 +629,9 @@ type OffBookTrade struct {
 	TradeDate       string        `json:"trade_date"`
 	Status          OffBookStatus `json:"status"`
 	Notes           string        `json:"notes,omitempty"`
+	ConfirmedBy     string        `json:"confirmed_by,omitempty"`
+	RejectedBy      string        `json:"rejected_by,omitempty"`
+	RejectionReason string        `json:"rejection_reason,omitempty"`
 	CreatedAt       string        `json:"created_at"`
 	UpdatedAt       string        `json:"updated_at"`
 }
@@ -895,4 +898,17 @@ type CSDTransfer struct {
 	TenantID        string            `json:"tenant_id"`
 	CreatedAt       string            `json:"created_at"`
 	UpdatedAt       string            `json:"updated_at"`
+}
+
+// ── Node Hierarchy ────────────────────────────────────────────────────────────
+
+// Node represents a hierarchical organisational node within a firm (e.g. desk, team, branch).
+// Permissions are inherited from parent nodes and merged with local overrides.
+type Node struct {
+	ID           string   `json:"id"`
+	FirmID       string   `json:"firm_id"`
+	ParentNodeID string   `json:"parent_node_id,omitempty"`
+	Name         string   `json:"name"`
+	Permissions  []string `json:"permissions"`
+	CreatedAt    string   `json:"created_at"`
 }

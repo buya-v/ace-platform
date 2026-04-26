@@ -54,6 +54,7 @@ func newThrottleTestServer(t *testing.T) (*httptest.Server, *store.InMemoryInstr
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore

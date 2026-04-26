@@ -61,6 +61,7 @@ type Server struct {
 	surveillanceStore    store.SurveillanceStore
 	instrumentGroupStore store.InstrumentGroupStore
 	offBookTradeStore    store.OffBookTradeStore
+	nodeStore            store.NodeStore
 	locateStore          store.LocateStore
 	rfqStore             store.RFQStore
 	giveUpStore          store.GiveUpStore
@@ -88,7 +89,7 @@ type Server struct {
 // tradeCorrectionStore may be nil; if so, trade correction endpoints return 503.
 // announcementStore and auditStore may be nil; if so, those endpoints return 503.
 // pendingChangeStore and referencePriceStore may be nil; if so, those endpoints return 503.
-// surveillanceStore, instrumentGroupStore, and offBookTradeStore may be nil; if so, those
+// surveillanceStore, instrumentGroupStore, offBookTradeStore, and nodeStore may be nil; if so, those
 // endpoints return 503.
 // locateStore, rfqStore, and giveUpStore may be nil; if so, those P4a endpoints return 503.
 // investigationStore, replayStore, and bondStore may be nil; if so, those endpoints return 503.
@@ -117,6 +118,7 @@ func New(
 	surveillanceStore store.SurveillanceStore,
 	instrumentGroupStore store.InstrumentGroupStore,
 	offBookTradeStore store.OffBookTradeStore,
+	nodeStore store.NodeStore,
 	locateStore store.LocateStore,
 	rfqStore store.RFQStore,
 	giveUpStore store.GiveUpStore,
@@ -159,6 +161,7 @@ func New(
 		surveillanceStore:    surveillanceStore,
 		instrumentGroupStore: instrumentGroupStore,
 		offBookTradeStore:    offBookTradeStore,
+		nodeStore:            nodeStore,
 		locateStore:          locateStore,
 		rfqStore:             rfqStore,
 		giveUpStore:          giveUpStore,
@@ -300,6 +303,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/off-book-trades", s.handleOffBookTrades)
 	mux.HandleFunc("/api/v1/securities/off-book-trades/", s.handleOffBookTrade)
 
+	// Node hierarchy
+	mux.HandleFunc("/api/v1/securities/nodes", s.handleNodes)
+	mux.HandleFunc("/api/v1/securities/nodes/", s.handleNodeItem)
+
 	// Market data (P3b Part B)
 	mux.HandleFunc("/api/v1/securities/market-data/book/", s.handleMarketDataBook)
 	mux.HandleFunc("/api/v1/securities/market-data/ticker/", s.handleMarketDataTicker)
@@ -311,6 +318,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Bulk upload (P3b Part D)
 	mux.HandleFunc("/api/v1/securities/bulk/instruments", s.handleBulkInstruments)
+	mux.HandleFunc("/api/v1/securities/bulk/instruments/csv", s.handleBulkInstrumentsCSV)
+	mux.HandleFunc("/api/v1/securities/bulk/instruments/amend", s.handleBulkInstrumentsAmend)
 
 	// P4a — Locates (short-sell locate requests)
 	mux.HandleFunc("/api/v1/securities/locates", s.handleLocates)

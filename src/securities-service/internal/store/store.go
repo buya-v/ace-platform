@@ -1681,6 +1681,8 @@ type OffBookTradeStore interface {
 	List() ([]types.OffBookTrade, error)
 	Get(id string) (*types.OffBookTrade, error)
 	UpdateStatus(id string, status types.OffBookStatus) error
+	Confirm(id string, confirmedBy string) error
+	Reject(id string, rejectedBy string, reason string) error
 }
 
 // InMemoryOffBookTradeStore is a thread-safe, in-memory implementation of OffBookTradeStore.
@@ -1740,6 +1742,180 @@ func (s *InMemoryOffBookTradeStore) UpdateStatus(id string, status types.OffBook
 	t.Status = status
 	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return nil
+}
+
+// Confirm marks an off-book trade as CONFIRMED, recording who confirmed it.
+func (s *InMemoryOffBookTradeStore) Confirm(id string, confirmedBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	t.Status = types.OffBookConfirmed
+	t.ConfirmedBy = confirmedBy
+	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// Reject marks an off-book trade as REJECTED, recording who rejected it and why.
+func (s *InMemoryOffBookTradeStore) Reject(id string, rejectedBy string, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	t.Status = types.OffBookRejected
+	t.RejectedBy = rejectedBy
+	t.RejectionReason = reason
+	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// ── NodeStore ─────────────────────────────────────────────────────────────────
+
+// NodeStore defines the repository contract for hierarchical organisational nodes.
+type NodeStore interface {
+	Create(node *types.Node) error
+	Get(id string) (*types.Node, error)
+	ListByFirm(firmID string) ([]types.Node, error)
+	ListChildren(parentNodeID string) ([]types.Node, error)
+	GetEffectivePermissions(id string) ([]string, error)
+}
+
+// InMemoryNodeStore is a thread-safe, in-memory implementation of NodeStore.
+type InMemoryNodeStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Node
+}
+
+// NewInMemoryNodeStore returns an empty InMemoryNodeStore.
+func NewInMemoryNodeStore() *InMemoryNodeStore {
+	return &InMemoryNodeStore{data: make(map[string]*types.Node)}
+}
+
+// Create stores a new node.
+func (s *InMemoryNodeStore) Create(node *types.Node) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[node.ID]; exists {
+		return fmt.Errorf("node %s already exists", node.ID)
+	}
+	cp := *node
+	cp.Permissions = make([]string, len(node.Permissions))
+	copy(cp.Permissions, node.Permissions)
+	s.data[node.ID] = &cp
+	return nil
+}
+
+// Get retrieves a node by ID.
+func (s *InMemoryNodeStore) Get(id string) (*types.Node, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *n
+	perms := make([]string, len(n.Permissions))
+	copy(perms, n.Permissions)
+	cp.Permissions = perms
+	return &cp, nil
+}
+
+// ListByFirm returns all nodes belonging to the given firm.
+func (s *InMemoryNodeStore) ListByFirm(firmID string) ([]types.Node, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []types.Node
+	for _, n := range s.data {
+		if n.FirmID == firmID {
+			cp := *n
+			perms := make([]string, len(n.Permissions))
+			copy(perms, n.Permissions)
+			cp.Permissions = perms
+			out = append(out, cp)
+		}
+	}
+	return out, nil
+}
+
+// ListChildren returns all direct children of a parent node.
+func (s *InMemoryNodeStore) ListChildren(parentNodeID string) ([]types.Node, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []types.Node
+	for _, n := range s.data {
+		if n.ParentNodeID == parentNodeID {
+			cp := *n
+			perms := make([]string, len(n.Permissions))
+			copy(perms, n.Permissions)
+			cp.Permissions = perms
+			out = append(out, cp)
+		}
+	}
+	return out, nil
+}
+
+// SetPermissions replaces the local permissions of a node in-place.
+// This is not part of the NodeStore interface but is used by the handler
+// via a type-assertion to avoid adding an Update method to the interface.
+func (s *InMemoryNodeStore) SetPermissions(id string, perms []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	cp := make([]string, len(perms))
+	copy(cp, perms)
+	n.Permissions = cp
+	return nil
+}
+
+// GetEffectivePermissions walks up the node tree, merging permissions from all
+// ancestors (parent → grandparent → …) and then the node's own permissions.
+// Later (more-specific) permissions win deduplication but all unique values are
+// included: the result is a deduplicated union across the full ancestry chain.
+func (s *InMemoryNodeStore) GetEffectivePermissions(id string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	var result []string
+
+	current := id
+	// Collect the ancestry chain from root down to current node.
+	var chain []*types.Node
+	visited := make(map[string]struct{})
+	for current != "" {
+		if _, cycle := visited[current]; cycle {
+			break // guard against circular references
+		}
+		visited[current] = struct{}{}
+		n, ok := s.data[current]
+		if !ok {
+			break
+		}
+		chain = append([]*types.Node{n}, chain...) // prepend so root comes first
+		current = n.ParentNodeID
+	}
+
+	// Walk from root to node, accumulating permissions.
+	for _, n := range chain {
+		for _, p := range n.Permissions {
+			if _, already := seen[p]; !already {
+				seen[p] = struct{}{}
+				result = append(result, p)
+			}
+		}
+	}
+
+	if result == nil {
+		result = []string{}
+	}
+	return result, nil
 }
 
 // ── P4a — LocateStore ─────────────────────────────────────────────────────────

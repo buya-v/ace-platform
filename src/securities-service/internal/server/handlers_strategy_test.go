@@ -44,6 +44,7 @@ func newStrategyTestServer(t *testing.T) (*httptest.Server, *store.InMemoryStrat
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -354,7 +355,7 @@ func TestStrategyEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil,  // bondStore
 		nil,  // strategyStore = nil

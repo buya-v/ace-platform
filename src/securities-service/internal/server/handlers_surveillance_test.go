@@ -45,6 +45,7 @@ func newSurveillanceTestServer(t *testing.T) (*httptest.Server, *store.InMemoryS
 		survStore,
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -319,7 +320,8 @@ func TestSurveillanceEndpoints_NotConfigured(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, // surveillanceStore = nil
 		nil, nil,
-		nil, nil, nil, // locateStore, rfqStore, giveUpStore
+		nil, nil, nil, // nodeStore
+		nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil, cfg,

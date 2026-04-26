@@ -148,6 +148,7 @@ func main() {
 		store.NewInMemorySurveillanceStore(),
 		store.NewInMemoryInstrumentGroupStore(),
 		store.NewInMemoryOffBookTradeStore(),
+		store.NewInMemoryNodeStore(),
 		// P4a stores: locate, RFQ, give-up
 		store.NewInMemoryLocateStore(),
 		store.NewInMemoryRFQStore(),

@@ -45,6 +45,7 @@ func newInvestigationTestServer(t *testing.T) (*httptest.Server, *store.InMemory
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -364,6 +365,7 @@ func TestInvestigationEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, // surveillance, instrument-group, off-book
+		nil,           // nodeStore
 		nil, nil, nil, // locate, rfq, give-up
 		nil, // investigationStore = nil
 		nil, // replayStore

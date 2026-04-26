@@ -37,7 +37,8 @@ func newPositionTestServer(t *testing.T) (*httptest.Server, *store.InMemoryPosit
 		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil, nil, nil,
-		nil, nil, nil, // locateStore, rfqStore, giveUpStore
+		nil, nil, nil, // nodeStore
+		nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil,
@@ -196,7 +197,8 @@ func TestListPositions_NilStore_Returns503(t *testing.T) {
 		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil, nil, nil,
-		nil, nil, nil, // locateStore, rfqStore, giveUpStore
+		nil, nil, nil, // nodeStore
+		nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil,

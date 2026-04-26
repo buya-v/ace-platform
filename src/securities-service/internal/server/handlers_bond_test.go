@@ -46,6 +46,7 @@ func newBondTestServer(t *testing.T) (*httptest.Server, *store.InMemoryBondStore
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -368,7 +369,7 @@ func TestBondEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		nil,  // investigationStore
 		nil,  // replayStore
 		nil,  // bondStore = nil

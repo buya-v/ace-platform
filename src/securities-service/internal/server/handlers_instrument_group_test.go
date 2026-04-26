@@ -37,6 +37,7 @@ func newGroupTestServer(t *testing.T) (*httptest.Server, *store.InMemoryInstrume
 		nil, // surveillanceStore
 		groupStore,
 		nil, // offBookTradeStore
+		nil, // nodeStore
 		nil, // locateStore
 		nil, // rfqStore
 		nil, // giveUpStore
@@ -265,7 +266,8 @@ func TestInstrumentGroupEndpoints_NotConfigured(t *testing.T) {
 		nil,  // surveillanceStore
 		nil,  // instrumentGroupStore = nil
 		nil,  // offBookTradeStore
-		nil, nil, nil, // locateStore, rfqStore, giveUpStore
+		nil, nil, nil, // nodeStore
+		nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, me, nil, nil, nil, cfg,
