@@ -38,8 +38,7 @@ func newReferencePriceTestServer(t *testing.T) (*httptest.Server, *store.InMemor
 		cbStore,
 		store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil,
-		nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		rpStore,
 		nil, nil, nil,
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore

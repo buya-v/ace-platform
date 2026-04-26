@@ -36,6 +36,7 @@ func newStrategyTestServer(t *testing.T) (*httptest.Server, *store.InMemoryStrat
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore
@@ -352,7 +353,7 @@ func TestStrategyEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil,  // bondStore

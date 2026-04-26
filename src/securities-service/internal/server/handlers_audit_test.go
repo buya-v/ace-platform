@@ -38,6 +38,7 @@ func newTestServerWithAudit(t *testing.T) (*httptest.Server, *store.InMemoryAudi
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		annStore,
 		auditStore,
 		nil, // pendingChangeStore

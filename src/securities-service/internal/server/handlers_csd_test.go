@@ -48,6 +48,7 @@ func newCSDTestServer(t *testing.T) (*httptest.Server, csdTestStores) {
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore
@@ -479,7 +480,7 @@ func TestCSDEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil,  // bondStore

@@ -37,6 +37,7 @@ func newInvestigationTestServer(t *testing.T) (*httptest.Server, *store.InMemory
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore
@@ -361,7 +362,7 @@ func TestInvestigationEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, // surveillance, instrument-group, off-book
 		nil, nil, nil, // locate, rfq, give-up
 		nil, // investigationStore = nil

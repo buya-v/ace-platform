@@ -81,10 +81,11 @@ func main() {
 	firmStore := store.NewInMemoryFirmStore()
 	participantStore := store.NewInMemoryParticipantStore()
 
-	// Tick table, trade correction, and throttle stores.
+	// Tick table, trade correction, throttle, and throttle-config stores.
 	tickTableStore := store.NewInMemoryTickTableStore()
 	tradeCorrectionStore := store.NewInMemoryTradeCorrectionStore()
 	throttleStore := store.NewInMemoryThrottleStore()
+	throttleConfigStore := store.NewInMemoryThrottleConfigStore()
 
 	// Announcement and audit stores.
 	announcementStore := store.NewInMemoryAnnouncementStore()
@@ -139,6 +140,7 @@ func main() {
 		tickTableStore,
 		tradeCorrectionStore,
 		throttleStore,
+		throttleConfigStore,
 		announcementStore,
 		auditStore,
 		pendingChangeStore,

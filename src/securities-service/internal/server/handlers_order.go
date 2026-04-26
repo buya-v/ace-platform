@@ -65,12 +65,26 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Part C: Order throttle — check rate limit before any validation.
+	// Order throttle — check per-firm rate limit before any validation.
+	// Resolve the participant's firm, look up a per-firm ThrottleConfig, and
+	// apply the configured limit.  Falls back to the default 100 orders/sec when
+	// no config exists or the config is disabled.
 	if s.throttleStore != nil && order.ParticipantID != "" {
-		allowed, _ := s.throttleStore.CheckAndIncrement(order.ParticipantID, 100)
+		const defaultLimit = 100
+		limit := defaultLimit
+
+		if s.throttleConfigStore != nil && s.participantStore != nil {
+			if participant, pErr := s.participantStore.Get(order.ParticipantID); pErr == nil {
+				if tcfg, cErr := s.throttleConfigStore.Get(participant.FirmID); cErr == nil && tcfg.Enabled {
+					limit = tcfg.MaxOrdersPerSecond
+				}
+			}
+		}
+
+		allowed, _ := s.throttleStore.CheckAndIncrement(order.ParticipantID, limit)
 		if !allowed {
 			s.writeError(w, http.StatusTooManyRequests, "THROTTLED",
-				"rate limit exceeded: max 100 orders/sec", nil)
+				fmt.Sprintf("rate limit exceeded: max %d orders/sec", limit), nil)
 			return
 		}
 	}

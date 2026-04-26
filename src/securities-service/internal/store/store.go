@@ -81,6 +81,7 @@ type SettlementStore interface {
 	ListByDate(date string) ([]types.SettlementObligation, error)
 	ListByStatus(status types.SettlementStatus) ([]types.SettlementObligation, error)
 	UpdateStatus(id string, status types.SettlementStatus) error
+	Update(obligation *types.SettlementObligation) error
 }
 
 // FirmStore defines the repository contract for member firms.
@@ -686,6 +687,19 @@ func (s *InMemorySettlementStore) UpdateStatus(id string, status types.Settlemen
 	return nil
 }
 
+// Update replaces the stored obligation with the provided copy.
+func (s *InMemorySettlementStore) Update(obligation *types.SettlementObligation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.data[obligation.ID]; !ok {
+		return ErrNotFound
+	}
+	cp := *obligation
+	s.data[obligation.ID] = &cp
+	return nil
+}
+
 // --- CorporateActionStore ---
 
 // CorporateActionFilters carries optional filter parameters for listing corporate actions.
@@ -899,6 +913,7 @@ type SegmentStore interface {
 	Create(seg *types.Segment) error
 	Get(id string) (*types.Segment, error)
 	ListByMarket(marketID string) ([]types.Segment, error)
+	UpdateStatus(id, status string) error
 }
 
 type InMemorySegmentStore struct {
@@ -937,6 +952,15 @@ func (s *InMemorySegmentStore) ListByMarket(marketID string) ([]types.Segment, e
 		if marketID == "" || seg.MarketID == marketID { out = append(out, *seg) }
 	}
 	return out, nil
+}
+
+func (s *InMemorySegmentStore) UpdateStatus(id, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seg, ok := s.data[id]
+	if !ok { return fmt.Errorf("segment %s not found", id) }
+	seg.Status = status; seg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
 }
 
 // ── Circuit Breaker Store (MillenniumIT P1) ──────────────────────────────────
@@ -2539,5 +2563,76 @@ func (s *InMemoryCSDTransferStore) Fail(id, reason string) error {
 	t.Status = types.CSDTransferFailed
 	t.FailReason = reason
 	t.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// ── ThrottleConfigStore ───────────────────────────────────────────────────────
+
+// ThrottleConfigStore defines the repository contract for per-firm throttle
+// configuration. Configs are keyed by FirmID.
+type ThrottleConfigStore interface {
+	// Get returns the throttle config for firmID, or ErrNotFound.
+	Get(firmID string) (*types.ThrottleConfig, error)
+	// Set creates or replaces the throttle config for the given firm.
+	Set(cfg *types.ThrottleConfig) error
+	// List returns all registered throttle configs.
+	List() ([]types.ThrottleConfig, error)
+	// Delete removes the throttle config for firmID, or ErrNotFound.
+	Delete(firmID string) error
+}
+
+// InMemoryThrottleConfigStore is a thread-safe, in-memory implementation of
+// ThrottleConfigStore.
+type InMemoryThrottleConfigStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.ThrottleConfig
+}
+
+// NewInMemoryThrottleConfigStore returns an empty InMemoryThrottleConfigStore.
+func NewInMemoryThrottleConfigStore() *InMemoryThrottleConfigStore {
+	return &InMemoryThrottleConfigStore{data: make(map[string]*types.ThrottleConfig)}
+}
+
+// Get returns the throttle config for firmID.
+func (s *InMemoryThrottleConfigStore) Get(firmID string) (*types.ThrottleConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.data[firmID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *c
+	return &cp, nil
+}
+
+// Set creates or replaces the throttle config for the given firm.
+func (s *InMemoryThrottleConfigStore) Set(cfg *types.ThrottleConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *cfg
+	cp.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	s.data[cfg.FirmID] = &cp
+	return nil
+}
+
+// List returns all registered throttle configs.
+func (s *InMemoryThrottleConfigStore) List() ([]types.ThrottleConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.ThrottleConfig, 0, len(s.data))
+	for _, c := range s.data {
+		out = append(out, *c)
+	}
+	return out, nil
+}
+
+// Delete removes the throttle config for firmID.
+func (s *InMemoryThrottleConfigStore) Delete(firmID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[firmID]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, firmID)
 	return nil
 }

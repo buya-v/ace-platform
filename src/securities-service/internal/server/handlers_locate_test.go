@@ -37,6 +37,7 @@ func newLocateTestServer(t *testing.T) (*httptest.Server, *store.InMemoryLocateS
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore

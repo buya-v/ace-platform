@@ -35,6 +35,7 @@ func newReplayTestServer(t *testing.T) (*httptest.Server, *store.InMemoryReplayS
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore
@@ -279,7 +280,7 @@ func TestReplayEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil,
 		nil,        // investigationStore
 		nil,        // replayStore = nil

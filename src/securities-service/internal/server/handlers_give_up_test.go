@@ -37,6 +37,7 @@ func newGiveUpTestServer(t *testing.T) (*httptest.Server, *store.InMemoryGiveUpS
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore

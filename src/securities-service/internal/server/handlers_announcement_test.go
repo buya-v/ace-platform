@@ -38,6 +38,7 @@ func newTestServerWithAnnouncement(t *testing.T) *httptest.Server {
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		annStore,
 		auditStore,
 		nil, // pendingChangeStore

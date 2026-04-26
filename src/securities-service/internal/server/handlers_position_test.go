@@ -34,7 +34,7 @@ func newPositionTestServer(t *testing.T) (*httptest.Server, *store.InMemoryPosit
 		store.NewInMemoryCircuitBreakerStore(),
 		store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil, nil, nil,
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore
@@ -193,7 +193,7 @@ func TestListPositions_NilStore_Returns503(t *testing.T) {
 		store.NewInMemoryCircuitBreakerStore(),
 		store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil, nil, nil,
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore

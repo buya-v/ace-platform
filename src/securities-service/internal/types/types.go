@@ -178,6 +178,7 @@ type SettlementObligation struct {
 	Quantity            int              `json:"quantity"`
 	Price               float64          `json:"price"`
 	NetAmount           float64          `json:"net_amount"`
+	AccruedInterest     float64          `json:"accrued_interest,omitempty"`
 	SettlementDate      string           `json:"settlement_date"`
 	Status              SettlementStatus `json:"status"`
 	CreatedAt           string           `json:"created_at"`
@@ -357,12 +358,14 @@ type ErrorResponse struct {
 
 const (
 	MarketActive    = "MARKET_ACTIVE"
+	MarketHalted    = "MARKET_HALTED"
 	MarketSuspended = "MARKET_SUSPENDED"
 	MarketClosed    = "MARKET_CLOSED"
 )
 
 const (
 	SegActive    = "SEG_ACTIVE"
+	SegHalted    = "SEG_HALTED"
 	SegSuspended = "SEG_SUSPENDED"
 )
 
@@ -827,6 +830,16 @@ type TradingStrategy struct {
 	TenantID     string         `json:"tenant_id"`
 	CreatedAt    string         `json:"created_at"`
 	UpdatedAt    string         `json:"updated_at"`
+}
+
+// ── Per-Firm Throttle Configuration ──────────────────────────────────────────
+
+// ThrottleConfig holds the per-firm rate limit configuration for order submission.
+type ThrottleConfig struct {
+	FirmID             string `json:"firm_id"`
+	MaxOrdersPerSecond int    `json:"max_orders_per_second"`
+	Enabled            bool   `json:"enabled"`
+	UpdatedAt          string `json:"updated_at"`
 }
 
 // ── CSD — Custody Accounts, Balances, Transfers ───────────────────────────────

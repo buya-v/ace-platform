@@ -37,6 +37,7 @@ func newSurveillanceTestServer(t *testing.T) (*httptest.Server, *store.InMemoryS
 		nil, // tickTableStore
 		nil, // tradeCorrectionStore
 		nil, // throttleStore
+		nil, // throttleConfigStore
 		nil, // announcementStore
 		nil, // auditStore
 		nil, // pendingChangeStore
@@ -315,7 +316,7 @@ func TestSurveillanceEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, // surveillanceStore = nil
 		nil, nil,
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore

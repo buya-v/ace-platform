@@ -14,6 +14,12 @@ import (
 type SettlementEngine struct {
 	orderStore      store.OrderStore
 	settlementStore store.SettlementStore
+	bondStore       store.BondStore
+}
+
+// SetBondStore configures the bond store used for accrued interest calculations.
+func (e *SettlementEngine) SetBondStore(bs store.BondStore) {
+	e.bondStore = bs
 }
 
 // NewSettlementEngine creates a new SettlementEngine with the given stores.
@@ -124,6 +130,22 @@ func (e *SettlementEngine) ProcessSettlementCycle(date string) (*types.Settlemen
 		return nil, fmt.Errorf("settlement cycle: failed to re-list obligations for %s: %w", date, err)
 	}
 
+	// 2b. Calculate accrued interest for bond instruments.
+	if e.bondStore != nil {
+		settlementDate, _ := time.Parse("2006-01-02", date)
+		for i := range obligations {
+			ob := &obligations[i]
+			bond, err := e.bondStore.Get(ob.InstrumentID)
+			if err != nil {
+				continue // not a bond instrument, skip
+			}
+			accrued := calculateAccruedInterest(bond, settlementDate, ob.Quantity)
+			ob.AccruedInterest = accrued
+			ob.NetAmount += accrued
+			_ = e.settlementStore.Update(ob)
+		}
+	}
+
 	// 3. Group AFFIRMED by (instrument, buyer, seller) and net quantities.
 	groups := make(map[nettingKey][]string) // key -> list of obligation IDs
 	for _, ob := range obligations {
@@ -165,4 +187,35 @@ func (e *SettlementEngine) ProcessSettlementCycle(date string) (*types.Settlemen
 	}
 
 	return result, nil
+}
+
+// calculateAccruedInterest computes accrued interest for a bond obligation based on
+// the bond's day count convention. For MVP, assumes 30 days since the last coupon date.
+func calculateAccruedInterest(bond *types.Bond, settlementDate time.Time, quantity int) float64 {
+	const defaultDaysSinceLastCoupon = 30
+
+	couponRate := bond.CouponRate // e.g. 0.05 for 5%
+	parValue := bond.ParValue
+	days := float64(defaultDaysSinceLastCoupon)
+
+	var accrued float64
+	switch bond.DayCountConvention {
+	case types.DayCountACT365:
+		// ACT/365: accrued = days * (couponRate/100) * parValue / 365
+		// Note: if couponRate is already fractional (e.g. 0.05), we don't divide by 100.
+		// The type doc says "e.g. 0.05 for 5%", so couponRate is already a fraction.
+		accrued = days * couponRate * parValue / 365.0
+	case types.DayCountACT360:
+		// ACT/360: accrued = days * couponRate * parValue / 360
+		accrued = days * couponRate * parValue / 360.0
+	case types.DayCount30360:
+		// 30/360: for MVP with 30 default days, months=1, remaining=0
+		// accrued = (months*30 + remaining_days) * couponRate * parValue / 360
+		accrued = days * couponRate * parValue / 360.0
+	default:
+		// Default to ACT/365 if convention is unknown.
+		accrued = days * couponRate * parValue / 365.0
+	}
+
+	return accrued * float64(quantity)
 }

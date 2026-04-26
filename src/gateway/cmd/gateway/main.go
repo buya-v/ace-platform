@@ -264,6 +264,11 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/bonds", secHandler)
 	rt.Handle("GET", "/api/v1/securities/bonds/{id}", secHandler)
 	rt.Handle("GET", "/api/v1/securities/bonds/{id}/accrued-interest", secHandler)
+	// Throttle config — per-firm rate limit administration
+	rt.Handle("GET", "/api/v1/securities/throttle-config", secHandler)
+	rt.Handle("GET", "/api/v1/securities/throttle-config/{firm_id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/throttle-config/{firm_id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/throttle-config/{firm_id}", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091

@@ -33,7 +33,7 @@ func newGroupTestServer(t *testing.T) (*httptest.Server, *store.InMemoryInstrume
 		store.NewInMemoryCircuitBreakerStore(),
 		store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, // surveillanceStore
 		groupStore,
 		nil, // offBookTradeStore
@@ -261,7 +261,7 @@ func TestInstrumentGroupEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil,  // surveillanceStore
 		nil,  // instrumentGroupStore = nil
 		nil,  // offBookTradeStore

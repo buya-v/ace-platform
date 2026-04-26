@@ -34,7 +34,7 @@ func newOffBookTestServer(t *testing.T) (*httptest.Server, *store.InMemoryOffBoo
 		store.NewInMemoryCircuitBreakerStore(),
 		store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, // surveillanceStore
 		nil, // instrumentGroupStore
 		obStore,
@@ -296,7 +296,7 @@ func TestOffBookEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(),
 		store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(),
 		store.NewInMemoryParticipantStore(),
-		nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil,
 		nil, // offBookTradeStore = nil
 		nil, nil, nil, // locateStore, rfqStore, giveUpStore

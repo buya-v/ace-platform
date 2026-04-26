@@ -199,7 +199,8 @@ func (s *Server) handleProcessCorporateAction(w http.ResponseWriter, r *http.Req
 	s.writeJSON(w, http.StatusOK, result)
 }
 
-// processDividend creates entitlements for all positions in the instrument.
+// processDividend creates entitlements for all positions in the instrument
+// and updates CSD custody balances for each participant.
 // dividend_amount must be present in ca.Details["dividend_amount"].
 func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types.Entitlement, error) {
 	dividendAmount := 0.0
@@ -229,13 +230,14 @@ func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types
 			return nil, err
 		}
 
+		entitlementValue := float64(pos.Quantity) * dividendAmount
 		e := types.Entitlement{
 			ID:                id,
 			CorporateActionID: ca.ID,
 			ParticipantID:     pos.ParticipantID,
 			InstrumentID:      ca.InstrumentID,
 			Quantity:          pos.Quantity,
-			EntitlementValue:  float64(pos.Quantity) * dividendAmount,
+			EntitlementValue:  entitlementValue,
 			Status:            types.EntitlementStatusPending,
 			CreatedAt:         now,
 		}
@@ -243,11 +245,21 @@ func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types
 			return nil, err
 		}
 		entitlements = append(entitlements, e)
+
+		// CSD balance update: credit the participant's custody account with the entitlement value.
+		if s.custodyAccountStore != nil && s.custodyBalanceStore != nil && s.participantStore != nil {
+			accountID := s.findCustodyAccountForParticipant(pos.ParticipantID)
+			if accountID != "" {
+				// Use entitlement value as integer delta (monetary units) on the instrument balance.
+				_, _ = s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, int(entitlementValue), 0)
+			}
+		}
 	}
 	return entitlements, nil
 }
 
-// processStockSplit adjusts all positions for the instrument by the split ratio.
+// processStockSplit adjusts all positions for the instrument by the split ratio
+// and updates CSD custody balances accordingly.
 // split_ratio must be present in ca.Details["split_ratio"].
 func (s *Server) processStockSplit(ca *types.CorporateAction) (int, error) {
 	splitRatio := 1.0
@@ -270,13 +282,47 @@ func (s *Server) processStockSplit(ca *types.CorporateAction) (int, error) {
 		if pos.InstrumentID != ca.InstrumentID {
 			continue
 		}
+		oldQty := pos.Quantity
 		pos.Quantity = int(float64(pos.Quantity) * splitRatio)
 		if err := s.positionStore.Update(&pos); err != nil {
 			return count, err
 		}
 		count++
+
+		// CSD balance update: multiply the custody balance quantity by the split ratio.
+		if s.custodyAccountStore != nil && s.custodyBalanceStore != nil && s.participantStore != nil {
+			accountID := s.findCustodyAccountForParticipant(pos.ParticipantID)
+			if accountID != "" {
+				// Retrieve current balance (deltaQty=0), then apply split delta.
+				bal, err := s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, 0, 0)
+				if err == nil && bal != nil {
+					// Delta to reach the new split quantity from the current balance.
+					deltaQty := int(float64(bal.Quantity)*splitRatio) - bal.Quantity
+					if deltaQty != 0 {
+						_, _ = s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, deltaQty, 0)
+					}
+				} else {
+					// No existing balance — seed it with the split-adjusted position quantity.
+					_, _ = s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, int(float64(oldQty)*splitRatio), 0)
+				}
+			}
+		}
 	}
 	return count, nil
+}
+
+// findCustodyAccountForParticipant looks up the participant's firm and returns the
+// first custody account ID for that firm. Returns "" if not found.
+func (s *Server) findCustodyAccountForParticipant(participantID string) string {
+	participant, err := s.participantStore.Get(participantID)
+	if err != nil || participant == nil {
+		return ""
+	}
+	accounts, err := s.custodyAccountStore.ListByFirm(participant.FirmID)
+	if err != nil || len(accounts) == 0 {
+		return ""
+	}
+	return accounts[0].ID
 }
 
 // extractID extracts the path segment after the given prefix.

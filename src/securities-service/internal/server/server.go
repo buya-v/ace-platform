@@ -53,6 +53,7 @@ type Server struct {
 	tickTableStore       store.TickTableStore
 	tradeCorrectionStore store.TradeCorrectionStore
 	throttleStore        store.ThrottleStore
+	throttleConfigStore  store.ThrottleConfigStore
 	announcementStore    store.AnnouncementStore
 	auditStore           store.AuditStore
 	pendingChangeStore   store.PendingChangeStore
@@ -91,6 +92,7 @@ type Server struct {
 // endpoints return 503.
 // locateStore, rfqStore, and giveUpStore may be nil; if so, those P4a endpoints return 503.
 // investigationStore, replayStore, and bondStore may be nil; if so, those endpoints return 503.
+// throttleConfigStore may be nil; if so, order throttle falls back to the default 100 orders/sec.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -107,6 +109,7 @@ func New(
 	tickTableStore store.TickTableStore,
 	tradeCorrectionStore store.TradeCorrectionStore,
 	throttleStore store.ThrottleStore,
+	throttleConfigStore store.ThrottleConfigStore,
 	announcementStore store.AnnouncementStore,
 	auditStore store.AuditStore,
 	pendingChangeStore store.PendingChangeStore,
@@ -148,6 +151,7 @@ func New(
 		tickTableStore:       tickTableStore,
 		tradeCorrectionStore: tradeCorrectionStore,
 		throttleStore:        throttleStore,
+		throttleConfigStore:  throttleConfigStore,
 		announcementStore:    announcementStore,
 		auditStore:           auditStore,
 		pendingChangeStore:   pendingChangeStore,
@@ -240,6 +244,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/markets", s.handleMarkets)
 	mux.HandleFunc("/api/v1/securities/markets/", s.handleMarket)
 	mux.HandleFunc("/api/v1/securities/segments", s.handleSegments)
+	mux.HandleFunc("/api/v1/securities/segments/", s.handleSegment)
 
 	// Circuit Breakers (MillenniumIT P1)
 	mux.HandleFunc("/api/v1/securities/circuit-breakers", s.handleCircuitBreakers)
@@ -341,6 +346,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/securities/csd/accounts/", s.handleCustodyAccount)
 	mux.HandleFunc("/api/v1/securities/csd/transfers", s.handleCSDTransfers)
 	mux.HandleFunc("/api/v1/securities/csd/transfers/", s.handleCSDTransfer)
+
+	// Throttle config — per-firm rate limit configuration
+	// The collection route must be registered before the wildcard item route.
+	mux.HandleFunc("/api/v1/securities/throttle-config", s.handleThrottleConfigs)
+	mux.HandleFunc("/api/v1/securities/throttle-config/", s.handleThrottleConfig)
 }
 
 // --- Health endpoints ---
