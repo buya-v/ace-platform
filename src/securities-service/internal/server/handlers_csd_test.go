@@ -67,6 +67,9 @@ func newCSDTestServer(t *testing.T) (*httptest.Server, csdTestStores) {
 		stores.accounts,
 		stores.balances,
 		stores.transfers,
+		nil, // watchListStore
+		nil, // ipRestrictionStore
+		nil, // passwordPolicyStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -614,7 +617,7 @@ func TestCSDEndpoints_NotConfigured(t *testing.T) {
 		nil,  // custodyAccountStore = nil
 		nil,  // custodyBalanceStore = nil
 		nil,  // csdTransferStore = nil
-		nil, me, nil, nil, nil, cfg,
+		nil, nil, nil, nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

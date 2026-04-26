@@ -912,3 +912,42 @@ type Node struct {
 	Permissions  []string `json:"permissions"`
 	CreatedAt    string   `json:"created_at"`
 }
+
+// ── Watch Lists ───────────────────────────────────────────────────────────────
+
+// WatchList is a named collection of instruments and/or clients/firms that a
+// user monitors for surveillance or alerting purposes.
+type WatchList struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	OwnerID       string   `json:"owner_id"`
+	InstrumentIDs []string `json:"instrument_ids"`
+	ClientIDs     []string `json:"client_ids"`
+	FirmIDs       []string `json:"firm_ids"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
+}
+
+// ── IP Restrictions ───────────────────────────────────────────────────────────
+
+// IPRestriction defines which IP addresses a given participant is allowed to
+// connect from. When Enabled is false the allow-list is not enforced.
+type IPRestriction struct {
+	ParticipantID string   `json:"participant_id"`
+	AllowedIPs    []string `json:"allowed_ips"`
+	Enabled       bool     `json:"enabled"`
+}
+
+// ── Password Policy ───────────────────────────────────────────────────────────
+
+// PasswordPolicy defines the complexity and expiry rules for passwords within a
+// tenant. Each tenant has exactly one policy record.
+type PasswordPolicy struct {
+	TenantID         string `json:"tenant_id"`
+	MinLength        int    `json:"min_length"`
+	RequireUppercase bool   `json:"require_uppercase"`
+	RequireLowercase bool   `json:"require_lowercase"`
+	RequireDigit     bool   `json:"require_digit"`
+	RequireSpecial   bool   `json:"require_special"`
+	MaxAgeDays       int    `json:"max_age_days"`
+}

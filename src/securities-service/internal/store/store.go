@@ -2817,3 +2817,177 @@ func (s *InMemoryThrottleConfigStore) Delete(firmID string) error {
 	delete(s.data, firmID)
 	return nil
 }
+
+// ── WatchListStore ────────────────────────────────────────────────────────────
+
+// WatchListStore defines the repository contract for user watch lists.
+type WatchListStore interface {
+	Create(wl *types.WatchList) error
+	Get(id string) (*types.WatchList, error)
+	ListByOwner(ownerID string) ([]types.WatchList, error)
+	Update(wl *types.WatchList) error
+	Delete(id string) error
+}
+
+// InMemoryWatchListStore is a thread-safe, in-memory implementation of WatchListStore.
+type InMemoryWatchListStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.WatchList
+}
+
+// NewInMemoryWatchListStore returns an empty InMemoryWatchListStore.
+func NewInMemoryWatchListStore() *InMemoryWatchListStore {
+	return &InMemoryWatchListStore{data: make(map[string]*types.WatchList)}
+}
+
+// Create stores a new watch list.
+func (s *InMemoryWatchListStore) Create(wl *types.WatchList) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[wl.ID]; exists {
+		return fmt.Errorf("watch list %s already exists", wl.ID)
+	}
+	cp := *wl
+	s.data[wl.ID] = &cp
+	return nil
+}
+
+// Get retrieves a watch list by ID.
+func (s *InMemoryWatchListStore) Get(id string) (*types.WatchList, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	wl, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *wl
+	return &cp, nil
+}
+
+// ListByOwner returns all watch lists owned by ownerID.
+func (s *InMemoryWatchListStore) ListByOwner(ownerID string) ([]types.WatchList, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.WatchList, 0)
+	for _, wl := range s.data {
+		if wl.OwnerID == ownerID {
+			out = append(out, *wl)
+		}
+	}
+	return out, nil
+}
+
+// Update replaces an existing watch list record.
+func (s *InMemoryWatchListStore) Update(wl *types.WatchList) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[wl.ID]; !ok {
+		return ErrNotFound
+	}
+	cp := *wl
+	s.data[wl.ID] = &cp
+	return nil
+}
+
+// Delete removes a watch list by ID.
+func (s *InMemoryWatchListStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// ── IPRestrictionStore ────────────────────────────────────────────────────────
+
+// IPRestrictionStore defines the repository contract for participant IP allow-lists.
+type IPRestrictionStore interface {
+	Get(participantID string) (*types.IPRestriction, error)
+	Set(r *types.IPRestriction) error
+	Delete(participantID string) error
+}
+
+// InMemoryIPRestrictionStore is a thread-safe, in-memory implementation of IPRestrictionStore.
+type InMemoryIPRestrictionStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.IPRestriction
+}
+
+// NewInMemoryIPRestrictionStore returns an empty InMemoryIPRestrictionStore.
+func NewInMemoryIPRestrictionStore() *InMemoryIPRestrictionStore {
+	return &InMemoryIPRestrictionStore{data: make(map[string]*types.IPRestriction)}
+}
+
+// Get retrieves the IP restriction record for a participant.
+func (s *InMemoryIPRestrictionStore) Get(participantID string) (*types.IPRestriction, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.data[participantID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *r
+	return &cp, nil
+}
+
+// Set upserts an IP restriction record.
+func (s *InMemoryIPRestrictionStore) Set(r *types.IPRestriction) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *r
+	s.data[r.ParticipantID] = &cp
+	return nil
+}
+
+// Delete removes the IP restriction record for a participant.
+func (s *InMemoryIPRestrictionStore) Delete(participantID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[participantID]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, participantID)
+	return nil
+}
+
+// ── PasswordPolicyStore ───────────────────────────────────────────────────────
+
+// PasswordPolicyStore defines the repository contract for per-tenant password policies.
+type PasswordPolicyStore interface {
+	Get(tenantID string) (*types.PasswordPolicy, error)
+	Set(p *types.PasswordPolicy) error
+}
+
+// InMemoryPasswordPolicyStore is a thread-safe, in-memory implementation of PasswordPolicyStore.
+type InMemoryPasswordPolicyStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.PasswordPolicy
+}
+
+// NewInMemoryPasswordPolicyStore returns an empty InMemoryPasswordPolicyStore.
+func NewInMemoryPasswordPolicyStore() *InMemoryPasswordPolicyStore {
+	return &InMemoryPasswordPolicyStore{data: make(map[string]*types.PasswordPolicy)}
+}
+
+// Get retrieves the password policy for a tenant.
+func (s *InMemoryPasswordPolicyStore) Get(tenantID string) (*types.PasswordPolicy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.data[tenantID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
+// Set upserts a password policy for a tenant.
+func (s *InMemoryPasswordPolicyStore) Set(p *types.PasswordPolicy) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *p
+	s.data[p.TenantID] = &cp
+	return nil
+}

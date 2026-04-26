@@ -45,6 +45,7 @@ func newReferencePriceTestServer(t *testing.T) (*httptest.Server, *store.InMemor
 		nil, // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil,
 		cfg,
 	)

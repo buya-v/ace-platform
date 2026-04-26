@@ -55,6 +55,7 @@ func newTestServerWithCA(t *testing.T, s caStores) *httptest.Server {
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil, cfg)
 	srv.SetReady()
 

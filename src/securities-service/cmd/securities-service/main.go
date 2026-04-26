@@ -162,6 +162,10 @@ func main() {
 		store.NewInMemoryCustodyAccountStore(),
 		store.NewInMemoryCustodyBalanceStore(),
 		store.NewInMemoryCSDTransferStore(),
+		// Watch lists, IP restrictions, password policy stores.
+		store.NewInMemoryWatchListStore(),
+		store.NewInMemoryIPRestrictionStore(),
+		store.NewInMemoryPasswordPolicyStore(),
 		dayManager,
 		matchingEngine,
 		sessionManager,

@@ -55,6 +55,9 @@ func newStrategyTestServer(t *testing.T) (*httptest.Server, *store.InMemoryStrat
 		nil, // custodyAccountStore
 		nil, // custodyBalanceStore
 		nil, // csdTransferStore
+		nil, // watchListStore
+		nil, // ipRestrictionStore
+		nil, // passwordPolicyStore
 		nil, // dayManager
 		me,
 		nil, // sessionManager
@@ -362,7 +365,7 @@ func TestStrategyEndpoints_NotConfigured(t *testing.T) {
 		nil,  // custodyAccountStore
 		nil,  // custodyBalanceStore
 		nil,  // csdTransferStore
-		nil, me, nil, nil, nil, cfg,
+		nil, nil, nil, nil, me, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

@@ -47,6 +47,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil, cfg)
 	srv.SetReady()
 
@@ -578,6 +579,7 @@ func TestHealthzEndpoint(t *testing.T) {
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
@@ -607,6 +609,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, nil, nil, nil, nil, cfg)
 	// NOT calling SetReady()
 
@@ -628,6 +631,7 @@ func TestReadyzEndpoint_Ready(t *testing.T) {
 		nil, // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
+		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 

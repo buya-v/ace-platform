@@ -72,6 +72,9 @@ type Server struct {
 	custodyAccountStore  store.CustodyAccountStore
 	custodyBalanceStore  store.CustodyBalanceStore
 	csdTransferStore     store.CSDTransferStore
+	watchListStore       store.WatchListStore
+	ipRestrictionStore   store.IPRestrictionStore
+	passwordPolicyStore  store.PasswordPolicyStore
 	dayManager           *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -94,6 +97,7 @@ type Server struct {
 // locateStore, rfqStore, and giveUpStore may be nil; if so, those P4a endpoints return 503.
 // investigationStore, replayStore, and bondStore may be nil; if so, those endpoints return 503.
 // throttleConfigStore may be nil; if so, order throttle falls back to the default 100 orders/sec.
+// watchListStore, ipRestrictionStore, and passwordPolicyStore may be nil; if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -129,6 +133,9 @@ func New(
 	custodyAccountStore store.CustodyAccountStore,
 	custodyBalanceStore store.CustodyBalanceStore,
 	csdTransferStore store.CSDTransferStore,
+	watchListStore store.WatchListStore,
+	ipRestrictionStore store.IPRestrictionStore,
+	passwordPolicyStore store.PasswordPolicyStore,
 	dayManager *engine.DayManager,
 	matchingEngine *engine.MatchingEngine,
 	sessionManager *engine.SessionManager,
@@ -172,6 +179,9 @@ func New(
 		custodyAccountStore:  custodyAccountStore,
 		custodyBalanceStore:  custodyBalanceStore,
 		csdTransferStore:     csdTransferStore,
+		watchListStore:       watchListStore,
+		ipRestrictionStore:   ipRestrictionStore,
+		passwordPolicyStore:  passwordPolicyStore,
 		dayManager:           dayManager,
 		engine:               matchingEngine,
 		sessionManager:       sessionManager,
@@ -363,6 +373,19 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Server-Sent Events (SSE) — real-time market event stream.
 	mux.HandleFunc("/api/v1/securities/events", s.handleSSE)
+
+	// Watch lists — named collections of instruments/clients/firms for monitoring.
+	mux.HandleFunc("/watchlists", s.handleWatchLists)
+	mux.HandleFunc("/watchlists/", s.handleWatchList)
+
+	// Trade capture reports — firm-level aggregated trade reports.
+	mux.HandleFunc("/api/v1/securities/trade-capture-reports", s.handleTradeCaptureReports)
+
+	// IP restrictions — per-participant IP allow-list management.
+	mux.HandleFunc("/ip-restrictions/", s.handleIPRestriction)
+
+	// Password policy — per-tenant password complexity and expiry rules.
+	mux.HandleFunc("/password-policy", s.handlePasswordPolicy)
 }
 
 // --- Health endpoints ---
