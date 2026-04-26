@@ -360,6 +360,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// The collection route must be registered before the wildcard item route.
 	mux.HandleFunc("/api/v1/securities/throttle-config", s.handleThrottleConfigs)
 	mux.HandleFunc("/api/v1/securities/throttle-config/", s.handleThrottleConfig)
+
+	// Server-Sent Events (SSE) — real-time market event stream.
+	mux.HandleFunc("/api/v1/securities/events", s.handleSSE)
 }
 
 // --- Health endpoints ---

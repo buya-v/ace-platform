@@ -161,3 +161,212 @@ func TestBulkUpload_LotSizeInvalid(t *testing.T) {
 		t.Errorf("expected failed=1, got %d", result.Failed)
 	}
 }
+
+// ============================================================
+// TestCSVImport_Valid — 3 rows created
+// ============================================================
+
+// TestCSVImport_Valid sends a CSV with 3 valid rows and expects created=3.
+func TestCSVImport_Valid(t *testing.T) {
+	ts := newTestServer(t)
+
+	csvBody := strings.Join([]string{
+		"ticker,name,asset_class,exchange_code,lot_size,tick_size,currency",
+		"CSV1,CSV One Corp,EQUITY,MSE,100,0.01,MNT",
+		"CSV2,CSV Two Corp,EQUITY,MSE,200,0.05,MNT",
+		"CSV3,CSV Three Corp,BOND,MSE,50,0.10,MNT",
+	}, "\n")
+
+	req, err := http.NewRequest(http.MethodPost,
+		ts.URL+"/api/v1/securities/bulk/instruments/csv",
+		strings.NewReader(csvBody))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "text/csv")
+	req.Header.Set("X-GarudaX-Tenant", testTenant)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	assertStatus(t, resp, http.StatusOK)
+
+	var result types.BulkUploadResult
+	decodeBody(t, resp, &result)
+
+	if result.Total != 3 {
+		t.Errorf("total: want 3, got %d", result.Total)
+	}
+	if result.Created != 3 {
+		t.Errorf("created: want 3, got %d", result.Created)
+	}
+	if result.Failed != 0 {
+		t.Errorf("failed: want 0, got %d: %v", result.Failed, result.Errors)
+	}
+}
+
+// ============================================================
+// TestCSVImport_PartialFail — 1 error
+// ============================================================
+
+// TestCSVImport_PartialFail sends 3 rows where the middle one has a missing ticker.
+// Expects created=2, failed=1.
+func TestCSVImport_PartialFail(t *testing.T) {
+	ts := newTestServer(t)
+
+	// Row 2 has no ticker column — results in empty ticker, causing validation failure.
+	csvBody := strings.Join([]string{
+		"ticker,name,asset_class,exchange_code,lot_size,tick_size",
+		"PFCSV1,PF One,EQUITY,MSE,100,0.01",
+		",No Ticker Corp,EQUITY,MSE,100,0.01",
+		"PFCSV3,PF Three,EQUITY,MSE,100,0.01",
+	}, "\n")
+
+	req, err := http.NewRequest(http.MethodPost,
+		ts.URL+"/api/v1/securities/bulk/instruments/csv",
+		strings.NewReader(csvBody))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "text/csv")
+	req.Header.Set("X-GarudaX-Tenant", testTenant)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	assertStatus(t, resp, http.StatusOK)
+
+	var result types.BulkUploadResult
+	decodeBody(t, resp, &result)
+
+	if result.Failed != 1 {
+		t.Errorf("failed: want 1, got %d", result.Failed)
+	}
+	if result.Created != 2 {
+		t.Errorf("created: want 2, got %d", result.Created)
+	}
+	if len(result.Errors) != 1 {
+		t.Errorf("errors length: want 1, got %d", len(result.Errors))
+	}
+}
+
+// ============================================================
+// TestMassAmend_Success — 2 updated
+// ============================================================
+
+// TestMassAmend_Success pre-creates 2 instruments via bulk upload, then amends
+// both via the mass-amend endpoint. Expects updated=2.
+func TestMassAmend_Success(t *testing.T) {
+	ts := newTestServer(t)
+
+	// Create two instruments.
+	createPayload := []interface{}{
+		validBulkItem("AMEND1"),
+		validBulkItem("AMEND2"),
+	}
+	createResp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/bulk/instruments", createPayload)
+	assertStatus(t, createResp, http.StatusOK)
+	var createResult types.BulkUploadResult
+	decodeBody(t, createResp, &createResult)
+	if createResult.Created != 2 {
+		t.Fatalf("setup: expected 2 created, got %d", createResult.Created)
+	}
+
+	// Retrieve the IDs by listing instruments.
+	listResp := doJSON(t, ts, http.MethodGet, "/api/v1/securities/instruments", nil)
+	assertStatus(t, listResp, http.StatusOK)
+	var listResult map[string]interface{}
+	decodeBody(t, listResp, &listResult)
+	data, _ := listResult["data"].([]interface{})
+	if len(data) < 2 {
+		t.Fatalf("expected at least 2 instruments, got %d", len(data))
+	}
+
+	// Collect IDs.
+	var ids []string
+	for _, item := range data {
+		instr, _ := item.(map[string]interface{})
+		ticker, _ := instr["ticker"].(string)
+		if ticker == "AMEND1" || ticker == "AMEND2" {
+			id, _ := instr["id"].(string)
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 AMEND instrument IDs, got %d", len(ids))
+	}
+
+	// Mass amend both.
+	amendPayload := []interface{}{
+		map[string]interface{}{"id": ids[0], "name": "Amended Name One", "lot_size": 200},
+		map[string]interface{}{"id": ids[1], "name": "Amended Name Two", "lot_size": 300},
+	}
+	amendResp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/bulk/instruments/amend", amendPayload)
+	assertStatus(t, amendResp, http.StatusOK)
+
+	var amendResult BulkAmendResult
+	decodeBody(t, amendResp, &amendResult)
+
+	if amendResult.Total != 2 {
+		t.Errorf("total: want 2, got %d", amendResult.Total)
+	}
+	if amendResult.Updated != 2 {
+		t.Errorf("updated: want 2, got %d", amendResult.Updated)
+	}
+	if amendResult.Failed != 0 {
+		t.Errorf("failed: want 0, got %d: %v", amendResult.Failed, amendResult.Errors)
+	}
+}
+
+// ============================================================
+// TestMassAmend_NotFound — error in result
+// ============================================================
+
+// TestMassAmend_NotFound attempts to amend a non-existent instrument ID.
+// The endpoint returns 200 with failed=1 and an error entry in the result.
+func TestMassAmend_NotFound(t *testing.T) {
+	ts := newTestServer(t)
+
+	amendPayload := []interface{}{
+		map[string]interface{}{"id": "NO-SUCH-INSTR", "name": "Ghost Corp", "lot_size": 100},
+	}
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/bulk/instruments/amend", amendPayload)
+	assertStatus(t, resp, http.StatusOK)
+
+	var result BulkAmendResult
+	decodeBody(t, resp, &result)
+
+	if result.Total != 1 {
+		t.Errorf("total: want 1, got %d", result.Total)
+	}
+	if result.Failed != 1 {
+		t.Errorf("failed: want 1, got %d", result.Failed)
+	}
+	if result.Updated != 0 {
+		t.Errorf("updated: want 0, got %d", result.Updated)
+	}
+	if len(result.Errors) != 1 {
+		t.Errorf("errors length: want 1, got %d", len(result.Errors))
+	}
+}
+
+// TestMassAmend_MissingID verifies that an amend item without an id is rejected
+// as a per-item error (not an HTTP error).
+func TestMassAmend_MissingID(t *testing.T) {
+	ts := newTestServer(t)
+
+	amendPayload := []interface{}{
+		map[string]interface{}{"name": "No ID Corp", "lot_size": 100},
+	}
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/bulk/instruments/amend", amendPayload)
+	assertStatus(t, resp, http.StatusOK)
+
+	var result BulkAmendResult
+	decodeBody(t, resp, &result)
+
+	if result.Failed != 1 {
+		t.Errorf("failed: want 1, got %d", result.Failed)
+	}
+}

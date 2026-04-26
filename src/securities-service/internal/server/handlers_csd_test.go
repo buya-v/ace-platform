@@ -465,6 +465,131 @@ func TestFailTransfer_NotFound(t *testing.T) {
 }
 
 // ============================================================
+// TestCSDTransfer_InsufficientBalance — 422
+// ============================================================
+
+// TestCSDTransfer_InsufficientBalance seeds a from-account with 10 units and
+// attempts to transfer 100 units. The handler must return 422 INSUFFICIENT_BALANCE.
+func TestCSDTransfer_InsufficientBalance(t *testing.T) {
+	ts, stores := newCSDTestServer(t)
+
+	// Create the custody account for the sender.
+	createAccountViaHTTP(t, ts, validAccountPayload("FROM-ACCT", "FIRM-A"))
+	createAccountViaHTTP(t, ts, validAccountPayload("TO-ACCT", "FIRM-A"))
+
+	// Seed the from-account with only 10 units.
+	stores.balances.GetOrUpdate("FROM-ACCT", "WHEAT-FUT-JAN", 10, 100.0) //nolint:errcheck
+
+	// Try to transfer 100 units — exceeds holding.
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/csd/transfers",
+		map[string]interface{}{
+			"from_account_id": "FROM-ACCT",
+			"to_account_id":   "TO-ACCT",
+			"instrument_id":   "WHEAT-FUT-JAN",
+			"quantity":        100,
+			"transfer_type":   "FOP",
+		})
+	assertStatus(t, resp, http.StatusUnprocessableEntity)
+
+	var errResp types.ErrorResponse
+	decodeBody(t, resp, &errResp)
+	if errResp.Error.Code != "INSUFFICIENT_BALANCE" {
+		t.Errorf("expected error code INSUFFICIENT_BALANCE, got %q", errResp.Error.Code)
+	}
+}
+
+// TestCSDTransfer_SufficientBalance_Accepted verifies that a transfer within
+// the available balance is accepted (201 Created).
+func TestCSDTransfer_SufficientBalance_Accepted(t *testing.T) {
+	ts, stores := newCSDTestServer(t)
+
+	createAccountViaHTTP(t, ts, validAccountPayload("FROM-SB", "FIRM-A"))
+	createAccountViaHTTP(t, ts, validAccountPayload("TO-SB", "FIRM-A"))
+
+	// Seed 500 units — transfer of 100 should succeed.
+	stores.balances.GetOrUpdate("FROM-SB", "BARLEY-FUT", 500, 50.0) //nolint:errcheck
+
+	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/csd/transfers",
+		map[string]interface{}{
+			"id":              "TXN-SB-OK",
+			"from_account_id": "FROM-SB",
+			"to_account_id":   "TO-SB",
+			"instrument_id":   "BARLEY-FUT",
+			"quantity":        100,
+			"transfer_type":   "FOP",
+		})
+	assertStatus(t, resp, http.StatusCreated)
+	resp.Body.Close()
+}
+
+// ============================================================
+// TestCSDTransfer_ValidBalance_BalancesUpdated — balances changed after complete
+// ============================================================
+
+// TestCSDTransfer_ValidBalance_BalancesUpdated verifies that completing a CSD
+// transfer debits the from-account and credits the to-account in the balance store.
+func TestCSDTransfer_ValidBalance_BalancesUpdated(t *testing.T) {
+	ts, stores := newCSDTestServer(t)
+
+	createAccountViaHTTP(t, ts, validAccountPayload("FROM-BU", "FIRM-A"))
+	createAccountViaHTTP(t, ts, validAccountPayload("TO-BU", "FIRM-A"))
+
+	// Seed from-account with 200 units.
+	stores.balances.GetOrUpdate("FROM-BU", "WHEAT-FUT-MAR", 200, 120.0) //nolint:errcheck
+
+	// Create a transfer of 75 units.
+	txnID := createTransferViaHTTP(t, ts, map[string]interface{}{
+		"id":              "TXN-BU-1",
+		"from_account_id": "FROM-BU",
+		"to_account_id":   "TO-BU",
+		"instrument_id":   "WHEAT-FUT-MAR",
+		"quantity":        75,
+		"transfer_type":   "FOP",
+	})
+
+	// Complete the transfer — this should apply balance movements.
+	completeResp := doJSON(t, ts, http.MethodPost,
+		"/api/v1/securities/csd/transfers/"+txnID+"/complete", nil)
+	assertStatus(t, completeResp, http.StatusOK)
+
+	var result map[string]interface{}
+	decodeBody(t, completeResp, &result)
+	if result["status"] != string(types.CSDTransferCompleted) {
+		t.Errorf("status: want CSD_COMPLETED, got %v", result["status"])
+	}
+
+	// Verify from-account balance was debited: 200 - 75 = 125.
+	fromBalances, err := stores.balances.ListByAccount("FROM-BU")
+	if err != nil {
+		t.Fatalf("ListByAccount FROM-BU: %v", err)
+	}
+	var fromQty int
+	for _, b := range fromBalances {
+		if b.InstrumentID == "WHEAT-FUT-MAR" {
+			fromQty = b.Quantity
+		}
+	}
+	if fromQty != 125 {
+		t.Errorf("from-account balance: want 125 after debit, got %d", fromQty)
+	}
+
+	// Verify to-account balance was credited: 0 + 75 = 75.
+	toBalances, err := stores.balances.ListByAccount("TO-BU")
+	if err != nil {
+		t.Fatalf("ListByAccount TO-BU: %v", err)
+	}
+	var toQty int
+	for _, b := range toBalances {
+		if b.InstrumentID == "WHEAT-FUT-MAR" {
+			toQty = b.Quantity
+		}
+	}
+	if toQty != 75 {
+		t.Errorf("to-account balance: want 75 after credit, got %d", toQty)
+	}
+}
+
+// ============================================================
 // TestCSDEndpoints_NotConfigured (503)
 // ============================================================
 

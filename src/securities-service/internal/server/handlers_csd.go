@@ -227,6 +227,28 @@ func (s *Server) handleCreateCSDTransfer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Balance validation: if a balance store is configured and the from-account
+	// has at least one balance record for any instrument, verify it holds
+	// sufficient quantity of the requested instrument.
+	// Accounts with no balance records at all (e.g. new accounts) skip this check.
+	if s.custodyBalanceStore != nil {
+		allBalances, balErr := s.custodyBalanceStore.ListByAccount(req.FromAccountID)
+		if balErr == nil && len(allBalances) > 0 {
+			held := 0
+			for _, b := range allBalances {
+				if b.InstrumentID == req.InstrumentID {
+					held = b.Quantity
+					break
+				}
+			}
+			if held < req.Quantity {
+				s.writeError(w, http.StatusUnprocessableEntity, "INSUFFICIENT_BALANCE",
+					"from account has insufficient balance for this transfer", nil)
+				return
+			}
+		}
+	}
+
 	id := req.ID
 	if id == "" {
 		id = "csd-" + time.Now().UTC().Format("20060102150405.000000000")
@@ -287,6 +309,15 @@ func (s *Server) handleCompleteCSDTransfer(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	transfer, _ := s.csdTransferStore.Get(id)
+
+	// Apply balance movements if a balance store is wired.
+	if s.custodyBalanceStore != nil && transfer != nil {
+		// Debit from-account.
+		s.custodyBalanceStore.GetOrUpdate(transfer.FromAccountID, transfer.InstrumentID, -transfer.Quantity, 0) //nolint:errcheck
+		// Credit to-account.
+		s.custodyBalanceStore.GetOrUpdate(transfer.ToAccountID, transfer.InstrumentID, transfer.Quantity, 0) //nolint:errcheck
+	}
+
 	s.writeJSON(w, http.StatusOK, transfer)
 }
 

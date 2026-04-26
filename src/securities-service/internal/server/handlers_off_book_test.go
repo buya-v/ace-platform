@@ -281,6 +281,160 @@ func TestUpdateOffBookStatus_MissingStatus(t *testing.T) {
 }
 
 // ============================================================
+// TestConfirmOffBookTrade — 200, status CONFIRMED
+// ============================================================
+
+func TestConfirmOffBookTrade(t *testing.T) {
+	ts, obStore := newOffBookTestServer(t)
+
+	// Submit a trade to confirm.
+	id := submitOffBookViaHTTP(t, ts, validOffBookPayload())
+
+	resp := doJSON(t, ts, http.MethodPost,
+		fmt.Sprintf("/api/v1/securities/off-book-trades/%s/confirm", id),
+		map[string]string{"confirmed_by": "OPS-USER-1"})
+	assertStatus(t, resp, http.StatusOK)
+
+	var result map[string]interface{}
+	decodeBody(t, resp, &result)
+
+	if result["status"] != string(types.OffBookConfirmed) {
+		t.Errorf("expected status CONFIRMED, got %v", result["status"])
+	}
+	if result["confirmed_by"] != "OPS-USER-1" {
+		t.Errorf("expected confirmed_by OPS-USER-1, got %v", result["confirmed_by"])
+	}
+
+	// Verify store reflects CONFIRMED.
+	trade, err := obStore.Get(id)
+	if err != nil {
+		t.Fatalf("Get after confirm: %v", err)
+	}
+	if trade.Status != types.OffBookConfirmed {
+		t.Errorf("store status: expected CONFIRMED, got %q", trade.Status)
+	}
+	if trade.ConfirmedBy != "OPS-USER-1" {
+		t.Errorf("store confirmed_by: expected OPS-USER-1, got %q", trade.ConfirmedBy)
+	}
+}
+
+func TestConfirmOffBookTrade_NotFound(t *testing.T) {
+	ts, _ := newOffBookTestServer(t)
+
+	resp := doJSON(t, ts, http.MethodPost,
+		"/api/v1/securities/off-book-trades/no-such-id/confirm",
+		map[string]string{"confirmed_by": "OPS-USER"})
+	assertStatus(t, resp, http.StatusNotFound)
+	resp.Body.Close()
+}
+
+func TestConfirmOffBookTrade_MissingConfirmedBy(t *testing.T) {
+	ts, _ := newOffBookTestServer(t)
+
+	id := submitOffBookViaHTTP(t, ts, validOffBookPayload())
+
+	resp := doJSON(t, ts, http.MethodPost,
+		fmt.Sprintf("/api/v1/securities/off-book-trades/%s/confirm", id),
+		map[string]string{})
+	assertStatus(t, resp, http.StatusBadRequest)
+	resp.Body.Close()
+}
+
+// ============================================================
+// TestRejectOffBookTrade — 200, status REJECTED, reason set
+// ============================================================
+
+func TestRejectOffBookTrade(t *testing.T) {
+	ts, obStore := newOffBookTestServer(t)
+
+	id := submitOffBookViaHTTP(t, ts, validOffBookPayload())
+
+	resp := doJSON(t, ts, http.MethodPost,
+		fmt.Sprintf("/api/v1/securities/off-book-trades/%s/reject", id),
+		map[string]string{
+			"rejected_by":      "COMPLIANCE-1",
+			"rejection_reason": "price outside acceptable range",
+		})
+	assertStatus(t, resp, http.StatusOK)
+
+	var result map[string]interface{}
+	decodeBody(t, resp, &result)
+
+	if result["status"] != string(types.OffBookRejected) {
+		t.Errorf("expected status REJECTED, got %v", result["status"])
+	}
+	if result["rejected_by"] != "COMPLIANCE-1" {
+		t.Errorf("expected rejected_by COMPLIANCE-1, got %v", result["rejected_by"])
+	}
+	if result["rejection_reason"] != "price outside acceptable range" {
+		t.Errorf("expected rejection_reason set, got %v", result["rejection_reason"])
+	}
+
+	// Verify store reflects REJECTED.
+	trade, err := obStore.Get(id)
+	if err != nil {
+		t.Fatalf("Get after reject: %v", err)
+	}
+	if trade.Status != types.OffBookRejected {
+		t.Errorf("store status: expected REJECTED, got %q", trade.Status)
+	}
+	if trade.RejectionReason != "price outside acceptable range" {
+		t.Errorf("store rejection_reason: got %q", trade.RejectionReason)
+	}
+}
+
+func TestRejectOffBookTrade_NotFound(t *testing.T) {
+	ts, _ := newOffBookTestServer(t)
+
+	resp := doJSON(t, ts, http.MethodPost,
+		"/api/v1/securities/off-book-trades/no-such-id/reject",
+		map[string]string{
+			"rejected_by":      "OPS",
+			"rejection_reason": "bad trade",
+		})
+	assertStatus(t, resp, http.StatusNotFound)
+	resp.Body.Close()
+}
+
+// ============================================================
+// TestRejectWithoutReason — 400
+// ============================================================
+
+func TestRejectWithoutReason(t *testing.T) {
+	ts, _ := newOffBookTestServer(t)
+
+	id := submitOffBookViaHTTP(t, ts, validOffBookPayload())
+
+	// Sending only rejected_by, no rejection_reason.
+	resp := doJSON(t, ts, http.MethodPost,
+		fmt.Sprintf("/api/v1/securities/off-book-trades/%s/reject", id),
+		map[string]string{"rejected_by": "OPS-USER"})
+	assertStatus(t, resp, http.StatusBadRequest)
+
+	var errResp map[string]interface{}
+	decodeBody(t, resp, &errResp)
+
+	// Verify the error code indicates missing field.
+	errObj, _ := errResp["error"].(map[string]interface{})
+	if errObj["code"] != "MISSING_FIELD" {
+		t.Errorf("expected code MISSING_FIELD, got %v", errObj["code"])
+	}
+}
+
+func TestRejectWithoutRejectedBy(t *testing.T) {
+	ts, _ := newOffBookTestServer(t)
+
+	id := submitOffBookViaHTTP(t, ts, validOffBookPayload())
+
+	// Sending only rejection_reason, no rejected_by.
+	resp := doJSON(t, ts, http.MethodPost,
+		fmt.Sprintf("/api/v1/securities/off-book-trades/%s/reject", id),
+		map[string]string{"rejection_reason": "bad"})
+	assertStatus(t, resp, http.StatusBadRequest)
+	resp.Body.Close()
+}
+
+// ============================================================
 // Not configured (503) test
 // ============================================================
 

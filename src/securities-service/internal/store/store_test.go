@@ -4459,3 +4459,209 @@ func TestCSDTransferStore_Create_Complete_Fail(t *testing.T) {
 		t.Error("Get returned pointer into internal storage")
 	}
 }
+
+// ============================================================
+// NodeStore tests
+// ============================================================
+
+func newNode(id, firmID, parentID, name string, perms []string) *types.Node {
+	return &types.Node{
+		ID:           id,
+		FirmID:       firmID,
+		ParentNodeID: parentID,
+		Name:         name,
+		Permissions:  perms,
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// TestNodeStore_Create_Get verifies that a node can be stored and retrieved
+// with all fields preserved, and that duplicate creation is rejected.
+func TestNodeStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+
+	node := newNode("NODE-1", "FIRM-A", "", "Trading Desk", []string{"TRADE", "REPORT"})
+	if err := s.Create(node); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("NODE-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "NODE-1" {
+		t.Errorf("ID: want NODE-1, got %q", got.ID)
+	}
+	if got.FirmID != "FIRM-A" {
+		t.Errorf("FirmID: want FIRM-A, got %q", got.FirmID)
+	}
+	if got.Name != "Trading Desk" {
+		t.Errorf("Name: want 'Trading Desk', got %q", got.Name)
+	}
+	if len(got.Permissions) != 2 {
+		t.Errorf("Permissions: want 2, got %d", len(got.Permissions))
+	}
+
+	// Duplicate create must fail.
+	if err := s.Create(node); err == nil {
+		t.Error("expected error on duplicate Create, got nil")
+	}
+
+	// Non-existent Get returns ErrNotFound.
+	_, err = s.Get("NO-SUCH")
+	if err != store.ErrNotFound {
+		t.Errorf("Get missing: expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestNodeStore_ListByFirm(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+
+	s.Create(newNode("N-F1-1", "FIRM-1", "", "Desk A", nil))
+	s.Create(newNode("N-F1-2", "FIRM-1", "", "Desk B", nil))
+	s.Create(newNode("N-F2-1", "FIRM-2", "", "Desk C", nil))
+
+	nodes, err := s.ListByFirm("FIRM-1")
+	if err != nil {
+		t.Fatalf("ListByFirm: %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Errorf("FIRM-1: want 2 nodes, got %d", len(nodes))
+	}
+
+	nodes2, err := s.ListByFirm("FIRM-2")
+	if err != nil {
+		t.Fatalf("ListByFirm FIRM-2: %v", err)
+	}
+	if len(nodes2) != 1 {
+		t.Errorf("FIRM-2: want 1 node, got %d", len(nodes2))
+	}
+
+	// Unknown firm returns empty slice (not an error).
+	nodes3, err := s.ListByFirm("UNKNOWN")
+	if err != nil {
+		t.Fatalf("ListByFirm UNKNOWN: %v", err)
+	}
+	if len(nodes3) != 0 {
+		t.Errorf("UNKNOWN firm: want 0 nodes, got %d", len(nodes3))
+	}
+}
+
+func TestNodeStore_Get_ReturnsCopy(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+	s.Create(newNode("N-COPY", "FIRM-A", "", "Copy Desk", []string{"TRADE"}))
+
+	got, _ := s.Get("N-COPY")
+	got.Name = "MUTATED"
+
+	got2, _ := s.Get("N-COPY")
+	if got2.Name == "MUTATED" {
+		t.Error("Get returned a pointer into internal storage instead of a copy")
+	}
+}
+
+// TestNodeStore_EffectivePermissions verifies that a child node inherits its
+// parent's permissions in addition to its own, with deduplication applied.
+func TestNodeStore_EffectivePermissions(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+
+	// Root node with base permissions.
+	root := newNode("ROOT", "FIRM-A", "", "Root", []string{"AUDIT", "REPORT"})
+	s.Create(root)
+
+	// Mid-level node that inherits from root and adds its own.
+	mid := newNode("MID", "FIRM-A", "ROOT", "Mid", []string{"TRADE"})
+	s.Create(mid)
+
+	// Leaf node that inherits from mid (and transitively from root).
+	leaf := newNode("LEAF", "FIRM-A", "MID", "Leaf", []string{"CANCEL"})
+	s.Create(leaf)
+
+	t.Run("root effective perms = own perms", func(t *testing.T) {
+		perms, err := s.GetEffectivePermissions("ROOT")
+		if err != nil {
+			t.Fatalf("GetEffectivePermissions: %v", err)
+		}
+		if len(perms) != 2 {
+			t.Errorf("root: want 2 perms, got %d: %v", len(perms), perms)
+		}
+	})
+
+	t.Run("mid inherits from root", func(t *testing.T) {
+		perms, err := s.GetEffectivePermissions("MID")
+		if err != nil {
+			t.Fatalf("GetEffectivePermissions: %v", err)
+		}
+		// Should have AUDIT, REPORT (from root) + TRADE (own) = 3
+		if len(perms) != 3 {
+			t.Errorf("mid: want 3 perms, got %d: %v", len(perms), perms)
+		}
+	})
+
+	t.Run("leaf inherits from mid and root transitively", func(t *testing.T) {
+		perms, err := s.GetEffectivePermissions("LEAF")
+		if err != nil {
+			t.Fatalf("GetEffectivePermissions: %v", err)
+		}
+		// Should have AUDIT, REPORT (from root), TRADE (from mid), CANCEL (own) = 4
+		if len(perms) != 4 {
+			t.Errorf("leaf: want 4 perms, got %d: %v", len(perms), perms)
+		}
+	})
+
+	t.Run("unknown node returns ErrNotFound", func(t *testing.T) {
+		_, err := s.GetEffectivePermissions("NO-SUCH")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestNodeStore_SetPermissions(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+	s.Create(newNode("N-SET", "FIRM-A", "", "Set Desk", []string{"READ"}))
+
+	if err := s.SetPermissions("N-SET", []string{"TRADE", "CANCEL"}); err != nil {
+		t.Fatalf("SetPermissions: %v", err)
+	}
+
+	got, _ := s.Get("N-SET")
+	if len(got.Permissions) != 2 {
+		t.Errorf("after SetPermissions: want 2, got %d", len(got.Permissions))
+	}
+
+	// SetPermissions on unknown node returns error.
+	if err := s.SetPermissions("NO-SUCH", []string{"X"}); err == nil {
+		t.Error("expected error for SetPermissions on missing node")
+	}
+}
+
+func TestNodeStore_EffectivePermissions_Deduplication(t *testing.T) {
+	s := store.NewInMemoryNodeStore()
+
+	// Parent and child both claim the same permission — result should have it once.
+	parent := newNode("P-DUP", "FIRM-A", "", "Parent", []string{"TRADE", "REPORT"})
+	s.Create(parent)
+
+	child := newNode("C-DUP", "FIRM-A", "P-DUP", "Child", []string{"TRADE"})
+	s.Create(child)
+
+	perms, err := s.GetEffectivePermissions("C-DUP")
+	if err != nil {
+		t.Fatalf("GetEffectivePermissions: %v", err)
+	}
+
+	seen := make(map[string]int)
+	for _, p := range perms {
+		seen[p]++
+	}
+	for perm, count := range seen {
+		if count > 1 {
+			t.Errorf("permission %q appears %d times (expected deduplication)", perm, count)
+		}
+	}
+	// Must have at least TRADE and REPORT.
+	if seen["TRADE"] == 0 || seen["REPORT"] == 0 {
+		t.Errorf("missing expected permissions; got %v", perms)
+	}
+}

@@ -1882,6 +1882,11 @@ func (s *InMemoryNodeStore) GetEffectivePermissions(id string) ([]string, error)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Guard: the starting node must exist.
+	if _, ok := s.data[id]; !ok {
+		return nil, ErrNotFound
+	}
+
 	seen := make(map[string]struct{})
 	var result []string
 
