@@ -67,6 +67,7 @@ func newTestServerWithAnnouncement(t *testing.T) *httptest.Server {
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

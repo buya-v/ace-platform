@@ -67,6 +67,7 @@ func newTestServerWithAudit(t *testing.T) (*httptest.Server, *store.InMemoryAudi
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

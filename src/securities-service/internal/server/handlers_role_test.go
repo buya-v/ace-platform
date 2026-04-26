@@ -66,6 +66,7 @@ func newRoleTestServer(t *testing.T) (*httptest.Server, store.RoleStore) {
 		nil,    // producer
 		pe,     // privilegeEngine
 		roleStore,
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()
@@ -340,6 +341,7 @@ func TestRoleHandlers_Unconfigured(t *testing.T) {
 		nil, me, nil, nil, nil,
 		nil, // privilegeEngine
 		nil, // roleStore — intentionally nil
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

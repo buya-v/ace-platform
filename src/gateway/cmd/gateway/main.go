@@ -303,6 +303,13 @@ func main() {
 	rt.Handle("GET", "/api/v1/securities/roles/{id}", secHandler)
 	rt.Handle("PUT", "/api/v1/securities/roles/{id}", secHandler)
 	rt.Handle("DELETE", "/api/v1/securities/roles/{id}", secHandler)
+	// Trading parameter sets — unified per-instrument trading controls
+	rt.Handle("GET", "/api/v1/securities/trading-params", secHandler)
+	rt.Handle("POST", "/api/v1/securities/trading-params", secHandler)
+	rt.Handle("GET", "/api/v1/securities/trading-params/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/trading-params/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/trading-params/{id}", secHandler)
+	rt.Handle("GET", "/api/v1/securities/trading-params/instrument/{instrument_id}", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091

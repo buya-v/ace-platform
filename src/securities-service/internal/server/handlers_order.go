@@ -223,6 +223,70 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// (j) TradingParameterSet checks — all optional; skipped when no param set
+	// is configured for this instrument.
+	if s.tradingParamSetStore != nil {
+		if ps, psErr := s.tradingParamSetStore.GetByInstrument(order.InstrumentID); psErr == nil && ps != nil {
+			// Check allowed order types.
+			if len(ps.AllowedOrderTypes) > 0 {
+				allowed := false
+				for _, ot := range ps.AllowedOrderTypes {
+					if ot == string(order.OrderType) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					s.writeError(w, http.StatusUnprocessableEntity, "ORDER_TYPE_NOT_ALLOWED",
+						fmt.Sprintf("order_type %q is not permitted for this instrument", order.OrderType), nil)
+					return
+				}
+			}
+			// Check allowed time-in-force values.
+			if len(ps.AllowedTimeInForce) > 0 && order.TimeInForce != "" {
+				allowed := false
+				for _, tif := range ps.AllowedTimeInForce {
+					if tif == string(order.TimeInForce) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					s.writeError(w, http.StatusUnprocessableEntity, "TIME_IN_FORCE_NOT_ALLOWED",
+						fmt.Sprintf("time_in_force %q is not permitted for this instrument", order.TimeInForce), nil)
+					return
+				}
+			}
+			// Check minimum order size.
+			if ps.MinOrderSize > 0 && order.Quantity < ps.MinOrderSize {
+				s.writeError(w, http.StatusUnprocessableEntity, "ORDER_TOO_SMALL",
+					fmt.Sprintf("quantity %d is below minimum order size %d", order.Quantity, ps.MinOrderSize), nil)
+				return
+			}
+			// Check maximum order size.
+			if ps.MaxOrderSize > 0 && order.Quantity > ps.MaxOrderSize {
+				s.writeError(w, http.StatusUnprocessableEntity, "ORDER_TOO_LARGE",
+					fmt.Sprintf("quantity %d exceeds maximum order size %d", order.Quantity, ps.MaxOrderSize), nil)
+				return
+			}
+			// Check maximum order value (price * quantity).
+			if ps.MaxOrderValue > 0 && order.Price > 0 {
+				orderValue := order.Price * float64(order.Quantity)
+				if orderValue > ps.MaxOrderValue {
+					s.writeError(w, http.StatusUnprocessableEntity, "ORDER_VALUE_EXCEEDED",
+						fmt.Sprintf("order value %.2f exceeds maximum allowed %.2f", orderValue, ps.MaxOrderValue), nil)
+					return
+				}
+			}
+			// Check short-selling allowance.
+			if order.Side == types.OrderSideShortSell && !ps.ShortSellingAllowed {
+				s.writeError(w, http.StatusUnprocessableEntity, "SHORT_SELLING_NOT_ALLOWED",
+					"short selling is not permitted for this instrument by its trading parameter set", nil)
+				return
+			}
+		}
+	}
+
 	// Set server-controlled defaults.
 	id, err := newUUID()
 	if err != nil {

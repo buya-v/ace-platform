@@ -66,6 +66,7 @@ func newLocateTestServer(t *testing.T) (*httptest.Server, *store.InMemoryLocateS
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

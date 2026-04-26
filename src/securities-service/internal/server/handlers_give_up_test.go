@@ -66,6 +66,7 @@ func newGiveUpTestServer(t *testing.T) (*httptest.Server, *store.InMemoryGiveUpS
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

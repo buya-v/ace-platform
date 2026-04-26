@@ -54,7 +54,7 @@ func newFRCServer(t *testing.T, s frcStores) *httptest.Server {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, nil, nil, cfg)
+		nil, me, nil, nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()

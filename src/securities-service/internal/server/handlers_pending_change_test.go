@@ -46,6 +46,7 @@ func newPendingChangeTestServer(t *testing.T) (*httptest.Server, *store.InMemory
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, me, nil, nil, nil,
 		nil, nil, // privilegeEngine, roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

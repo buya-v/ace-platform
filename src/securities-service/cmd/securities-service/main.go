@@ -175,6 +175,8 @@ func main() {
 			return engine.NewPrivilegeEngine(participantStore, rs)
 		}(),
 		store.NewInMemoryRoleStore(),
+		// Trading parameter set store — per-instrument unified trading controls.
+		store.NewInMemoryTradingParamSetStore(),
 		cfg,
 	)
 

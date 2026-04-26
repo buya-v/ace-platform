@@ -77,6 +77,7 @@ func newCSDTestServer(t *testing.T) (*httptest.Server, csdTestStores) {
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()
@@ -619,7 +620,7 @@ func TestCSDEndpoints_NotConfigured(t *testing.T) {
 		nil,  // custodyAccountStore = nil
 		nil,  // custodyBalanceStore = nil
 		nil,  // csdTransferStore = nil
-		nil, nil, nil, nil, me, nil, nil, nil, nil, nil, cfg,
+		nil, nil, nil, nil, me, nil, nil, nil, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

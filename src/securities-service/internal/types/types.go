@@ -1023,3 +1023,33 @@ type Role struct {
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
 }
+
+// ── Trading Parameter Sets ────────────────────────────────────────────────────
+
+// AuctionConfig holds auction-phase parameters for a trading parameter set.
+type AuctionConfig struct {
+	RandomEndSeconds          int    `json:"random_end_seconds"`
+	SurplusHandling           string `json:"surplus_handling"`            // PRO_RATA | TIME_PRIORITY
+	MinAuctionDurationSeconds int    `json:"min_auction_duration_seconds"`
+}
+
+// TradingParameterSet defines the unified set of trading controls applied to
+// an instrument. All constraint fields are optional — a zero value means the
+// check is skipped during order validation.
+type TradingParameterSet struct {
+	ID                  string        `json:"id"`
+	InstrumentID        string        `json:"instrument_id"`
+	Name                string        `json:"name"`
+	TickTableID         string        `json:"tick_table_id,omitempty"`
+	CircuitBreakerID    string        `json:"circuit_breaker_id,omitempty"`
+	AllowedOrderTypes   []string      `json:"allowed_order_types,omitempty"`
+	AllowedTimeInForce  []string      `json:"allowed_time_in_force,omitempty"`
+	MinOrderSize        int           `json:"min_order_size,omitempty"`
+	MaxOrderSize        int           `json:"max_order_size,omitempty"`
+	MaxOrderValue       float64       `json:"max_order_value,omitempty"`
+	AuctionParams       AuctionConfig `json:"auction_params"`
+	STPMode             string        `json:"stp_mode,omitempty"`
+	ShortSellingAllowed bool          `json:"short_selling_allowed"`
+	CreatedAt           string        `json:"created_at"`
+	UpdatedAt           string        `json:"updated_at"`
+}

@@ -65,6 +65,7 @@ func newRFQTestServer(t *testing.T) (*httptest.Server, *store.InMemoryRFQStore) 
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

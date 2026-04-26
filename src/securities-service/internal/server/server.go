@@ -73,10 +73,11 @@ type Server struct {
 	custodyAccountStore  store.CustodyAccountStore
 	custodyBalanceStore  store.CustodyBalanceStore
 	csdTransferStore     store.CSDTransferStore
-	watchListStore       store.WatchListStore
-	ipRestrictionStore   store.IPRestrictionStore
-	passwordPolicyStore  store.PasswordPolicyStore
-	dayManager           *engine.DayManager
+	watchListStore        store.WatchListStore
+	ipRestrictionStore    store.IPRestrictionStore
+	passwordPolicyStore   store.PasswordPolicyStore
+	tradingParamSetStore  store.TradingParamSetStore
+	dayManager            *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
 	settlementEngine     *settlement.SettlementEngine
@@ -103,6 +104,7 @@ type Server struct {
 // throttleConfigStore may be nil; if so, order throttle falls back to the default 100 orders/sec.
 // watchListStore, ipRestrictionStore, and passwordPolicyStore may be nil; if so, those endpoints return 503.
 // privilegeEngine and roleStore may be nil; if so, permission checks are skipped (backwards compat).
+// tradingParamSetStore may be nil; if so, trading-params endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -148,6 +150,7 @@ func New(
 	producer kafka.Producer,
 	privilegeEngine *engine.PrivilegeEngine,
 	roleStore store.RoleStore,
+	tradingParamSetStore store.TradingParamSetStore,
 	cfg Config,
 ) *Server {
 	return &Server{
@@ -196,6 +199,7 @@ func New(
 		producer:             producer,
 		privilegeEngine:      privilegeEngine,
 		roleStore:            roleStore,
+		tradingParamSetStore: tradingParamSetStore,
 	}
 }
 
@@ -423,6 +427,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// RBAC Roles — create, list, get, update, delete.
 	mux.HandleFunc("/api/v1/securities/roles", s.handleRoles)
 	mux.HandleFunc("/api/v1/securities/roles/", s.handleRole)
+
+	// Trading parameter sets — unified per-instrument trading controls.
+	// The instrument sub-route must be registered before the wildcard item route.
+	mux.HandleFunc("/api/v1/securities/trading-params/instrument/", s.handleTradingParamByInstrument)
+	mux.HandleFunc("/api/v1/securities/trading-params", s.handleTradingParams)
+	mux.HandleFunc("/api/v1/securities/trading-params/", s.handleTradingParamItem)
 }
 
 // --- Health endpoints ---

@@ -2995,3 +2995,134 @@ func (s *InMemoryPasswordPolicyStore) Set(p *types.PasswordPolicy) error {
 	s.data[p.TenantID] = &cp
 	return nil
 }
+
+// ── TradingParamSetStore ──────────────────────────────────────────────────────
+
+// TradingParamSetStore defines the repository contract for trading parameter sets.
+type TradingParamSetStore interface {
+	Create(ps *types.TradingParameterSet) error
+	Get(id string) (*types.TradingParameterSet, error)
+	GetByInstrument(instrumentID string) (*types.TradingParameterSet, error)
+	List() ([]types.TradingParameterSet, error)
+	Update(ps *types.TradingParameterSet) error
+	Delete(id string) error
+}
+
+// InMemoryTradingParamSetStore is a thread-safe, in-memory implementation of
+// TradingParamSetStore.
+type InMemoryTradingParamSetStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.TradingParameterSet // keyed by ID
+	byInstrument map[string]string             // instrumentID → paramSet ID
+}
+
+// NewInMemoryTradingParamSetStore returns an empty InMemoryTradingParamSetStore.
+func NewInMemoryTradingParamSetStore() *InMemoryTradingParamSetStore {
+	return &InMemoryTradingParamSetStore{
+		data:         make(map[string]*types.TradingParameterSet),
+		byInstrument: make(map[string]string),
+	}
+}
+
+// Create stores a new TradingParameterSet. Returns an error if the ID already exists.
+func (s *InMemoryTradingParamSetStore) Create(ps *types.TradingParameterSet) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[ps.ID]; exists {
+		return fmt.Errorf("trading parameter set %s already exists", ps.ID)
+	}
+	cp := copyTradingParamSet(ps)
+	s.data[ps.ID] = cp
+	if ps.InstrumentID != "" {
+		s.byInstrument[ps.InstrumentID] = ps.ID
+	}
+	return nil
+}
+
+// Get retrieves a TradingParameterSet by its ID.
+func (s *InMemoryTradingParamSetStore) Get(id string) (*types.TradingParameterSet, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ps, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := copyTradingParamSet(ps)
+	return cp, nil
+}
+
+// GetByInstrument retrieves the TradingParameterSet associated with an instrument.
+func (s *InMemoryTradingParamSetStore) GetByInstrument(instrumentID string) (*types.TradingParameterSet, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.byInstrument[instrumentID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	ps, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := copyTradingParamSet(ps)
+	return cp, nil
+}
+
+// List returns all TradingParameterSets.
+func (s *InMemoryTradingParamSetStore) List() ([]types.TradingParameterSet, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.TradingParameterSet, 0, len(s.data))
+	for _, ps := range s.data {
+		out = append(out, *copyTradingParamSet(ps))
+	}
+	return out, nil
+}
+
+// Update replaces an existing TradingParameterSet in full.
+func (s *InMemoryTradingParamSetStore) Update(ps *types.TradingParameterSet) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, ok := s.data[ps.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	// Remove old instrument mapping if instrument changed.
+	if existing.InstrumentID != "" && existing.InstrumentID != ps.InstrumentID {
+		delete(s.byInstrument, existing.InstrumentID)
+	}
+	cp := copyTradingParamSet(ps)
+	s.data[ps.ID] = cp
+	if ps.InstrumentID != "" {
+		s.byInstrument[ps.InstrumentID] = ps.ID
+	}
+	return nil
+}
+
+// Delete removes a TradingParameterSet by ID.
+func (s *InMemoryTradingParamSetStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ps, ok := s.data[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if ps.InstrumentID != "" {
+		delete(s.byInstrument, ps.InstrumentID)
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// copyTradingParamSet performs a shallow copy including slice fields.
+func copyTradingParamSet(ps *types.TradingParameterSet) *types.TradingParameterSet {
+	cp := *ps
+	if ps.AllowedOrderTypes != nil {
+		cp.AllowedOrderTypes = make([]string, len(ps.AllowedOrderTypes))
+		copy(cp.AllowedOrderTypes, ps.AllowedOrderTypes)
+	}
+	if ps.AllowedTimeInForce != nil {
+		cp.AllowedTimeInForce = make([]string, len(ps.AllowedTimeInForce))
+		copy(cp.AllowedTimeInForce, ps.AllowedTimeInForce)
+	}
+	return &cp
+}

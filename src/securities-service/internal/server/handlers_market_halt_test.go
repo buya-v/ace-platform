@@ -75,6 +75,7 @@ func newHaltTestServer(t *testing.T) (
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()

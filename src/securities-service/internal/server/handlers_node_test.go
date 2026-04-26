@@ -65,6 +65,7 @@ func newNodeTestServer(t *testing.T) (*httptest.Server, *store.InMemoryNodeStore
 		nil, // producer
 		nil, // privilegeEngine
 		nil, // roleStore
+		nil, // tradingParamSetStore
 		cfg,
 	)
 	srv.SetReady()
@@ -374,7 +375,7 @@ func TestNodeEndpoints_NotConfigured(t *testing.T) {
 		nil, // nodeStore = nil
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, nil, nil, cfg,
+		nil, me, nil, nil, nil, nil, nil, nil, cfg,
 	)
 	srv.SetReady()
 

@@ -48,7 +48,7 @@ func newTestServerWithStores(t *testing.T, instrStore store.InstrumentStore, ord
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, me, nil, nil, nil, nil, nil, cfg)
+		nil, me, nil, nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	mux := http.NewServeMux()
@@ -580,7 +580,7 @@ func TestHealthzEndpoint(t *testing.T) {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, nil, nil, nil, nil, nil, nil, cfg)
+		nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()
@@ -610,7 +610,7 @@ func TestReadyzEndpoint_NotReady(t *testing.T) {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, nil, nil, nil, nil, nil, nil, cfg)
+		nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	// NOT calling SetReady()
 
 	w := httptest.NewRecorder()
@@ -632,7 +632,7 @@ func TestReadyzEndpoint_Ready(t *testing.T) {
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
-		nil, nil, nil, nil, nil, nil, nil, cfg)
+		nil, nil, nil, nil, nil, nil, nil, nil, cfg)
 	srv.SetReady()
 
 	w := httptest.NewRecorder()
