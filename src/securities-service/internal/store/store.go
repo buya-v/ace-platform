@@ -3316,3 +3316,341 @@ func copyTradingCycle(c *types.TradingCycle) *types.TradingCycle {
 	}
 	return &cp
 }
+
+// ── Part A — History Store ─────────────────────────────────────────────────────
+
+// HistoryStore defines the repository contract for archived orders and trades.
+type HistoryStore interface {
+	ArchiveOrder(order types.SecurityOrder) error
+	ArchiveTrade(trade types.SecurityTrade) error
+	ListOrders(dateFrom, dateTo string) ([]types.SecurityOrder, error)
+	ListTrades(dateFrom, dateTo string) ([]types.SecurityTrade, error)
+}
+
+// InMemoryHistoryStore is a thread-safe in-memory implementation of HistoryStore.
+type InMemoryHistoryStore struct {
+	mu     sync.RWMutex
+	orders []types.SecurityOrder
+	trades []types.SecurityTrade
+}
+
+// NewInMemoryHistoryStore returns an empty InMemoryHistoryStore.
+func NewInMemoryHistoryStore() *InMemoryHistoryStore {
+	return &InMemoryHistoryStore{}
+}
+
+// ArchiveOrder appends an order to the history store (sets ArchivedAt if empty).
+func (s *InMemoryHistoryStore) ArchiveOrder(order types.SecurityOrder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if order.ArchivedAt == "" {
+		order.ArchivedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	s.orders = append(s.orders, order)
+	return nil
+}
+
+// ArchiveTrade appends a trade to the history store (sets ArchivedAt if empty).
+func (s *InMemoryHistoryStore) ArchiveTrade(trade types.SecurityTrade) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if trade.ArchivedAt == "" {
+		trade.ArchivedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	s.trades = append(s.trades, trade)
+	return nil
+}
+
+// ListOrders returns archived orders whose ArchivedAt falls within [dateFrom, dateTo].
+// Empty string bounds are treated as open-ended.
+func (s *InMemoryHistoryStore) ListOrders(dateFrom, dateTo string) ([]types.SecurityOrder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.SecurityOrder, 0, len(s.orders))
+	for _, o := range s.orders {
+		if dateFrom != "" && o.ArchivedAt < dateFrom {
+			continue
+		}
+		if dateTo != "" && o.ArchivedAt > dateTo {
+			continue
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+// ListTrades returns archived trades whose ArchivedAt falls within [dateFrom, dateTo].
+func (s *InMemoryHistoryStore) ListTrades(dateFrom, dateTo string) ([]types.SecurityTrade, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.SecurityTrade, 0, len(s.trades))
+	for _, t := range s.trades {
+		if dateFrom != "" && t.ArchivedAt < dateFrom {
+			continue
+		}
+		if dateTo != "" && t.ArchivedAt > dateTo {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// ── Part B — Post-Trade Params Store ──────────────────────────────────────────
+
+// PostTradeParamsStore defines the repository contract for post-trade parameters.
+type PostTradeParamsStore interface {
+	Create(p *types.PostTradeParams) error
+	Get(id string) (*types.PostTradeParams, error)
+	GetByInstrument(instrumentID string) (*types.PostTradeParams, error)
+	Update(p *types.PostTradeParams) error
+	Delete(id string) error
+}
+
+// InMemoryPostTradeParamsStore is a thread-safe in-memory implementation of PostTradeParamsStore.
+type InMemoryPostTradeParamsStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.PostTradeParams
+}
+
+// NewInMemoryPostTradeParamsStore returns an empty InMemoryPostTradeParamsStore.
+func NewInMemoryPostTradeParamsStore() *InMemoryPostTradeParamsStore {
+	return &InMemoryPostTradeParamsStore{
+		data: make(map[string]*types.PostTradeParams),
+	}
+}
+
+// Create stores a new PostTradeParams record.
+func (s *InMemoryPostTradeParamsStore) Create(p *types.PostTradeParams) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[p.ID]; exists {
+		return fmt.Errorf("post-trade-params %s already exists", p.ID)
+	}
+	cp := *p
+	s.data[p.ID] = &cp
+	return nil
+}
+
+// Get retrieves a PostTradeParams by ID.
+func (s *InMemoryPostTradeParamsStore) Get(id string) (*types.PostTradeParams, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
+// GetByInstrument retrieves a PostTradeParams by instrument ID.
+func (s *InMemoryPostTradeParamsStore) GetByInstrument(instrumentID string) (*types.PostTradeParams, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, p := range s.data {
+		if p.InstrumentID == instrumentID {
+			cp := *p
+			return &cp, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// Update replaces a PostTradeParams record in full.
+func (s *InMemoryPostTradeParamsStore) Update(p *types.PostTradeParams) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[p.ID]; !ok {
+		return ErrNotFound
+	}
+	cp := *p
+	cp.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	s.data[p.ID] = &cp
+	return nil
+}
+
+// Delete removes a PostTradeParams record by ID.
+func (s *InMemoryPostTradeParamsStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// ── Part C — Config Table Store ────────────────────────────────────────────────
+
+// ConfigTableStore defines the repository contract for operator-managed config tables.
+type ConfigTableStore interface {
+	Create(t *types.ConfigTable) error
+	Get(id string) (*types.ConfigTable, error)
+	ListByType(tableType types.ConfigTableType) ([]types.ConfigTable, error)
+	Update(t *types.ConfigTable) error
+	Delete(id string) error
+}
+
+// InMemoryConfigTableStore is a thread-safe in-memory implementation of ConfigTableStore.
+type InMemoryConfigTableStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.ConfigTable
+}
+
+// NewInMemoryConfigTableStore returns an empty InMemoryConfigTableStore.
+func NewInMemoryConfigTableStore() *InMemoryConfigTableStore {
+	return &InMemoryConfigTableStore{
+		data: make(map[string]*types.ConfigTable),
+	}
+}
+
+// Create stores a new ConfigTable record.
+func (s *InMemoryConfigTableStore) Create(t *types.ConfigTable) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[t.ID]; exists {
+		return fmt.Errorf("config-table %s already exists", t.ID)
+	}
+	cp := copyConfigTable(t)
+	s.data[t.ID] = cp
+	return nil
+}
+
+// Get retrieves a ConfigTable by ID.
+func (s *InMemoryConfigTableStore) Get(id string) (*types.ConfigTable, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return copyConfigTable(t), nil
+}
+
+// ListByType returns all ConfigTables of the given type.
+// An empty tableType returns all tables.
+func (s *InMemoryConfigTableStore) ListByType(tableType types.ConfigTableType) ([]types.ConfigTable, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.ConfigTable, 0, len(s.data))
+	for _, t := range s.data {
+		if tableType != "" && t.TableType != tableType {
+			continue
+		}
+		out = append(out, *copyConfigTable(t))
+	}
+	return out, nil
+}
+
+// Update replaces a ConfigTable record in full.
+func (s *InMemoryConfigTableStore) Update(t *types.ConfigTable) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[t.ID]; !ok {
+		return ErrNotFound
+	}
+	cp := copyConfigTable(t)
+	cp.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	s.data[t.ID] = cp
+	return nil
+}
+
+// Delete removes a ConfigTable by ID.
+func (s *InMemoryConfigTableStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}
+
+// copyConfigTable deep-copies a ConfigTable (Rows is a slice of maps).
+func copyConfigTable(t *types.ConfigTable) *types.ConfigTable {
+	cp := *t
+	if t.Rows != nil {
+		cp.Rows = make([]map[string]interface{}, len(t.Rows))
+		for i, row := range t.Rows {
+			newRow := make(map[string]interface{}, len(row))
+			for k, v := range row {
+				newRow[k] = v
+			}
+			cp.Rows[i] = newRow
+		}
+	}
+	return &cp
+}
+
+// ── Part D — Client Store ──────────────────────────────────────────────────────
+
+// ClientStore defines the repository contract for end-client entities.
+type ClientStore interface {
+	Create(c *types.Client) error
+	Get(id string) (*types.Client, error)
+	ListByFirm(firmID string) ([]types.Client, error)
+	Delete(id string) error
+}
+
+// InMemoryClientStore is a thread-safe in-memory implementation of ClientStore.
+type InMemoryClientStore struct {
+	mu   sync.RWMutex
+	data map[string]*types.Client
+}
+
+// NewInMemoryClientStore returns an empty InMemoryClientStore.
+func NewInMemoryClientStore() *InMemoryClientStore {
+	return &InMemoryClientStore{
+		data: make(map[string]*types.Client),
+	}
+}
+
+// Create stores a new Client record.
+func (s *InMemoryClientStore) Create(c *types.Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.data[c.ID]; exists {
+		return fmt.Errorf("client %s already exists", c.ID)
+	}
+	cp := *c
+	s.data[c.ID] = &cp
+	return nil
+}
+
+// Get retrieves a Client by ID.
+func (s *InMemoryClientStore) Get(id string) (*types.Client, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.data[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *c
+	return &cp, nil
+}
+
+// ListByFirm returns all clients belonging to the given firm.
+func (s *InMemoryClientStore) ListByFirm(firmID string) ([]types.Client, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]types.Client, 0, len(s.data))
+	for _, c := range s.data {
+		if firmID != "" && c.FirmID != firmID {
+			continue
+		}
+		out = append(out, *c)
+	}
+	return out, nil
+}
+
+// Delete removes a Client by ID.
+func (s *InMemoryClientStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.data[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.data, id)
+	return nil
+}

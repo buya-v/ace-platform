@@ -117,8 +117,10 @@ type SecurityOrder struct {
 	VisibleQuantity int         `json:"visible_quantity,omitempty"` // Iceberg: visible (displayed) quantity
 	HiddenQuantity  int         `json:"hidden_quantity,omitempty"`  // Iceberg: hidden (reserve) quantity
 	LocateID        string      `json:"locate_id,omitempty"`        // P4a: required for SHORT_SELL orders
+	ClientID        string      `json:"client_id,omitempty"`        // Part D: originating client entity
 	CreatedAt       string      `json:"created_at"`
 	UpdatedAt       string      `json:"updated_at"`
+	ArchivedAt      string      `json:"archived_at,omitempty"`
 }
 
 // TradeStatus represents the lifecycle state of a trade.
@@ -144,6 +146,7 @@ type SecurityTrade struct {
 	SettlementDate string      `json:"settlement_date"`
 	Status         TradeStatus `json:"status"`
 	CreatedAt      string      `json:"created_at"`
+	ArchivedAt     string      `json:"archived_at,omitempty"`
 }
 
 // Position represents a participant's holdings in a specific instrument.
@@ -1097,4 +1100,63 @@ type TradingCycle struct {
 	SessionSequence []string `json:"session_sequence"` // ordered list of MarketSession values
 	IsDefault       bool     `json:"is_default"`
 	CreatedAt       string   `json:"created_at"`
+}
+
+// ── Part B — Post-Trade Parameters ───────────────────────────────────────────
+
+// PostTradeParams holds the clearing and settlement configuration for an instrument.
+type PostTradeParams struct {
+	ID               string  `json:"id"`
+	InstrumentID     string  `json:"instrument_id"`
+	SettlementCycle  string  `json:"settlement_cycle"`   // e.g. "T+2"
+	ClearingFirmID   string  `json:"clearing_firm_id"`
+	FeeScheduleID    string  `json:"fee_schedule_id"`
+	PenaltyRatePct   float64 `json:"penalty_rate_pct"`
+	CreatedAt        string  `json:"created_at"`
+	UpdatedAt        string  `json:"updated_at"`
+}
+
+// ── Part C — Config Tables ────────────────────────────────────────────────────
+
+// ConfigTableType classifies the purpose of a configurable tabular structure.
+type ConfigTableType string
+
+const (
+	ConfigTableTypeFeeSchedule   ConfigTableType = "FEE_SCHEDULE"
+	ConfigTableTypeTaxRate       ConfigTableType = "TAX_RATE"
+	ConfigTableTypeHoliday       ConfigTableType = "HOLIDAY"
+	ConfigTableTypeMarginMatrix  ConfigTableType = "MARGIN_MATRIX"
+	ConfigTableTypeThrottle      ConfigTableType = "THROTTLE"
+	ConfigTableTypeCustom        ConfigTableType = "CUSTOM"
+)
+
+// ConfigTable stores an operator-managed tabular configuration structure.
+type ConfigTable struct {
+	ID        string                   `json:"id"`
+	TableType ConfigTableType          `json:"table_type"`
+	Name      string                   `json:"name"`
+	Rows      []map[string]interface{} `json:"rows"`
+	CreatedAt string                   `json:"created_at"`
+	UpdatedAt string                   `json:"updated_at"`
+}
+
+// ── Part D — Client Entities ──────────────────────────────────────────────────
+
+// ClientType classifies the category of a registered client.
+type ClientType string
+
+const (
+	ClientTypeIndividual    ClientType = "INDIVIDUAL"
+	ClientTypeInstitutional ClientType = "INSTITUTIONAL"
+	ClientTypeProprietary   ClientType = "PROPRIETARY"
+)
+
+// Client represents an end-client registered under a member firm.
+type Client struct {
+	ID          string     `json:"id"`
+	FirmID      string     `json:"firm_id"`
+	Name        string     `json:"name"`
+	Nationality string     `json:"nationality"`
+	ClientType  ClientType `json:"client_type"`
+	CreatedAt   string     `json:"created_at"`
 }

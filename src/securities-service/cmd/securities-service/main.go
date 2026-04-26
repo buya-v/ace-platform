@@ -185,6 +185,18 @@ func main() {
 	// Wire DB into server for health checks (nil-safe; no-op when in-memory mode).
 	srv.SetDB(pool)
 
+	// Part A — History archive store.
+	srv.SetHistoryStore(store.NewInMemoryHistoryStore())
+
+	// Part B — Post-trade parameters store.
+	srv.SetPostTradeParamsStore(store.NewInMemoryPostTradeParamsStore())
+
+	// Part C — Config table store.
+	srv.SetConfigTableStore(store.NewInMemoryConfigTableStore())
+
+	// Part D — Client entity store.
+	srv.SetClientStore(store.NewInMemoryClientStore())
+
 	// Start health server on port 9089.
 	go func() {
 		logger.Info("health server starting",

@@ -78,6 +78,10 @@ type Server struct {
 	passwordPolicyStore   store.PasswordPolicyStore
 	tradingParamSetStore  store.TradingParamSetStore
 	tradingCycleStore     store.TradingCycleStore // T1: trading cycle management
+	historyStore          store.HistoryStore        // Part A: history archive
+	postTradeParamsStore  store.PostTradeParamsStore // Part B: post-trade parameters
+	configTableStore      store.ConfigTableStore    // Part C: tabular structures
+	clientStore           store.ClientStore         // Part D: client entities
 	dayManager            *engine.DayManager
 	engine               *engine.MatchingEngine
 	sessionManager       *engine.SessionManager
@@ -106,6 +110,8 @@ type Server struct {
 // watchListStore, ipRestrictionStore, and passwordPolicyStore may be nil; if so, those endpoints return 503.
 // privilegeEngine and roleStore may be nil; if so, permission checks are skipped (backwards compat).
 // tradingParamSetStore may be nil; if so, trading-params endpoints return 503.
+// historyStore, postTradeParamsStore, configTableStore, and clientStore may be nil;
+// if so, those endpoints return 503.
 func New(
 	instrumentStore store.InstrumentStore,
 	orderStore store.OrderStore,
@@ -210,6 +216,26 @@ func New(
 // This is separate from New() to avoid breaking existing test call sites.
 func (s *Server) SetTradingCycleStore(tcs store.TradingCycleStore) {
 	s.tradingCycleStore = tcs
+}
+
+// SetHistoryStore wires the history store into the server after construction (Part A).
+func (s *Server) SetHistoryStore(hs store.HistoryStore) {
+	s.historyStore = hs
+}
+
+// SetPostTradeParamsStore wires the post-trade params store into the server after construction (Part B).
+func (s *Server) SetPostTradeParamsStore(ps store.PostTradeParamsStore) {
+	s.postTradeParamsStore = ps
+}
+
+// SetConfigTableStore wires the config table store into the server after construction (Part C).
+func (s *Server) SetConfigTableStore(cs store.ConfigTableStore) {
+	s.configTableStore = cs
+}
+
+// SetClientStore wires the client store into the server after construction (Part D).
+func (s *Server) SetClientStore(cs store.ClientStore) {
+	s.clientStore = cs
 }
 
 // checkPermission validates that the caller identified by X-Participant-ID holds
@@ -449,6 +475,23 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Trading cycles (T1) — named session-sequence definitions per market.
 	mux.HandleFunc("/api/v1/securities/trading-cycles", s.handleTradingCycles)
 	mux.HandleFunc("/api/v1/securities/trading-cycles/", s.handleTradingCycle)
+
+	// Part A — History archive.
+	mux.HandleFunc("/api/v1/securities/history/", s.handleHistory)
+
+	// Part B — Post-trade parameters.
+	// Instrument sub-route must be registered before the wildcard item route.
+	mux.HandleFunc("/api/v1/securities/post-trade-params/instrument/", s.handlePostTradeParamsByInstrument)
+	mux.HandleFunc("/api/v1/securities/post-trade-params", s.handlePostTradeParams)
+	mux.HandleFunc("/api/v1/securities/post-trade-params/", s.handlePostTradeParamItem)
+
+	// Part C — Config tables.
+	mux.HandleFunc("/api/v1/securities/config-tables", s.handleConfigTables)
+	mux.HandleFunc("/api/v1/securities/config-tables/", s.handleConfigTableItem)
+
+	// Part D — Client entities.
+	mux.HandleFunc("/api/v1/securities/clients", s.handleClients)
+	mux.HandleFunc("/api/v1/securities/clients/", s.handleClientItem)
 }
 
 // --- Health endpoints ---

@@ -321,6 +321,28 @@ func main() {
 	rt.Handle("POST", "/api/v1/securities/trading-cycles", secHandler)
 	rt.Handle("GET", "/api/v1/securities/trading-cycles/{id}", secHandler)
 	rt.Handle("DELETE", "/api/v1/securities/trading-cycles/{id}", secHandler)
+	// Part A — History archive
+	rt.Handle("GET", "/api/v1/securities/history/orders", secHandler)
+	rt.Handle("GET", "/api/v1/securities/history/trades", secHandler)
+	rt.Handle("POST", "/api/v1/securities/history/archive", secHandler)
+	// Part B — Post-trade parameters
+	rt.Handle("GET", "/api/v1/securities/post-trade-params", secHandler)
+	rt.Handle("POST", "/api/v1/securities/post-trade-params", secHandler)
+	rt.Handle("GET", "/api/v1/securities/post-trade-params/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/post-trade-params/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/post-trade-params/{id}", secHandler)
+	rt.Handle("GET", "/api/v1/securities/post-trade-params/instrument/{instrument_id}", secHandler)
+	// Part C — Config tables
+	rt.Handle("GET", "/api/v1/securities/config-tables", secHandler)
+	rt.Handle("POST", "/api/v1/securities/config-tables", secHandler)
+	rt.Handle("GET", "/api/v1/securities/config-tables/{id}", secHandler)
+	rt.Handle("PUT", "/api/v1/securities/config-tables/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/config-tables/{id}", secHandler)
+	// Part D — Client entities
+	rt.Handle("GET", "/api/v1/securities/clients", secHandler)
+	rt.Handle("POST", "/api/v1/securities/clients", secHandler)
+	rt.Handle("GET", "/api/v1/securities/clients/{id}", secHandler)
+	rt.Handle("DELETE", "/api/v1/securities/clients/{id}", secHandler)
 	logger.Info("securities-service routes registered (HTTP proxy)", slog.String("upstream", securitiesBaseURL))
 
 	// Register FIX gateway routes: /api/v1/fix/* → fix-gateway:8091
