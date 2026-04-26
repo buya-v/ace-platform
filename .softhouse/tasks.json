@@ -1,42 +1,30 @@
 {
-  "run_id": "20260425-deep-gap-sprint2",
-  "feature": "Deep Gap Sprint 2 — Privilege Hierarchy",
-  "requirement": "Implement MIT's 4-tier privilege system: 40 entity permissions, Role entity, Node inheritance, permission middleware on all endpoints",
+  "run_id": "20260425-deep-gap-sprint3",
+  "feature": "Deep Gap Sprint 3 — Trading Parameter Sets",
+  "requirement": "Unified TradingParameterSet entity bundling tick_table, circuit_breaker, allowed_order_types, auction_params per instrument",
   "status": "planning",
   "tasks": [
     {
       "id": "T1",
-      "title": "Role entity + 40 entity permissions + privilege inheritance engine",
-      "description": "Implement the privilege system foundation.\n\nAPPEND to types.go:\n- Role struct: ID, Name, Permissions []string, Description, CreatedAt — json tags\n- 40 permission constants organized by category:\n  Instrument: PERM_INSTRUMENT_CREATE, PERM_INSTRUMENT_VIEW, PERM_INSTRUMENT_EDIT, PERM_INSTRUMENT_DELETE, PERM_INSTRUMENT_APPROVE\n  Market: PERM_MARKET_MANAGE, PERM_MARKET_HALT, PERM_MARKET_START_DAY, PERM_MARKET_END_DAY\n  Order: PERM_ORDER_CREATE, PERM_ORDER_CANCEL, PERM_ORDER_VIEW, PERM_ORDER_AMEND, PERM_ORDER_MASS_CANCEL\n  Trade: PERM_TRADE_VIEW, PERM_TRADE_CORRECT, PERM_TRADE_BUST, PERM_TRADE_REINSTATE\n  Settlement: PERM_SETTLEMENT_VIEW, PERM_SETTLEMENT_TRIGGER, PERM_SETTLEMENT_APPROVE\n  Surveillance: PERM_SURVEILLANCE_VIEW, PERM_SURVEILLANCE_MANAGE, PERM_SURVEILLANCE_INVESTIGATE\n  Participant: PERM_PARTICIPANT_CREATE, PERM_PARTICIPANT_VIEW, PERM_PARTICIPANT_EDIT, PERM_PARTICIPANT_SUSPEND\n  Reference Data: PERM_REFDATA_VIEW, PERM_REFDATA_EDIT, PERM_REFDATA_APPROVE, PERM_REFDATA_UPLOAD\n  Admin: PERM_ADMIN_FULL, PERM_ADMIN_FORCE_LOGOUT, PERM_ADMIN_LOCK_USER, PERM_ADMIN_ANNOUNCEMENTS\n  Service Desk: PERM_SERVICEDESK_ORDER, PERM_SERVICEDESK_TRADE, PERM_SERVICEDESK_CANCEL\n  System: PERM_SYSTEM_CONFIG, PERM_SYSTEM_AUDIT_VIEW, PERM_SYSTEM_ROLE_MANAGE\n\nAPPEND to store.go:\n- RoleStore interface: Create, Get, GetByName, List, Update, Delete + InMemory\n  Seed 3 default roles: ADMIN (all 40 perms), TRADER (order+trade view perms), VIEWER (view-only perms)\n\nCreate src/securities-service/internal/engine/privilege.go:\n- PrivilegeEngine struct with roleStore, nodeStore, participantStore\n- ResolveEffectivePermissions(participantID string) ([]string, error):\n  1. Get participant → get permissions\n  2. Get participant's node → walk up node tree collecting permissions\n  3. Get participant's role (if role field exists) → get role permissions\n  4. Merge all permissions (union, deduplicate)\n- HasPermission(participantID, requiredPerm string) (bool, error):\n  1. Resolve effective permissions\n  2. Check if requiredPerm is in the set\n  3. PERM_ADMIN_FULL grants everything\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
+      "title": "TradingParameterSet entity + store + handlers + engine wiring",
+      "description": "Create a unified trading parameter configuration per instrument.\n\nAPPEND to types.go:\n- TradingParameterSet struct:\n  ID string, InstrumentID string, Name string,\n  TickTableID string (reference to existing TickTable),\n  CircuitBreakerID string (reference to existing CircuitBreaker),\n  AllowedOrderTypes []string (LIMIT/MARKET/STOP/STOP_LIMIT — configurable per instrument),\n  AllowedTimeInForce []string (GTC/IOC/FOK/DAY — configurable),\n  MinOrderSize int, MaxOrderSize int, MaxOrderValue float64,\n  AuctionParams AuctionConfig,\n  STPMode string,\n  ShortSellingAllowed bool,\n  CreatedAt, UpdatedAt — json tags\n\n- AuctionConfig struct:\n  RandomEndSeconds int (random end period for auctions),\n  SurplusHandling string (PRO_RATA/TIME_PRIORITY),\n  MinAuctionDuration int (seconds),\n  CreatedAt — json tags\n\nAPPEND to store.go:\n- TradingParamSetStore: Create, Get, GetByInstrument(instrumentID), List, Update, Delete + InMemory\n\nCreate handlers_trading_params.go:\n- POST /api/v1/securities/trading-params — create parameter set for instrument\n- GET /api/v1/securities/trading-params — list all\n- GET /api/v1/securities/trading-params/{id} — get by ID\n- GET /api/v1/securities/trading-params/instrument/{instrument_id} — get by instrument\n- PUT /api/v1/securities/trading-params/{id} — update\n- DELETE /api/v1/securities/trading-params/{id} — delete\n\nWire into order submission (handlers_order.go):\n- Before processing order, load TradingParameterSet for the instrument\n- If parameter set exists:\n  - Validate order_type is in AllowedOrderTypes\n  - Validate time_in_force is in AllowedTimeInForce\n  - Validate quantity >= MinOrderSize and <= MaxOrderSize\n  - Validate price * quantity <= MaxOrderValue (if set)\n  - Use STPMode from param set (override instrument default)\n  - Check ShortSellingAllowed before accepting SHORT_SELL\n\nUpdate server.go + main.go + gateway routes.\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
-      "model": "opus",
+      "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/engine/privilege.go"],
+      "files_hint": ["src/securities-service/internal/types/types.go", "src/securities-service/internal/store/store.go", "src/securities-service/internal/server/handlers_trading_params.go", "src/securities-service/internal/server/handlers_order.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
       "dependencies": [],
       "status": "pending",
       "attempts": 0
     },
     {
       "id": "T2",
-      "title": "Permission middleware + role CRUD handlers + gateway",
-      "description": "Wire privilege checking into all endpoints.\n\nPart A — Permission middleware (create src/securities-service/internal/middleware/permission.go):\n- PermissionMiddleware(privilegeEngine, requiredPerm string) func(http.Handler) http.Handler\n- Extracts participant_id from request context or X-Participant-ID header\n- Calls privilegeEngine.HasPermission(participantID, requiredPerm)\n- If denied: 403 {error: {code: 'PERMISSION_DENIED', message: 'requires: PERM_XYZ'}}\n- If no participant_id: pass through (public endpoint)\n\nPart B — Role CRUD handlers (create handlers_role.go):\n- POST /api/v1/securities/roles — create role {name, permissions[]}\n- GET /api/v1/securities/roles — list all roles\n- GET /api/v1/securities/roles/{id} — get role\n- PUT /api/v1/securities/roles/{id} — update permissions\n- DELETE /api/v1/securities/roles/{id} — delete\n- POST /api/v1/securities/roles/{id}/assign/{participant_id} — assign role to participant\n\nPart C — Wire permission checks to key endpoints (modify server.go):\n- Instrument create/edit/delete: require PERM_INSTRUMENT_CREATE/EDIT/DELETE\n- Order submit: require PERM_ORDER_CREATE\n- Trade correct/bust: require PERM_TRADE_CORRECT/BUST\n- Market halt/start day: require PERM_MARKET_HALT/START_DAY\n- Settlement trigger: require PERM_SETTLEMENT_TRIGGER\n- For MVP: add permission checks to the 10 most critical endpoints, not all 130+\n\nPart D — Update server.go + main.go + gateway routes.\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go build ./... && go test ./... && cd ../gateway && go build ./...\n\nWrite handoff to .softhouse/handoff/T2.md",
-      "agent_role": "coder",
-      "model": "sonnet",
-      "target": "backend",
-      "files_hint": ["src/securities-service/internal/middleware/permission.go", "src/securities-service/internal/server/handlers_role.go", "src/securities-service/internal/server/server.go", "src/securities-service/cmd/securities-service/main.go", "src/gateway/cmd/gateway/main.go"],
-      "dependencies": ["T1"],
-      "status": "pending",
-      "attempts": 0
-    },
-    {
-      "id": "T3",
-      "title": "Unit tests for privilege system",
-      "description": "Write tests for roles, permissions, privilege inheritance.\n\n1. store_test.go:\n- TestRoleStore_CRUD — create, get, list, update, delete\n- TestRoleStore_SeededRoles — verify ADMIN/TRADER/VIEWER roles exist\n\n2. engine/privilege_test.go:\n- TestResolvePermissions_FromRole — participant with TRADER role → trade permissions\n- TestResolvePermissions_FromNode — node has extra permissions → inherited\n- TestResolvePermissions_Merged — role + node + participant permissions merged\n- TestHasPermission_AdminFull — ADMIN_FULL grants everything\n- TestHasPermission_Denied — missing permission → false\n- TestHasPermission_UnknownParticipant → error\n\n3. handlers_role_test.go:\n- TestCreateRole → 201\n- TestListRoles → includes seeded roles\n- TestAssignRole → 200\n\n4. middleware/permission_test.go:\n- TestPermissionMiddleware_Allowed → next handler called\n- TestPermissionMiddleware_Denied → 403\n- TestPermissionMiddleware_NoParticipant → pass through\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "title": "Unit tests for trading parameter sets",
+      "description": "Write tests.\n\n1. store_test.go:\n- TestTradingParamSetStore_Create_Get\n- TestTradingParamSetStore_GetByInstrument\n- TestTradingParamSetStore_Update\n- TestTradingParamSetStore_Delete\n\n2. handlers_trading_params_test.go:\n- TestCreateTradingParamSet → 201\n- TestGetByInstrument → 200\n- TestUpdateTradingParamSet → 200\n- TestOrderValidation_AllowedOrderType — MARKET allowed → pass\n- TestOrderValidation_DisallowedOrderType — STOP not in allowed → 422\n- TestOrderValidation_MinOrderSize — below min → 422\n- TestOrderValidation_MaxOrderSize — above max → 422\n- TestOrderValidation_MaxOrderValue — price*qty exceeds max → 422\n- TestOrderValidation_ShortSellingDisabled — SHORT_SELL with ShortSellingAllowed=false → 422\n\nGo at /usr/local/go/bin/go. cd src/securities-service && go test ./... -race -cover\n\nWrite handoff to .softhouse/handoff/T2.md",
       "agent_role": "test_writer",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/engine/privilege_test.go", "src/securities-service/internal/server/handlers_role_test.go"],
-      "dependencies": ["T2"],
+      "files_hint": ["src/securities-service/internal/store/store_test.go", "src/securities-service/internal/server/"],
+      "dependencies": ["T1"],
       "status": "pending",
       "attempts": 0
     }
