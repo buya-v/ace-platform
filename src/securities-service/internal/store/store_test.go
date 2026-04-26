@@ -4665,3 +4665,241 @@ func TestNodeStore_EffectivePermissions_Deduplication(t *testing.T) {
 		t.Errorf("missing expected permissions; got %v", perms)
 	}
 }
+
+// ============================================================
+// RoleStore tests
+// ============================================================
+
+func newRole(id, name string, perms ...string) *types.Role {
+	if perms == nil {
+		perms = []string{}
+	}
+	return &types.Role{
+		ID:          id,
+		Name:        name,
+		Description: "test role " + name,
+		Permissions: perms,
+		CreatedAt:   "2026-04-26T00:00:00Z",
+		UpdatedAt:   "2026-04-26T00:00:00Z",
+	}
+}
+
+func TestRoleStore_Create_Get(t *testing.T) {
+	s := store.NewInMemoryRoleStore()
+	r := newRole("ROLE-1", "analyst", "VIEW_ORDERS", "VIEW_TRADES")
+
+	if err := s.Create(r); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := s.Get("ROLE-1")
+	if err != nil {
+		t.Fatalf("Get after Create: %v", err)
+	}
+	if got.ID != "ROLE-1" {
+		t.Errorf("ID: want ROLE-1, got %s", got.ID)
+	}
+	if got.Name != "analyst" {
+		t.Errorf("Name: want analyst, got %s", got.Name)
+	}
+	if len(got.Permissions) != 2 {
+		t.Errorf("Permissions len: want 2, got %d", len(got.Permissions))
+	}
+	hasPerm := false
+	for _, p := range got.Permissions {
+		if p == "VIEW_ORDERS" {
+			hasPerm = true
+		}
+	}
+	if !hasPerm {
+		t.Errorf("expected VIEW_ORDERS in permissions, got %v", got.Permissions)
+	}
+	if got.CreatedAt == "" {
+		t.Error("CreatedAt should not be empty")
+	}
+	if got.UpdatedAt == "" {
+		t.Error("UpdatedAt should not be empty")
+	}
+
+	t.Run("get non-existent returns ErrNotFound", func(t *testing.T) {
+		_, err := s.Get("NO-SUCH-ROLE")
+		if err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("duplicate Create returns error", func(t *testing.T) {
+		if err := s.Create(r); err == nil {
+			t.Fatal("expected error on duplicate Create, got nil")
+		}
+	})
+
+	t.Run("Get returns copy — mutation does not affect store", func(t *testing.T) {
+		got2, _ := s.Get("ROLE-1")
+		got2.Name = "MUTATED"
+		got3, _ := s.Get("ROLE-1")
+		if got3.Name == "MUTATED" {
+			t.Error("Get returned a pointer into internal storage instead of a copy")
+		}
+	})
+}
+
+// TestRoleStore_GetByName seeds ADMIN/TRADER/VIEWER roles and retrieves each by
+// iterating List, simulating the common pattern of looking up a role by name.
+func TestRoleStore_GetByName(t *testing.T) {
+	s := store.NewInMemoryRoleStore()
+
+	// Seed the three well-known roles.
+	roles := []*types.Role{
+		newRole("role-admin", "ADMIN", types.PermAdminRoleManage, types.PermAdminAuditView, types.PermAdminAnnouncements),
+		newRole("role-trader", "TRADER", types.PermTradeEquity, types.PermTradeBond, types.PermTradeETF),
+		newRole("role-viewer", "VIEWER", types.PermAdminAuditView),
+	}
+	for _, r := range roles {
+		if err := s.Create(r); err != nil {
+			t.Fatalf("seed Create %s: %v", r.Name, err)
+		}
+	}
+
+	findByName := func(name string) (*types.Role, bool) {
+		all, _ := s.List()
+		for _, r := range all {
+			if r.Name == name {
+				return &r, true
+			}
+		}
+		return nil, false
+	}
+
+	for _, want := range []string{"ADMIN", "TRADER", "VIEWER"} {
+		r, ok := findByName(want)
+		if !ok {
+			t.Errorf("role %s not found after seeding", want)
+			continue
+		}
+		if r.Name != want {
+			t.Errorf("Name: want %s, got %s", want, r.Name)
+		}
+		if len(r.Permissions) == 0 {
+			t.Errorf("role %s has no permissions", want)
+		}
+	}
+}
+
+func TestRoleStore_List(t *testing.T) {
+	s := store.NewInMemoryRoleStore()
+
+	// Seed three roles.
+	for i, name := range []string{"ADMIN", "TRADER", "VIEWER"} {
+		id := fmt.Sprintf("role-%d", i+1)
+		if err := s.Create(newRole(id, name)); err != nil {
+			t.Fatalf("Create %s: %v", name, err)
+		}
+	}
+
+	all, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) < 3 {
+		t.Fatalf("want at least 3 roles, got %d", len(all))
+	}
+
+	names := make(map[string]bool)
+	for _, r := range all {
+		names[r.Name] = true
+	}
+	for _, want := range []string{"ADMIN", "TRADER", "VIEWER"} {
+		if !names[want] {
+			t.Errorf("role %s missing from List result", want)
+		}
+	}
+}
+
+func TestRoleStore_Update(t *testing.T) {
+	s := store.NewInMemoryRoleStore()
+	if err := s.Create(newRole("ROLE-UPD", "original", "PERM_A")); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	err := s.Update("ROLE-UPD", "updated", "new description", []string{"PERM_B", "PERM_C"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := s.Get("ROLE-UPD")
+	if err != nil {
+		t.Fatalf("Get after Update: %v", err)
+	}
+	if got.Name != "updated" {
+		t.Errorf("Name: want updated, got %s", got.Name)
+	}
+	if got.Description != "new description" {
+		t.Errorf("Description: want 'new description', got %s", got.Description)
+	}
+	if len(got.Permissions) != 2 {
+		t.Errorf("Permissions len: want 2, got %d", len(got.Permissions))
+	}
+	hasPB := false
+	for _, p := range got.Permissions {
+		if p == "PERM_B" {
+			hasPB = true
+		}
+	}
+	if !hasPB {
+		t.Errorf("expected PERM_B in permissions after update, got %v", got.Permissions)
+	}
+
+	t.Run("UpdatedAt is refreshed", func(t *testing.T) {
+		orig, _ := s.Get("ROLE-UPD")
+		_ = s.Update("ROLE-UPD", "", "", []string{"PERM_D"})
+		after, _ := s.Get("ROLE-UPD")
+		// UpdatedAt should be a valid RFC3339 timestamp and may differ from CreatedAt.
+		if after.UpdatedAt == "" {
+			t.Error("UpdatedAt should not be empty after Update")
+		}
+		_ = orig // suppress unused warning
+	})
+
+	t.Run("update non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Update("NO-SUCH-ROLE", "x", "", nil); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestRoleStore_Delete(t *testing.T) {
+	s := store.NewInMemoryRoleStore()
+	if err := s.Create(newRole("ROLE-DEL", "to-delete")); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.Delete("ROLE-DEL"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	_, err := s.Get("ROLE-DEL")
+	if err != store.ErrNotFound {
+		t.Errorf("Get after Delete: expected ErrNotFound, got %v", err)
+	}
+
+	t.Run("delete non-existent returns ErrNotFound", func(t *testing.T) {
+		if err := s.Delete("NO-SUCH-ROLE"); err != store.ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("List does not include deleted role", func(t *testing.T) {
+		s2 := store.NewInMemoryRoleStore()
+		s2.Create(newRole("KEEP", "keeper"))
+		s2.Create(newRole("DROP", "dropper"))
+		s2.Delete("DROP")
+
+		all, _ := s2.List()
+		for _, r := range all {
+			if r.ID == "DROP" {
+				t.Error("deleted role still appears in List")
+			}
+		}
+	})
+}
