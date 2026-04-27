@@ -159,18 +159,18 @@ export function SurveillancePage() {
         <tbody>
           {alerts.map(alert => (
             <tr key={alert.id} onClick={() => setSelectedAlert(alert)}>
-              <td>{formatAlertTime(alert.timestamp)}</td>
-              <td>{alert.participant_name}</td>
+              <td>{formatAlertTime(alert.timestamp || (alert as any).created_at)}</td>
+              <td>{alert.participant_name || (alert as any).resolved_by || '—'}</td>
               <td>{alert.instrument_id}</td>
-              <td>{alert.rule_type.replace(/_/g, ' ')}</td>
+              <td>{(alert.rule_type || (alert as any).alert_type || '—').replace(/_/g, ' ')}</td>
               <td>
-                <span className={styles[severityClassName(alert.severity)]}>
-                  {alert.severity}
+                <span className={styles[severityClassName(alert.severity || 'MEDIUM')]}>
+                  {alert.severity || 'MEDIUM'}
                 </span>
               </td>
               <td>
                 <span className={`${styles.statusBadge} ${styles[statusClassName(alert.status)]}`}>
-                  {alert.status.replace(/_/g, ' ')}
+                  {(alert.status || '').replace(/_/g, ' ')}
                 </span>
               </td>
             </tr>
@@ -191,36 +191,36 @@ export function SurveillancePage() {
           <div className={styles.detailGrid}>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Time</span>
-              <span className={styles.detailValue}>{formatAlertTime(selectedAlert.timestamp)}</span>
+              <span className={styles.detailValue}>{formatAlertTime(selectedAlert.timestamp || (selectedAlert as any).created_at)}</span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Participant</span>
-              <span className={styles.detailValue}>{selectedAlert.participant_name}</span>
+              <span className={styles.detailValue}>{selectedAlert.participant_name || (selectedAlert as any).resolved_by || '—'}</span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Instrument</span>
               <span className={styles.detailValue}>{selectedAlert.instrument_id}</span>
             </div>
             <div className={styles.detailField}>
-              <span className={styles.detailLabel}>Rule Type</span>
-              <span className={styles.detailValue}>{selectedAlert.rule_type.replace(/_/g, ' ')}</span>
+              <span className={styles.detailLabel}>Alert Type</span>
+              <span className={styles.detailValue}>{(selectedAlert.rule_type || (selectedAlert as any).alert_type || '—').replace(/_/g, ' ')}</span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Severity</span>
               <span className={styles[severityClassName(selectedAlert.severity)]}>
-                {selectedAlert.severity}
+                {selectedAlert.severity || '—'}
               </span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Status</span>
               <span className={`${styles.statusBadge} ${styles[statusClassName(selectedAlert.status)]}`}>
-                {selectedAlert.status.replace(/_/g, ' ')}
+                {(selectedAlert.status || '').replace(/_/g, ' ')}
               </span>
             </div>
           </div>
           <div className={styles.detailField}>
             <span className={styles.detailLabel}>Description</span>
-            <span className={styles.detailValue}>{selectedAlert.description}</span>
+            <span className={styles.detailValue}>{selectedAlert.description || (selectedAlert as any).message || '—'}</span>
           </div>
           {(selectedAlert.status === 'OPEN' || selectedAlert.status === 'UNDER_REVIEW') && (
             <div style={{ marginTop: 16 }}>
