@@ -45,16 +45,28 @@ export function MarketPhasePage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [instrRes, dayRes, sessRes] = await Promise.allSettled([
+      const [instrRes, bondRes, dayRes, sessRes] = await Promise.allSettled([
         fetchSecuritiesInstruments(),
+        apiFetch<{ data: any[] }>('/securities/bonds'),
         apiFetch<{ state: string }>('/securities/day/status'),
         apiFetch<{ sessions: Record<string, string> }>('/securities/sessions'),
       ]);
 
-      // Parse instruments
+      // Parse instruments + bonds
       let instList: MarketInstrument[] = [];
       if (instrRes.status === 'fulfilled') {
         instList = normalizeInstruments(instrRes.value);
+      }
+      if (bondRes.status === 'fulfilled') {
+        const bonds = ((bondRes.value as any)?.data ?? []).map((b: any) => ({
+          instrument_id: b.id,
+          name: b.name,
+          ticker: b.id,
+          phase: 'CLOSED',
+          trading_status: b.trading_status || 'ACTIVE',
+          last_updated: b.updated_at || '',
+        }));
+        instList = [...instList, ...bonds];
       }
 
       // Parse day state
