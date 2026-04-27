@@ -152,16 +152,20 @@ export const Trading: React.FC = () => {
     const fetchHistory = () => {
       apiRequest<{ data: Record<string, unknown>[] }>('/securities/trades')
         .then((res) => {
-          const trades = (res.data || []).map((t) => ({
-            tradeId: (t.id || t.tradeId || '') as string,
-            instrumentId: (t.instrument_id || t.instrumentId || '') as string,
-            instrumentSymbol: (t.instrument_id || '') as string,
-            side: ((t.side || '') as string).toLowerCase(),
-            quantity: String(t.quantity || '0'),
-            price: String(t.price || '0'),
-            totalValue: calculateTradeValue(String(t.price || 0), String(t.quantity || 0)),
-            timestamp: (t.created_at || t.timestamp || '') as string,
-          })) as TradeRecord[];
+          const trades = (res.data || []).map((t) => {
+            const instId = (t.instrument_id || t.instrumentId || '') as string;
+            const inst = instruments.find((i) => i.id === instId);
+            return {
+              tradeId: (t.id || t.tradeId || '') as string,
+              instrumentId: instId,
+              instrumentSymbol: inst?.ticker || instId.slice(0, 8),
+              side: ((t.side || '') as string).toLowerCase(),
+              quantity: String(t.quantity || '0'),
+              price: String(t.price || '0'),
+              totalValue: calculateTradeValue(String(t.price || 0), String(t.quantity || 0)),
+              timestamp: (t.created_at || t.timestamp || '') as string,
+            };
+          }) as TradeRecord[];
           setTradeHistory(trades);
         })
         .catch(() => {});
@@ -169,7 +173,7 @@ export const Trading: React.FC = () => {
     fetchHistory();
     const interval = setInterval(fetchHistory, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [instruments]);
 
   // Poll orders from securities service
   useEffect(() => {
@@ -289,7 +293,7 @@ export const Trading: React.FC = () => {
                   {orders.map((order) => (
                     <div key={order.id} className={styles.ordersRow}>
                       <span>{new Date(order.created_at).toLocaleTimeString()}</span>
-                      <span>{order.instrument_id}</span>
+                      <span>{instruments.find((i) => i.id === order.instrument_id)?.ticker || order.instrument_id?.slice(0, 8)}</span>
                       <span className={order.side?.toLowerCase() === 'buy' ? styles.buySide : styles.sellSide}>
                         {order.side || '-'}
                       </span>
