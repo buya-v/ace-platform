@@ -126,8 +126,8 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({ trades, instruments 
           <div key={trade.tradeId} className={styles.row}>
             <span className={styles.time}>{formatTradeTime(trade.timestamp)}</span>
             <span>{trade.instrumentSymbol}</span>
-            <span className={trade.side === 'buy' ? styles.buySide : styles.sellSide}>
-              {trade.side.toUpperCase()}
+            <span className={trade.side?.toLowerCase() === 'buy' ? styles.buySide : styles.sellSide}>
+              {(trade.side || '-').toUpperCase()}
             </span>
             <span>{trade.quantity}</span>
             <span className={trade.side === 'buy' ? styles.buyPrice : styles.sellPrice}>

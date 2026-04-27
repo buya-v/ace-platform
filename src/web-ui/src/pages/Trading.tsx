@@ -150,12 +150,18 @@ export const Trading: React.FC = () => {
   // Poll trade history from securities service
   useEffect(() => {
     const fetchHistory = () => {
-      apiRequest<{ data: TradeRecord[] }>('/securities/trades')
+      apiRequest<{ data: Record<string, unknown>[] }>('/securities/trades')
         .then((res) => {
           const trades = (res.data || []).map((t) => ({
-            ...t,
-            totalValue: t.totalValue || calculateTradeValue(t.price, t.quantity),
-          }));
+            tradeId: (t.id || t.tradeId || '') as string,
+            instrumentId: (t.instrument_id || t.instrumentId || '') as string,
+            instrumentSymbol: (t.instrument_id || '') as string,
+            side: ((t.side || '') as string).toLowerCase(),
+            quantity: String(t.quantity || '0'),
+            price: String(t.price || '0'),
+            totalValue: calculateTradeValue(String(t.price || 0), String(t.quantity || 0)),
+            timestamp: (t.created_at || t.timestamp || '') as string,
+          })) as TradeRecord[];
           setTradeHistory(trades);
         })
         .catch(() => {});
@@ -284,8 +290,8 @@ export const Trading: React.FC = () => {
                     <div key={order.id} className={styles.ordersRow}>
                       <span>{new Date(order.created_at).toLocaleTimeString()}</span>
                       <span>{order.instrument_id}</span>
-                      <span className={order.side === 'buy' ? styles.buySide : styles.sellSide}>
-                        {order.side.toUpperCase()}
+                      <span className={order.side?.toLowerCase() === 'buy' ? styles.buySide : styles.sellSide}>
+                        {order.side || '-'}
                       </span>
                       <span>{order.order_type}</span>
                       <span>{order.quantity}</span>

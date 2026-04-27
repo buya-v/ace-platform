@@ -81,8 +81,27 @@ export async function login(email: string, password: string): Promise<{ user: { 
   }
 
   const data = await response.json();
-  tokenManager.setToken(data.access_token || data.AccessToken, data.expires_in || data.ExpiresIn);
-  return { user: data.user };
+  const token = data.access_token || data.AccessToken;
+  tokenManager.setToken(token, data.expires_in || data.ExpiresIn);
+
+  // Auth service returns { AccessToken, RefreshToken, ExpiresIn } — no user object.
+  // Extract user info from JWT payload.
+  let user = data.user;
+  if (!user && token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      user = {
+        id: payload.sub || '',
+        email: payload.email || email,
+        displayName: payload.email?.split('@')[0] || email.split('@')[0],
+        roles: payload.role ? [payload.role] : [],
+        participantId: payload.sub || '',
+      };
+    } catch {
+      user = { id: '', email, displayName: email.split('@')[0], roles: [], participantId: '' };
+    }
+  }
+  return { user };
 }
 
 export async function logout(): Promise<void> {
@@ -104,8 +123,24 @@ export async function silentRefresh(): Promise<{ user: { id: string; email: stri
     });
     if (!res.ok) return null;
     const data = await res.json();
-    tokenManager.setToken(data.access_token || data.AccessToken, data.expires_in || data.ExpiresIn);
-    return { user: data.user };
+    const token = data.access_token || data.AccessToken;
+    tokenManager.setToken(token, data.expires_in || data.ExpiresIn);
+    let user = data.user;
+    if (!user && token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        user = {
+          id: payload.sub || '',
+          email: payload.email || '',
+          displayName: payload.email?.split('@')[0] || 'user',
+          roles: payload.role ? [payload.role] : [],
+          participantId: payload.sub || '',
+        };
+      } catch {
+        return null;
+      }
+    }
+    return { user };
   } catch {
     return null;
   }

@@ -74,7 +74,7 @@ export interface TradeRecord {
   tradeId: string;
   instrumentId: string;
   instrumentSymbol: string;
-  side: 'buy' | 'sell';
+  side: string;
   quantity: string;
   price: string;
   totalValue: string;
