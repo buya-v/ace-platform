@@ -86,8 +86,8 @@ export const TradeHistory: React.FC<TradeHistoryProps> = ({ trades, instruments 
               >
                 <option value="">All</option>
                 {instruments?.map((inst) => (
-                  <option key={inst.instrumentId} value={inst.instrumentId}>
-                    {inst.symbol}
+                  <option key={inst.id} value={inst.id}>
+                    {inst.ticker}
                   </option>
                 ))}
               </select>

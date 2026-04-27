@@ -48,6 +48,7 @@ export async function apiRequest<T>(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
+      'X-GarudaX-Tenant': 'mse-equities',
       ...options.headers,
     },
   });

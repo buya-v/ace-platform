@@ -138,6 +138,9 @@ export const Chart: React.FC<ChartProps> = ({ instrumentId }) => {
       </div>
       <div className={styles.canvasContainer} ref={containerRef}>
         {loading && <div className={styles.loading}>Loading chart...</div>}
+        {!loading && candles.length === 0 && (
+          <div className={styles.loading}>No chart data available</div>
+        )}
         <canvas ref={canvasRef} />
       </div>
     </div>

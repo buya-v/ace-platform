@@ -19,7 +19,7 @@ export function useOrders(): UseOrdersReturn {
     setSubmitting(true);
     setLastError(null);
     try {
-      const result = await apiRequest<SubmitOrderResponse>('/orders', {
+      const result = await apiRequest<SubmitOrderResponse>('/securities/orders', {
         method: 'POST',
         body: JSON.stringify(req),
       });

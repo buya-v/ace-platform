@@ -20,16 +20,31 @@ import type { Position, PnlSummary, MarginStatus as MarginStatusType, TradeRecor
 import type { Instrument, Ticker } from '../types/instrument';
 import styles from './Trading.module.css';
 
+interface SecuritiesOrder {
+  id: string;
+  instrument_id: string;
+  side: string;
+  order_type: string;
+  quantity: number;
+  price: number;
+  time_in_force: string;
+  status: string;
+  filled_quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export const Trading: React.FC = () => {
   const { state, dispatch, selectInstrument } = useTrading();
   const { logout } = useAuth();
   const [prefillPrice, setPrefillPrice] = useState<string | undefined>();
   const [tradeHistory, setTradeHistory] = useState<TradeRecord[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [orders, setOrders] = useState<SecuritiesOrder[]>([]);
   const [tickers, setTickers] = useState<Map<string, Ticker>>(new Map());
-  const [activeTab, setActiveTab] = useState<'positions' | 'history'>('positions');
+  const [activeTab, setActiveTab] = useState<'positions' | 'history' | 'orders'>('orders');
 
-  const instrumentId = state.selectedInstrument?.instrumentId ?? null;
+  const instrumentId = state.selectedInstrument?.id ?? null;
   const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
   const handleBookMessage = useCallback((msg: WSMessage) => {
@@ -74,14 +89,14 @@ export const Trading: React.FC = () => {
     enabled: !!instrumentId,
   });
 
-  // Fetch instruments list for trade history filter
+  // Fetch instruments list
   useEffect(() => {
-    apiRequest<{ instruments: Instrument[] }>('/instruments?status=active')
-      .then((data) => setInstruments(data.instruments || []))
+    apiRequest<{ data: Instrument[] }>('/securities/instruments')
+      .then((res) => setInstruments(res.data || []))
       .catch(() => {});
   }, []);
 
-  // Poll positions, P&L, margin, tickers
+  // Poll positions and margin — catch errors silently (these endpoints may not exist for securities)
   useEffect(() => {
     const poll = async () => {
       try {
@@ -92,16 +107,16 @@ export const Trading: React.FC = () => {
         if (posData.status === 'fulfilled') dispatch({ type: 'SET_POSITIONS', positions: posData.value.positions || [] });
         if (marginData.status === 'fulfilled') dispatch({ type: 'SET_MARGIN', margin: marginData.value });
       } catch {
-        // Silently fail polling
+        // Silently fail polling — these commodity endpoints may not be available
       }
     };
 
     poll();
-    const interval = setInterval(poll, 5000);
+    const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
   }, [dispatch]);
 
-  // Poll tickers for position current prices
+  // Poll tickers for position current prices — silently handle missing market-data endpoint
   useEffect(() => {
     if (state.positions.length === 0) return;
     const pollTickers = () => {
@@ -114,10 +129,11 @@ export const Trading: React.FC = () => {
       });
     };
     pollTickers();
-    const interval = setInterval(pollTickers, 5000);
+    const interval = setInterval(pollTickers, 15000);
     return () => clearInterval(interval);
   }, [state.positions]);
 
+  // Settlement cycles — silently handle missing endpoint
   useEffect(() => {
     apiRequest<PnlSummary>('/settlement/cycles')
       .then((pnl) => dispatch({ type: 'SET_PNL', pnl }))
@@ -127,16 +143,16 @@ export const Trading: React.FC = () => {
       apiRequest<PnlSummary>('/settlement/cycles')
         .then((pnl) => dispatch({ type: 'SET_PNL', pnl }))
         .catch(() => {});
-    }, 5000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [dispatch]);
 
-  // Poll trade history
+  // Poll trade history from securities service
   useEffect(() => {
     const fetchHistory = () => {
-      apiRequest<{ trades: TradeRecord[] }>('/trades/history')
-        .then((data) => {
-          const trades = (data.trades || []).map((t) => ({
+      apiRequest<{ data: TradeRecord[] }>('/securities/trades')
+        .then((res) => {
+          const trades = (res.data || []).map((t) => ({
             ...t,
             totalValue: t.totalValue || calculateTradeValue(t.price, t.quantity),
           }));
@@ -149,11 +165,23 @@ export const Trading: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Close position: submit opposing market order
+  // Poll orders from securities service
+  useEffect(() => {
+    const fetchOrders = () => {
+      apiRequest<{ data: SecuritiesOrder[] }>('/securities/orders')
+        .then((res) => setOrders(res.data || []))
+        .catch(() => {});
+    };
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Close position: submit opposing market order via securities endpoint
   const handleClosePosition = useCallback(async (posInstrumentId: string, side: 'long' | 'short', quantity: string) => {
     const opposingSide = side === 'long' ? 'sell' : 'buy';
     try {
-      await apiRequest('/orders', {
+      await apiRequest('/securities/orders', {
         method: 'POST',
         body: JSON.stringify({
           instrument_id: posInstrumentId,
@@ -221,6 +249,12 @@ export const Trading: React.FC = () => {
           <div className={styles.bottomTabArea}>
             <div className={styles.tabBar}>
               <button
+                className={`${styles.tab} ${activeTab === 'orders' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('orders')}
+              >
+                Orders ({orders.length})
+              </button>
+              <button
                 className={`${styles.tab} ${activeTab === 'positions' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('positions')}
               >
@@ -234,6 +268,37 @@ export const Trading: React.FC = () => {
               </button>
             </div>
             <div className={styles.tabContent}>
+              {activeTab === 'orders' && (
+                <div className={styles.ordersTable}>
+                  <div className={styles.ordersHeader}>
+                    <span>Time</span>
+                    <span>Instrument</span>
+                    <span>Side</span>
+                    <span>Type</span>
+                    <span>Qty</span>
+                    <span>Price</span>
+                    <span>Filled</span>
+                    <span>Status</span>
+                  </div>
+                  {orders.map((order) => (
+                    <div key={order.id} className={styles.ordersRow}>
+                      <span>{new Date(order.created_at).toLocaleTimeString()}</span>
+                      <span>{order.instrument_id}</span>
+                      <span className={order.side === 'buy' ? styles.buySide : styles.sellSide}>
+                        {order.side.toUpperCase()}
+                      </span>
+                      <span>{order.order_type}</span>
+                      <span>{order.quantity}</span>
+                      <span>{order.price}</span>
+                      <span>{order.filled_quantity}</span>
+                      <span>{order.status}</span>
+                    </div>
+                  ))}
+                  {orders.length === 0 && (
+                    <div className={styles.empty}>No orders</div>
+                  )}
+                </div>
+              )}
               {activeTab === 'positions' && (
                 <ErrorBoundary>
                   <Positions

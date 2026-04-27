@@ -30,18 +30,25 @@ describe('tradingReducer', () => {
     const result = tradingReducer(state, {
       type: 'SET_INSTRUMENT',
       instrument: {
-        instrumentId: 'new',
-        symbol: 'WHEAT',
-        commodityName: 'Wheat',
-        deliveryMonth: '2026-07',
-        deliveryLocation: 'UB',
-        tickSize: '0.01',
-        lotSize: '1',
-        status: 'active',
+        id: 'new',
+        isin: 'MN0000000001',
+        ticker: 'WHEAT',
+        name: 'Wheat',
+        asset_class: 'commodity',
+        security_type: 'future',
+        exchange_code: 'ACE',
+        lot_size: 1,
+        tick_size: 0.01,
+        currency: 'MNT',
+        listing_date: '2026-01-01',
+        trading_status: 'active',
+        outstanding_shares: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
       },
     });
 
-    expect(result.selectedInstrument?.instrumentId).toBe('new');
+    expect(result.selectedInstrument?.id).toBe('new');
     expect(result.orderBook.bids).toEqual([]);
     expect(result.orderBook.asks).toEqual([]);
     expect(result.recentTrades).toEqual([]);

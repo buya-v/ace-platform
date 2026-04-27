@@ -19,7 +19,7 @@ export const InstrumentInfo: React.FC<InstrumentInfoProps> = ({ instrumentId }) 
     }
 
     setLoading(true);
-    apiRequest<InstrumentDetail>(`/instruments/${instrumentId}`)
+    apiRequest<InstrumentDetail>(`/securities/instruments/${instrumentId}`)
       .then((data) => setDetail(data))
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
@@ -32,55 +32,55 @@ export const InstrumentInfo: React.FC<InstrumentInfoProps> = ({ instrumentId }) 
   return (
     <div className={styles.instrumentInfo}>
       <button className={styles.toggleBtn} onClick={toggle}>
-        {expanded ? 'Hide Contract Specs' : 'Contract Specs'}
+        {expanded ? 'Hide Instrument Details' : 'Instrument Details'}
       </button>
 
       {expanded && (
         <div className={styles.panel}>
           {loading && <div className={styles.loading}>Loading...</div>}
-          {!loading && !detail && <div className={styles.empty}>No contract info available</div>}
+          {!loading && !detail && <div className={styles.empty}>No instrument info available</div>}
           {!loading && detail && (
             <div className={styles.grid}>
               <div className={styles.item}>
-                <span className={styles.label}>Symbol</span>
-                <span className={styles.value}>{detail.symbol}</span>
+                <span className={styles.label}>Ticker</span>
+                <span className={styles.value}>{detail.ticker}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Commodity</span>
-                <span className={styles.value}>{detail.commodityName}</span>
+                <span className={styles.label}>Name</span>
+                <span className={styles.value}>{detail.name}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Delivery Month</span>
-                <span className={styles.value}>{detail.deliveryMonth}</span>
+                <span className={styles.label}>ISIN</span>
+                <span className={styles.value}>{detail.isin}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Contract Size</span>
-                <span className={styles.value}>{detail.contractSize ?? detail.lotSize}</span>
+                <span className={styles.label}>Asset Class</span>
+                <span className={styles.value}>{detail.asset_class}</span>
+              </div>
+              <div className={styles.item}>
+                <span className={styles.label}>Security Type</span>
+                <span className={styles.value}>{detail.security_type}</span>
               </div>
               <div className={styles.item}>
                 <span className={styles.label}>Tick Size</span>
-                <span className={styles.value}>{detail.tickSize}</span>
+                <span className={styles.value}>{detail.tick_size}</span>
               </div>
               <div className={styles.item}>
                 <span className={styles.label}>Lot Size</span>
-                <span className={styles.value}>{detail.lotSize}</span>
+                <span className={styles.value}>{detail.lot_size}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Position Limit</span>
-                <span className={styles.value}>{detail.positionLimit ?? 'N/A'}</span>
+                <span className={styles.label}>Exchange</span>
+                <span className={styles.value}>{detail.exchange_code}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Settlement</span>
-                <span className={styles.value}>{detail.settlementType ?? 'N/A'}</span>
+                <span className={styles.label}>Currency</span>
+                <span className={styles.value}>{detail.currency}</span>
               </div>
               <div className={styles.item}>
-                <span className={styles.label}>Delivery Location</span>
-                <span className={styles.value}>{detail.deliveryLocation}</span>
-              </div>
-              <div className={styles.item}>
-                <span className={styles.label}>Status</span>
-                <span className={`${styles.value} ${styles[detail.status]}`}>
-                  {detail.status.toUpperCase()}
+                <span className={styles.label}>Trading Status</span>
+                <span className={`${styles.value}`}>
+                  {detail.trading_status.toUpperCase()}
                 </span>
               </div>
             </div>
