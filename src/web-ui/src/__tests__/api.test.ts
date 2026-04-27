@@ -148,6 +148,50 @@ describe('apiRequest', () => {
     }));
   });
 
+  it('includes X-GarudaX-Tenant header in every authenticated request', async () => {
+    (tokenManager as unknown as { __setToken: (t: string | null) => void }).__setToken('valid-token');
+    mockFetch.mockReturnValueOnce(jsonResponse({ data: 'ok' }));
+
+    await apiRequest('/securities/instruments');
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/securities/instruments', expect.objectContaining({
+      headers: expect.objectContaining({
+        'X-GarudaX-Tenant': 'mse-equities',
+      }),
+    }));
+  });
+
+  it('uses /securities/instruments endpoint for instrument list', async () => {
+    (tokenManager as unknown as { __setToken: (t: string | null) => void }).__setToken('valid-token');
+    mockFetch.mockReturnValueOnce(jsonResponse({ data: [{ id: 'inst-1', ticker: 'MNE', name: 'Mongolian Energy', trading_status: 'active' }] }));
+
+    const result = await apiRequest<{ data: { id: string; ticker: string; name: string; trading_status: string }[] }>('/securities/instruments');
+    expect(result.data[0].id).toBe('inst-1');
+    expect(result.data[0].ticker).toBe('MNE');
+    expect(result.data[0].name).toBe('Mongolian Energy');
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/securities/instruments', expect.anything());
+  });
+
+  it('uses /securities/orders endpoint for order submission', async () => {
+    (tokenManager as unknown as { __setToken: (t: string | null) => void }).__setToken('valid-token');
+    mockFetch.mockReturnValueOnce(jsonResponse({ order_id: 'ord-1', status: 'pending' }));
+
+    const result = await apiRequest<{ order_id: string; status: string }>('/securities/orders', {
+      method: 'POST',
+      body: JSON.stringify({ instrument_id: 'inst-1', side: 'buy', order_type: 'limit', quantity: '10', price: '100' }),
+    });
+    expect(result.order_id).toBe('ord-1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/securities/orders', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('uses /securities/trades endpoint for trade history', async () => {
+    (tokenManager as unknown as { __setToken: (t: string | null) => void }).__setToken('valid-token');
+    mockFetch.mockReturnValueOnce(jsonResponse({ data: [{ tradeId: 'tr-1', price: '100', quantity: '5' }] }));
+
+    const result = await apiRequest<{ data: { tradeId: string; price: string; quantity: string }[] }>('/securities/trades');
+    expect(result.data[0].tradeId).toBe('tr-1');
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/securities/trades', expect.anything());
+  });
+
   it('retries on 401 after successful refresh', async () => {
     (tokenManager as unknown as { __setToken: (t: string | null) => void }).__setToken('expired-token');
 
