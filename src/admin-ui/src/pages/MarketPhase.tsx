@@ -16,7 +16,7 @@ export interface MarketInstrument {
 }
 
 export function normalizeInstruments(raw: any): MarketInstrument[] {
-  const list = raw?.instruments ?? (Array.isArray(raw) ? raw : []);
+  const list = raw?.instruments ?? raw?.data ?? (Array.isArray(raw) ? raw : []);
   return list.map((item: any) => ({
     instrument_id: item.instrument_id ?? item.id ?? '',
     name: item.name ?? item.ticker ?? item.instrument_id ?? item.id ?? '',

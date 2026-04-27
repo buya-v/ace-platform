@@ -49,7 +49,8 @@ export function computeFeeSummary(rules: FeeRule[]): {
   rules.forEach(r => {
     types.add(r.fee_type);
     tiers.add(r.tier);
-    rateSum += r.rate_bps;
+    const bps = typeof r.rate_bps === 'number' && !isNaN(r.rate_bps) ? r.rate_bps : 0;
+    rateSum += bps;
   });
 
   return {
@@ -66,7 +67,11 @@ export function FeeManagementPage() {
     60000,
   );
 
-  const rules: FeeRule[] = data?.data ?? [];
+  const rawRules = data?.data ?? [];
+  const rules: FeeRule[] = Array.isArray(rawRules) ? rawRules.map((r: any) => ({
+    ...r,
+    rate_bps: typeof r.rate_bps === 'number' ? r.rate_bps : parseFloat(r.rate_bps) || 0,
+  })) : [];
   const summary = computeFeeSummary(rules);
 
   return (

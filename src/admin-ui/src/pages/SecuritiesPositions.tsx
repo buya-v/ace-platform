@@ -1,6 +1,6 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { usePolling } from '../hooks/usePolling';
-import { fetchSecuritiesPositions } from '../services/api';
+import { fetchSecuritiesPositions, fetchSecuritiesInstruments } from '../services/api';
 import { DataGrid, Column } from '../components/DataGrid';
 import { useTenant } from '../contexts/TenantContext';
 import styles from './SecuritiesPositions.module.css';
@@ -62,6 +62,25 @@ export function normalizePositions(raw: unknown): SecuritiesPosition[] {
 export function SecuritiesPositionsPage() {
   const { currentTenant } = useTenant();
 
+  const [instrumentMap, setInstrumentMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSecuritiesInstruments(undefined, controller.signal)
+      .then((res: any) => {
+        const list = res?.instruments ?? res?.data ?? (Array.isArray(res) ? res : []);
+        const map = new Map<string, string>();
+        for (const inst of list) {
+          const id = inst.id ?? inst.instrument_id ?? '';
+          const ticker = inst.ticker ?? inst.symbol ?? inst.name ?? id;
+          if (id) map.set(id, ticker);
+        }
+        setInstrumentMap(map);
+      })
+      .catch(() => { /* ignore */ });
+    return () => controller.abort();
+  }, []);
+
   const positionsResult = usePolling<unknown>(
     useCallback((signal: AbortSignal) => fetchSecuritiesPositions(undefined, signal), []),
     30000,
@@ -80,6 +99,7 @@ export function SecuritiesPositionsPage() {
         mono: true,
         sortable: true,
         filterable: true,
+        render: (row) => instrumentMap.get(row.instrument_id) ?? row.instrument_id,
       },
       {
         key: 'quantity',
@@ -121,7 +141,7 @@ export function SecuritiesPositionsPage() {
         },
       },
     ],
-    [],
+    [instrumentMap],
   );
 
   return (

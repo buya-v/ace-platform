@@ -177,7 +177,7 @@ export function DashboardHome() {
           ) : (
             <>
               <div className={styles.bigNumber}>
-                {participants.data?.pagination?.total ?? '\u2014'}
+                {participants.data?.pagination?.total ?? 0}
               </div>
               <Sparkline
                 data={pendingKycHistory}
@@ -193,7 +193,7 @@ export function DashboardHome() {
             <div className={styles.card}>
               <h3>Active Margin Calls</h3>
               <div className={styles.bigNumber}>
-                {marginStats.data?.total_active ?? '\u2014'}
+                {marginStats.data?.total_active ?? 0}
               </div>
               <Sparkline
                 data={marginCallHistory}
@@ -205,7 +205,7 @@ export function DashboardHome() {
             <div className={styles.card}>
               <h3>Settlement Cycles</h3>
               <div className={styles.bigNumber}>
-                {settlements.data?.data?.length ?? '\u2014'}
+                {settlements.data?.data?.length ?? 0}
               </div>
               <Sparkline
                 data={settlementHistory}

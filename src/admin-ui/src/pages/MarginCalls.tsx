@@ -90,26 +90,24 @@ export function MarginCallsPage() {
         </button>
       </div>
 
-      {stats.data && (
-        <div className={styles.statsGrid}>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Active Calls</div>
-            <div className={styles.statValue}>{stats.data.total_active}</div>
-          </div>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Total Shortfall</div>
-            <div className={styles.statValue}>{stats.data.total_shortfall}</div>
-          </div>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Participants in Call</div>
-            <div className={styles.statValue}>{stats.data.participants_in_call}</div>
-          </div>
-          <div className={styles.statCard}>
-            <div className={styles.statLabel}>Avg Utilization</div>
-            <div className={styles.statValue}>{stats.data.average_utilization}%</div>
-          </div>
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>Active Calls</div>
+          <div className={styles.statValue}>{stats.data?.total_active ?? 0}</div>
         </div>
-      )}
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>Total Shortfall</div>
+          <div className={styles.statValue}>{stats.data?.total_shortfall ?? '0.00'}</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>Participants in Call</div>
+          <div className={styles.statValue}>{stats.data?.participants_in_call ?? 0}</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statLabel}>Avg Utilization</div>
+          <div className={styles.statValue}>{stats.data?.average_utilization ?? 0}%</div>
+        </div>
+      </div>
 
       <DataGrid
         columns={columns}

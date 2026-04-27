@@ -92,7 +92,7 @@ export function CircuitBreakersPage() {
     { key: 'upper_limit', header: 'Upper Limit', align: 'right', mono: true },
     { key: 'lower_limit', header: 'Lower Limit', align: 'right', mono: true },
     { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    { key: 'daily_volume', header: 'Daily Volume', align: 'right', mono: true, sortable: true, render: (row) => row.daily_volume.toLocaleString() },
+    { key: 'daily_volume', header: 'Daily Volume', align: 'right', mono: true, sortable: true, render: (row) => (row.daily_volume ?? 0).toLocaleString() },
     {
       key: 'actions', header: 'Actions', render: (row) => (
         <div className={styles.actionBtns}>
