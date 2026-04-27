@@ -1,40 +1,57 @@
 {
-  "run_id": "20260426-demo-polish",
-  "feature": "Demo Polish & Stabilization Sprint",
-  "requirement": "Make securities exchange demo bulletproof, add Sprint 1-8 feature demos, fix reset, stabilize",
-  "status": "done",
+  "run_id": "20260427-trade-portal-securities",
+  "feature": "Trade Portal — Securities Service Integration",
+  "requirement": "Rewire web-ui from commodity matching-engine endpoints to securities-service endpoints for MSE equities demo",
+  "status": "planning",
   "tasks": [
     {
       "id": "T1",
-      "title": "Securities-service demo reset endpoint",
+      "title": "API service + types — securities endpoint rewiring",
+      "description": "Rewire the web-ui API layer and type definitions to work with securities-service.\n\n## 1. src/web-ui/src/services/api.ts\nAdd `'X-GarudaX-Tenant': 'mse-equities'` to the headers object in apiRequest() alongside the Authorization header.\n\n## 2. src/web-ui/src/types/instrument.ts\nReplace the Instrument interface to match securities-service response:\n```typescript\nexport interface Instrument {\n  id: string;\n  isin: string;\n  ticker: string;\n  name: string;\n  asset_class: string;\n  security_type: string;\n  exchange_code: string;\n  lot_size: number;\n  tick_size: number;\n  currency: string;\n  listing_date: string;\n  trading_status: string;\n  outstanding_shares: number;\n}\n```\nKeep InstrumentDetail and Ticker interfaces but update InstrumentDetail to extend new Instrument.\nRemove commodityName, deliveryMonth, deliveryLocation, symbol fields.\n\n## 3. src/web-ui/src/components/InstrumentSelector.tsx\n- Change fetch from `/instruments?status=active` to `/securities/instruments`\n- Parse response as `{ data: Instrument[] }` instead of `{ instruments: Instrument[] }`\n- Replace `inst.instrumentId` → `inst.id` everywhere\n- Replace `inst.symbol` → `inst.ticker`\n- Replace `inst.commodityName` → `inst.name`\n- Remove ticker polling to `/market-data/ticker` (not available for securities yet)\n- Display: ticker + name + trading_status\n\n## 4. src/web-ui/src/pages/Trading.tsx\n- Change instrument fetch: `/instruments?status=active` → `/securities/instruments`, parse `data` array\n- Change `state.selectedInstrument?.instrumentId` → `state.selectedInstrument?.id`\n- Change order submission: `/orders` → `/securities/orders`\n- Add orders list fetch: GET `/securities/orders` with tenant header, display in bottom panel\n- Change trade history fetch: `/trades/history` → `/securities/trades`, parse `data` array\n- Remove or stub polling for `/clearing/positions`, `/margin`, `/settlement/cycles` — these return errors for securities demo\n- Keep the layout structure unchanged\n\n## 5. src/web-ui/src/components/OrderEntry.tsx\n- Change submit URL from `/orders` to `/securities/orders`\n- `instrumentId` prop is now `inst.id` from parent\n- Order body fields are already compatible (instrument_id, side, order_type, quantity, price, time_in_force)\n\n## 6. src/web-ui/src/components/InstrumentInfo.tsx\n- Fetch from `/securities/instruments/{id}` instead of `/instruments/{id}`\n- Map response fields to display\n\n## 7. src/web-ui/src/components/Chart.tsx\n- Keep chart but stub the data fetch if `/market-data/candles` returns error\n- Show 'No chart data' placeholder on error\n\n## 8. src/web-ui/src/components/Positions.tsx\n- Keep component but handle empty positions gracefully\n- Replace `pos.instrumentId` → `pos.instrumentId` (keep — positions still use this field from clearing)\n\n## 9. src/web-ui/src/components/TradeHistory.tsx\n- Update to handle securities-service trade format from `{ data: [...] }`\n- Map securities trade fields (id, instrument_id, price, quantity, side, created_at)\n- Replace `inst.instrumentId` → `inst.id` in filter dropdown\n\n## 10. src/web-ui/src/contexts/MarketContext.tsx\n- Update `Instrument | null` references — new Instrument uses `id` not `instrumentId`\n- The `selectedInstrument.instrumentId` references throughout need to become `selectedInstrument.id`\n\n## 11. src/web-ui/src/hooks/useOrders.ts\n- Read this file and update if it calls old endpoints\n\nAfter all changes:\n```bash\ncd src/web-ui && npm install && npm run build\n```\n\nThe build MUST succeed. Fix any TypeScript errors.\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
-      "target": "backend",
-      "status": "done",
-      "attempts": 1
+      "model": "opus",
+      "target": "frontend",
+      "files_hint": [
+        "src/web-ui/src/services/api.ts",
+        "src/web-ui/src/types/instrument.ts",
+        "src/web-ui/src/types/trade.ts",
+        "src/web-ui/src/components/InstrumentSelector.tsx",
+        "src/web-ui/src/components/OrderEntry.tsx",
+        "src/web-ui/src/components/InstrumentInfo.tsx",
+        "src/web-ui/src/components/Chart.tsx",
+        "src/web-ui/src/components/Positions.tsx",
+        "src/web-ui/src/components/TradeHistory.tsx",
+        "src/web-ui/src/contexts/MarketContext.tsx",
+        "src/web-ui/src/hooks/useOrders.ts",
+        "src/web-ui/src/pages/Trading.tsx"
+      ],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
     },
     {
       "id": "T2",
-      "title": "Demo steps for Sprint 1-8 features",
-      "agent_role": "coder",
+      "title": "Update web-ui tests for securities fields",
+      "description": "Update all existing tests in src/web-ui/src/__tests__/ to match the new securities-service field names and response formats.\n\nRead the handoff from T1: .softhouse/handoff/T1.md\n\nKey changes to apply in tests:\n- `instrumentId` → `id` in Instrument mocks\n- `symbol` → `ticker`\n- `commodityName` → `name`\n- `{ instruments: [...] }` → `{ data: [...] }` in mock responses\n- `/instruments?status=active` → `/securities/instruments`\n- `/orders` → `/securities/orders`\n- `/trades/history` → `/securities/trades`\n- API headers must include `X-GarudaX-Tenant: mse-equities`\n\nRun: cd src/web-ui && npx vitest run\nAll tests must pass.\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "test_writer",
+      "model": "sonnet",
       "target": "frontend",
-      "status": "done",
-      "attempts": 1
+      "files_hint": ["src/web-ui/src/__tests__/"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
     },
     {
       "id": "T3",
-      "title": "Docker Compose health check & fix",
+      "title": "Build and deploy web-ui container",
+      "description": "Build and deploy the updated web-ui.\n\n1. cd /home/vcp/ace-platform/src/web-ui && npm run build\n2. Verify build succeeds with no errors\n3. docker compose build web-ui\n4. docker compose up -d web-ui\n5. Verify https://trade.garudax.asla.mn/ loads\n6. Test login: curl the auth endpoint, get a token, verify /securities/instruments returns data through the trade portal's proxy\n\nWrite handoff to .softhouse/handoff/T3.md",
       "agent_role": "coder",
+      "model": "haiku",
       "target": "infra",
-      "status": "done",
-      "attempts": 1
-    },
-    {
-      "id": "T4",
-      "title": "Demo runner tests for new sections",
-      "agent_role": "test_writer",
-      "target": "frontend",
-      "status": "done",
-      "attempts": 1
+      "files_hint": ["docker-compose.yml"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
     }
   ]
 }
