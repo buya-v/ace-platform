@@ -16,8 +16,8 @@ export const MarginStatusPanel: React.FC<MarginStatusProps> = ({ margin }) => {
     );
   }
 
-  const utilPct = (margin.marginUtilization * 100).toFixed(1);
-  const isWarning = margin.marginUtilization > 0.8;
+  const utilPct = ((margin.marginUtilization || 0) * 100).toFixed(1);
+  const isWarning = (margin.marginUtilization || 0) > 0.8;
 
   return (
     <div className={styles.margin}>
@@ -48,7 +48,7 @@ export const MarginStatusPanel: React.FC<MarginStatusProps> = ({ margin }) => {
           style={{ width: `${Math.min(100, Number(utilPct))}%` }}
         />
       </div>
-      {margin.marginCalls.length > 0 && (
+      {margin.marginCalls?.length > 0 && (
         <div className={styles.calls}>
           <h4>Margin Calls</h4>
           {margin.marginCalls.map((call) => (
