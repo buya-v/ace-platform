@@ -46,13 +46,7 @@ const securitiesNav: NavItem[] = [
 const operationsNav: NavItem[] = [
   { label: 'Platform', path: '/dashboard/platform', adminOnly: true, icon: ShieldIcon },
   { label: 'System Health', path: '/dashboard/monitoring', adminOnly: true, icon: HeartbeatIcon },
-  { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
   { label: 'Tickets', path: '/dashboard/tickets', adminOnly: true, icon: TicketIcon },
-  { label: 'Risk Overview', path: '/dashboard/risk', adminOnly: true, icon: AlertIcon },
-  { label: 'Margin Calls', path: '/dashboard/margin', adminOnly: true, icon: DollarIcon },
-  { label: 'Commodity Book', path: '/dashboard/orderbook', adminOnly: true, icon: BookIcon },
-  { label: 'Commodity Positions', path: '/dashboard/positions', adminOnly: true, icon: ChartBarIcon },
-  { label: 'Warehouse', path: '/dashboard/warehouse', adminOnly: true, icon: BoxIcon },
 ];
 
 const complianceNav: NavItem[] = [
