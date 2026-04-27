@@ -59,13 +59,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   useEffect(() => {
-    silentRefresh().then((result) => {
-      if (result) {
-        dispatch({ type: 'LOGIN_SUCCESS', user: result.user });
-      } else {
-        dispatch({ type: 'SESSION_EXPIRED' });
-      }
-    });
+    // Skip silent refresh — tokens are in-memory only, so there's no session
+    // to restore on page load. Go straight to login page.
+    dispatch({ type: 'SESSION_EXPIRED' });
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
