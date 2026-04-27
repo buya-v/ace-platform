@@ -56,7 +56,7 @@ const registration: Section = {
     {
       id: 'reg-1',
       title: 'Register Trader 1 (Buyer)',
-      description: 'Create first trader account',
+      description: 'Email: trader1@garudax.mn | Password: Tr@der1Pass!',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader1', password: 'Tr@der1Pass!', email: 'trader1@garudax.mn', role: 'trader' }),
@@ -65,7 +65,7 @@ const registration: Section = {
     {
       id: 'reg-2',
       title: 'Register Trader 2 (Seller)',
-      description: 'Create second trader account',
+      description: 'Email: trader2@garudax.mn | Password: Tr@der2Pass!',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'trader2', password: 'Tr@der2Pass!', email: 'trader2@garudax.mn', role: 'trader' }),
@@ -74,7 +74,7 @@ const registration: Section = {
     {
       id: 'reg-3',
       title: 'Register Exchange Admin',
-      description: 'Create market operations admin',
+      description: 'Email: admin@garudax.mn | Password: Adm1n@Pass!',
       method: 'POST',
       url: '/api/v1/auth/register',
       body: () => ({ username: 'admin', password: 'Adm1n@Pass!', email: 'admin@garudax.mn', role: 'admin' }),
@@ -83,7 +83,7 @@ const registration: Section = {
     {
       id: 'reg-4',
       title: 'Login Trader 1',
-      description: 'Authenticate and store JWT token',
+      description: 'Login: trader1@garudax.mn / Tr@der1Pass! → use token on trade.garudax.asla.mn',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'trader1@garudax.mn', password: 'Tr@der1Pass!' }),
@@ -97,7 +97,7 @@ const registration: Section = {
     {
       id: 'reg-5',
       title: 'Login Trader 2',
-      description: 'Authenticate and store JWT token',
+      description: 'Login: trader2@garudax.mn / Tr@der2Pass! → use token on trade.garudax.asla.mn',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'trader2@garudax.mn', password: 'Tr@der2Pass!' }),
@@ -111,7 +111,7 @@ const registration: Section = {
     {
       id: 'reg-6',
       title: 'Login Admin',
-      description: 'Authenticate exchange admin',
+      description: 'Login: admin@garudax.mn / Adm1n@Pass! → use token on admin.garudax.asla.mn',
       method: 'POST',
       url: '/api/v1/auth/login',
       body: () => ({ email: 'admin@garudax.mn', password: 'Adm1n@Pass!' }),
