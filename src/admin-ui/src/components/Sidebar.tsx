@@ -31,24 +31,28 @@ interface NavItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }
 
+// Securities-first navigation — these are the primary pages for MSE equities demo
+const securitiesNav: NavItem[] = [
+  { label: 'Instruments', path: '/dashboard/securities', adminOnly: true, icon: ChartBarIcon },
+  { label: 'Orders', path: '/dashboard/securities-orders', adminOnly: true, icon: BookIcon },
+  { label: 'Positions', path: '/dashboard/securities-positions', adminOnly: true, icon: DollarIcon },
+  { label: 'Surveillance', path: '/dashboard/surveillance', adminOnly: true, icon: EyeIcon },
+  { label: 'Market Phase', path: '/dashboard/market-phase', adminOnly: true, icon: ShieldIcon },
+  { label: 'Circuit Breakers', path: '/dashboard/circuit-breakers', adminOnly: true, icon: ShieldIcon },
+  { label: 'Settlement', path: '/dashboard/settlement', adminOnly: true, icon: ExchangeIcon },
+  { label: 'Reports', path: '/dashboard/reports', adminOnly: true, icon: FileTextIcon },
+];
+
 const operationsNav: NavItem[] = [
   { label: 'Platform', path: '/dashboard/platform', adminOnly: true, icon: ShieldIcon },
   { label: 'System Health', path: '/dashboard/monitoring', adminOnly: true, icon: HeartbeatIcon },
-  { label: 'Order Book', path: '/dashboard/orderbook', adminOnly: true, icon: BookIcon },
-  { label: 'Positions', path: '/dashboard/positions', adminOnly: true, icon: ChartBarIcon },
+  { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
+  { label: 'Tickets', path: '/dashboard/tickets', adminOnly: true, icon: TicketIcon },
   { label: 'Risk Overview', path: '/dashboard/risk', adminOnly: true, icon: AlertIcon },
   { label: 'Margin Calls', path: '/dashboard/margin', adminOnly: true, icon: DollarIcon },
-  { label: 'Settlement', path: '/dashboard/settlement', adminOnly: true, icon: ExchangeIcon },
-  { label: 'Circuit Breakers', path: '/dashboard/circuit-breakers', adminOnly: true, icon: ShieldIcon },
+  { label: 'Commodity Book', path: '/dashboard/orderbook', adminOnly: true, icon: BookIcon },
+  { label: 'Commodity Positions', path: '/dashboard/positions', adminOnly: true, icon: ChartBarIcon },
   { label: 'Warehouse', path: '/dashboard/warehouse', adminOnly: true, icon: BoxIcon },
-  { label: 'Market Phase', path: '/dashboard/market-phase', adminOnly: true, icon: ShieldIcon },
-  { label: 'Surveillance', path: '/dashboard/surveillance', adminOnly: true, icon: EyeIcon },
-  { label: 'Fee Management', path: '/dashboard/fees', adminOnly: true, icon: FeeIcon },
-  { label: 'Reports', path: '/dashboard/reports', adminOnly: true, icon: FileTextIcon },
-  { label: 'Tickets', path: '/dashboard/tickets', adminOnly: true, icon: TicketIcon },
-  { label: 'Securities', path: '/dashboard/securities', adminOnly: true, icon: ChartBarIcon },
-  { label: 'Sec. Orders', path: '/dashboard/securities-orders', adminOnly: true, icon: BookIcon },
-  { label: 'Sec. Positions', path: '/dashboard/securities-positions', adminOnly: true, icon: DollarIcon },
 ];
 
 const complianceNav: NavItem[] = [
@@ -66,7 +70,8 @@ interface SidebarProps {
 export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
   const { state, logout } = useAuth();
   const isAdmin = hasAdminAccess(state.user?.roles ?? []);
-  const [opsOpen, setOpsOpen] = useState(true);
+  const [secOpen, setSecOpen] = useState(true);
+  const [opsOpen, setOpsOpen] = useState(false);
   const [compOpen, setCompOpen] = useState(true);
 
   const statusColorMap: Record<SystemStatus, string> = {
@@ -92,26 +97,48 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
       </NavLink>
 
       {isAdmin && (
-        <div className={styles.section}>
-          <button
-            className={styles.sectionToggle}
-            onClick={() => setOpsOpen(o => !o)}
-            aria-expanded={opsOpen}
-          >
-            {opsOpen ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
-            <span className={styles.sectionLabel}>Operations</span>
-          </button>
-          {opsOpen && operationsNav.map(item => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => isActive ? styles.activeLink : styles.link}
+        <>
+          <div className={styles.section}>
+            <button
+              className={styles.sectionToggle}
+              onClick={() => setSecOpen(o => !o)}
+              aria-expanded={secOpen}
             >
-              <item.icon size={16} className={styles.navIcon} />
-              <span className={styles.navLabel}>{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
+              {secOpen ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
+              <span className={styles.sectionLabel}>Securities Exchange</span>
+            </button>
+            {secOpen && securitiesNav.map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => isActive ? styles.activeLink : styles.link}
+              >
+                <item.icon size={16} className={styles.navIcon} />
+                <span className={styles.navLabel}>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+          <div className={styles.section}>
+            <button
+              className={styles.sectionToggle}
+              onClick={() => setOpsOpen(o => !o)}
+              aria-expanded={opsOpen}
+            >
+              {opsOpen ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
+              <span className={styles.sectionLabel}>Operations</span>
+            </button>
+            {opsOpen && operationsNav.map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => isActive ? styles.activeLink : styles.link}
+              >
+                <item.icon size={16} className={styles.navIcon} />
+                <span className={styles.navLabel}>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </>
       )}
 
       <div className={styles.section}>
@@ -145,5 +172,5 @@ export function Sidebar({ systemStatus = 'unknown' }: SidebarProps) {
   );
 }
 
-export { operationsNav, complianceNav };
+export { securitiesNav, operationsNav, complianceNav };
 export type { NavItem };
