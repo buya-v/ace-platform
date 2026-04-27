@@ -5,6 +5,7 @@ import {
   fetchSecuritiesOrders,
   submitSecuritiesOrder,
   cancelSecuritiesOrder,
+  apiFetch,
 } from '../services/api';
 import { DataGrid, Column } from '../components/DataGrid';
 import { StatusBadge } from '../components/StatusBadge';
@@ -177,13 +178,16 @@ export function SecuritiesOrdersPage() {
     [ordersResult.data],
   );
 
-  // Trades from order response (if any)
+  // Fetch trades from securities-service
+  const tradesResult = usePolling(
+    (signal) => apiFetch<{ data: any[] }>('/securities/trades', {}, signal),
+    15000,
+  );
   const trades: any[] = useMemo(() => {
-    const raw = ordersResult.data as any;
+    const raw = tradesResult.data as any;
     if (!raw) return [];
-    const arr = raw.trades ?? raw.recent_trades ?? null;
-    return Array.isArray(arr) ? arr : [];
-  }, [ordersResult.data]);
+    return raw.data ?? raw.trades ?? (Array.isArray(raw) ? raw : []);
+  }, [tradesResult.data]);
 
   // Submit Order modal
   const [showModal, setShowModal] = useState(false);
