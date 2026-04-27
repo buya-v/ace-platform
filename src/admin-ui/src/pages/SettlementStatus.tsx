@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
-import { fetchSettlementCycles } from '../services/api';
+import { fetchSettlementCycles, apiFetch } from '../services/api';
 import { SettlementCycle } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { DataGrid, Column } from '../components/DataGrid';
@@ -14,13 +14,38 @@ export function formatCurrency(value: string | number): string {
   return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+interface SecuritiesSettlement {
+  id: string;
+  trade_id: string;
+  instrument_id: string;
+  buyer_id: string;
+  seller_id: string;
+  quantity: number;
+  price: number;
+  status: string;
+  settlement_date: string;
+  created_at: string;
+}
+
 export function SettlementStatusPage() {
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
+  const [secSettlements, setSecSettlements] = useState<SecuritiesSettlement[]>([]);
 
   const { data, isLoading } = usePolling(
     (signal) => fetchSettlementCycles({}, signal),
     15000,
   );
+
+  // Also fetch securities settlements
+  const { data: secData } = usePolling(
+    (signal) => apiFetch<{ data?: SecuritiesSettlement[]; obligations?: SecuritiesSettlement[] }>('/securities/settlements', {}, signal),
+    15000,
+  );
+
+  React.useEffect(() => {
+    const list = (secData as any)?.data ?? (secData as any)?.obligations ?? (Array.isArray(secData) ? secData : []);
+    setSecSettlements(list);
+  }, [secData]);
 
   const cycles = data?.data ?? [];
   const activeCycle = cycles.find(c => c.phase !== 'COMPLETED' && c.phase !== 'FAILED');
@@ -98,6 +123,24 @@ export function SettlementStatusPage() {
           </div>
         ))}
       </div>
+
+      <h2>Securities Settlement Obligations</h2>
+      {secSettlements.length === 0 ? (
+        <div className={styles.noActive}>No settlement obligations found</div>
+      ) : (
+        <div className={styles.historyList}>
+          {secSettlements.map((s, i) => (
+            <div key={s.id || i} className={styles.historyRow}>
+              <span className={styles.historyId}>{(s.id || '').slice(0, 8)}</span>
+              <StatusBadge status={s.status || 'PENDING'} />
+              <span>{s.instrument_id?.slice(0, 8) || '—'}</span>
+              <span>Qty: {s.quantity}</span>
+              <span>Price: {s.price}</span>
+              <span>Settle: {s.settlement_date || '—'}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

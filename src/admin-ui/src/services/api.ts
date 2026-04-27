@@ -308,14 +308,14 @@ export function fetchSurveillanceAlerts(params?: { severity?: string; status?: s
   if (params?.status) qs.set('status', params.status);
   const query = qs.toString();
   return apiFetch<import('../types').ApiResponse<import('../pages/Surveillance').SurveillanceAlert[]>>(
-    `/compliance/surveillance/alerts${query ? `?${query}` : ''}`,
+    `/securities/surveillance/alerts${query ? `?${query}` : ''}`,
     {},
     signal,
   );
 }
 
 export function resolveSurveillanceAlert(alertId: string) {
-  return apiFetch<void>(`/compliance/surveillance/alerts/${alertId}/resolve`, { method: 'POST' });
+  return apiFetch<void>(`/securities/surveillance/alerts/${alertId}/resolve`, { method: 'POST' });
 }
 
 // Fee Management
