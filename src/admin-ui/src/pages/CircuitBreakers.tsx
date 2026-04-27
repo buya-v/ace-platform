@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePolling } from '../hooks/usePolling';
-import { fetchInstruments, haltTrading, resumeTrading, setCircuitBreaker } from '../services/api';
+import { fetchSecuritiesInstruments, apiFetch, haltTrading, resumeTrading, setCircuitBreaker } from '../services/api';
 import { InstrumentControl } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -10,7 +10,24 @@ import styles from './CircuitBreakers.module.css';
 
 export function CircuitBreakersPage() {
   const { data, refresh, isLoading } = usePolling(
-    (signal) => fetchInstruments(signal),
+    async (signal) => {
+      const [instrRes, bondRes] = await Promise.allSettled([
+        fetchSecuritiesInstruments(undefined, signal),
+        apiFetch<{ data: any[] }>('/securities/bonds', {}, signal),
+      ]);
+      const equities = instrRes.status === 'fulfilled' ? ((instrRes.value as any)?.data ?? []) : [];
+      const bonds = bondRes.status === 'fulfilled' ? ((bondRes.value as any)?.data ?? []) : [];
+      const all = [...equities, ...bonds].map((i: any) => ({
+        instrument_id: i.id,
+        ticker: i.ticker || i.id,
+        last_price: '0',
+        upper_limit: '10',
+        lower_limit: '10',
+        status: (i.trading_status === 'HALTED' ? 'HALTED' : (i.trading_status === 'ACTIVE' ? 'TRADING' : 'PRE_OPEN')) as InstrumentControl['status'],
+        daily_volume: 0,
+      }));
+      return { data: all };
+    },
     10000,
   );
   const { showToast } = useToast();
