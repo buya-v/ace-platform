@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Candle } from '../types/trade';
+import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../services/api';
 import styles from './Chart.module.css';
 
@@ -7,126 +6,151 @@ interface ChartProps {
   instrumentId: string | null;
 }
 
-type Timeframe = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+interface InstrumentDetail {
+  id: string;
+  ticker: string;
+  name: string;
+  isin: string;
+  asset_class: string;
+  security_type: string;
+  exchange_code: string;
+  lot_size: number;
+  tick_size: number;
+  currency: string;
+  listing_date: string;
+  trading_status: string;
+  outstanding_shares: number;
+}
 
-const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
-
-function drawCandlestick(
-  ctx: CanvasRenderingContext2D,
-  candles: Candle[],
-  width: number,
-  height: number,
-) {
-  if (candles.length === 0) return;
-
-  ctx.clearRect(0, 0, width, height);
-
-  const padding = { top: 20, bottom: 30, left: 60, right: 20 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  const allPrices = candles.flatMap((c) => [c.high, c.low]);
-  const minPrice = Math.min(...allPrices);
-  const maxPrice = Math.max(...allPrices);
-  const priceRange = maxPrice - minPrice || 1;
-
-  const candleWidth = Math.max(2, chartW / candles.length - 2);
-
-  const priceToY = (p: number) =>
-    padding.top + chartH - ((p - minPrice) / priceRange) * chartH;
-
-  // Grid lines
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 0.5;
-  const gridLines = 5;
-  for (let i = 0; i <= gridLines; i++) {
-    const y = padding.top + (chartH / gridLines) * i;
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(width - padding.right, y);
-    ctx.stroke();
-
-    const price = maxPrice - (priceRange / gridLines) * i;
-    ctx.fillStyle = '#888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(price.toFixed(2), padding.left - 4, y + 4);
-  }
-
-  // Candles
-  candles.forEach((candle, i) => {
-    const x = padding.left + (chartW / candles.length) * i + candleWidth / 2;
-    const isGreen = candle.close >= candle.open;
-
-    // Wick
-    ctx.strokeStyle = isGreen ? '#2ecc71' : '#e74c3c';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, priceToY(candle.high));
-    ctx.lineTo(x, priceToY(candle.low));
-    ctx.stroke();
-
-    // Body
-    const bodyTop = priceToY(Math.max(candle.open, candle.close));
-    const bodyBottom = priceToY(Math.min(candle.open, candle.close));
-    const bodyHeight = Math.max(1, bodyBottom - bodyTop);
-
-    ctx.fillStyle = isGreen ? '#2ecc71' : '#e74c3c';
-    ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
-  });
+interface OrderSummary {
+  id: string;
+  side: string;
+  price: number;
+  quantity: number;
+  filled_quantity: number;
+  status: string;
+  created_at: string;
 }
 
 export const Chart: React.FC<ChartProps> = ({ instrumentId }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [timeframe, setTimeframe] = useState<Timeframe>('15m');
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Candle data is not available for securities-service instruments.
-  // Skip the fetch to avoid 404 console noise.
-  useEffect(() => {
-    setCandles([]);
-    setLoading(false);
-  }, [instrumentId, timeframe]);
+  const [instrument, setInstrument] = useState<InstrumentDetail | null>(null);
+  const [stats, setStats] = useState<{ lastPrice: number; high: number; low: number; volume: number; trades: number } | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!instrumentId) { setInstrument(null); setStats(null); return; }
 
-    const resizeObserver = new ResizeObserver(() => {
-      const rect = container.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) drawCandlestick(ctx, candles, canvas.width, canvas.height);
-    });
+    apiRequest<InstrumentDetail>(`/securities/instruments/${instrumentId}`)
+      .then(setInstrument)
+      .catch(() => setInstrument(null));
 
-    resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
-  }, [candles]);
+    apiRequest<{ data: OrderSummary[] }>('/securities/orders')
+      .then((res) => {
+        const orders = (res.data || []).filter((o) => o.status === 'FILLED');
+        const instrOrders = orders.filter((o) => String(o.id).length > 0); // all filled orders
+        if (instrOrders.length === 0) { setStats(null); return; }
+        const prices = instrOrders.map((o) => Number(o.price)).filter((p) => p > 0);
+        const totalVol = instrOrders.reduce((s, o) => s + Number(o.filled_quantity || o.quantity), 0);
+        setStats({
+          lastPrice: prices[0] || 0,
+          high: Math.max(...prices),
+          low: Math.min(...prices),
+          volume: totalVol,
+          trades: instrOrders.length,
+        });
+      })
+      .catch(() => setStats(null));
+  }, [instrumentId]);
+
+  if (!instrumentId) {
+    return (
+      <div className={styles.chart}>
+        <div className={styles.summaryEmpty}>Select an instrument to view market data</div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.chart}>
-      <div className={styles.toolbar}>
-        {TIMEFRAMES.map((tf) => (
-          <button
-            key={tf}
-            className={`${styles.tfBtn} ${timeframe === tf ? styles.tfActive : ''}`}
-            onClick={() => setTimeframe(tf)}
-          >
-            {tf}
-          </button>
-        ))}
-      </div>
-      <div className={styles.canvasContainer} ref={containerRef}>
-        {loading && <div className={styles.loading}>Loading chart...</div>}
-        {!loading && candles.length === 0 && (
-          <div className={styles.loading}>No chart data available</div>
-        )}
-        <canvas ref={canvasRef} />
-      </div>
+      {instrument && (
+        <div className={styles.summaryPanel}>
+          <div className={styles.summaryHeader}>
+            <div className={styles.tickerBlock}>
+              <span className={styles.tickerName}>{instrument.ticker}</span>
+              <span className={styles.instrName}>{instrument.name}</span>
+            </div>
+            <div className={styles.priceBlock}>
+              {stats ? (
+                <>
+                  <span className={styles.lastPrice}>{stats.lastPrice.toLocaleString()} {instrument.currency}</span>
+                  <span className={styles.priceLabel}>Last Trade</span>
+                </>
+              ) : (
+                <span className={styles.priceLabel}>No trades yet</span>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.statsGrid}>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>ISIN</span>
+              <span className={styles.statValue}>{instrument.isin || '—'}</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Asset Class</span>
+              <span className={styles.statValue}>{instrument.asset_class}</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Type</span>
+              <span className={styles.statValue}>{instrument.security_type || '—'}</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Status</span>
+              <span className={`${styles.statValue} ${instrument.trading_status === 'ACTIVE' ? styles.statusActive : ''}`}>
+                {instrument.trading_status}
+              </span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Lot Size</span>
+              <span className={styles.statValue}>{instrument.lot_size}</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Tick Size</span>
+              <span className={styles.statValue}>{instrument.tick_size} {instrument.currency}</span>
+            </div>
+            {stats && (
+              <>
+                <div className={styles.statCard}>
+                  <span className={styles.statLabel}>Day High</span>
+                  <span className={`${styles.statValue} ${styles.highVal}`}>{stats.high.toLocaleString()}</span>
+                </div>
+                <div className={styles.statCard}>
+                  <span className={styles.statLabel}>Day Low</span>
+                  <span className={`${styles.statValue} ${styles.lowVal}`}>{stats.low.toLocaleString()}</span>
+                </div>
+                <div className={styles.statCard}>
+                  <span className={styles.statLabel}>Volume</span>
+                  <span className={styles.statValue}>{stats.volume.toLocaleString()}</span>
+                </div>
+                <div className={styles.statCard}>
+                  <span className={styles.statLabel}>Trades</span>
+                  <span className={styles.statValue}>{stats.trades}</span>
+                </div>
+              </>
+            )}
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Exchange</span>
+              <span className={styles.statValue}>{instrument.exchange_code?.trim()}</span>
+            </div>
+            <div className={styles.statCard}>
+              <span className={styles.statLabel}>Listed</span>
+              <span className={styles.statValue}>{instrument.listing_date}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      {!instrument && (
+        <div className={styles.summaryEmpty}>Loading instrument data...</div>
+      )}
     </div>
   );
 };
