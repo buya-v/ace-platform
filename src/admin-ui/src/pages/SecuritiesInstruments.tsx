@@ -4,6 +4,7 @@ import {
   fetchSecuritiesInstruments,
   createSecuritiesInstrument,
   updateInstrumentStatus,
+  apiFetch,
 } from '../services/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -102,14 +103,40 @@ export function SecuritiesInstrumentsPage() {
   const { currentTenant } = useTenant();
 
   const { data, refresh, isLoading } = usePolling(
-    (signal) => fetchSecuritiesInstruments(
-      assetClassFilter ? { asset_class: assetClassFilter } : undefined,
-      signal,
-    ),
+    async (signal) => {
+      const [instrRes, bondRes] = await Promise.allSettled([
+        fetchSecuritiesInstruments(
+          assetClassFilter && assetClassFilter !== 'BOND' ? { asset_class: assetClassFilter } : undefined,
+          signal,
+        ),
+        assetClassFilter === 'EQUITY' ? Promise.resolve({ data: [] }) : apiFetch<{ data: any[] }>('/securities/bonds', {}, signal),
+      ]);
+      const instruments = instrRes.status === 'fulfilled'
+        ? ((instrRes.value as any)?.data ?? [])
+        : [];
+      const bonds = bondRes.status === 'fulfilled'
+        ? ((bondRes.value as any)?.data ?? []).map((b: any) => ({
+            id: b.id,
+            ticker: b.id,
+            name: b.name,
+            asset_class: 'BOND',
+            lot_size: 1,
+            tick_size: b.par_value || 100000,
+            currency: 'MNT',
+            exchange_code: 'MSE',
+            trading_status: b.trading_status || 'ACTIVE',
+            isin: b.isin || '',
+            coupon_rate: b.coupon_rate,
+            maturity_date: b.maturity_date,
+            issuer: b.issuer,
+          }))
+        : [];
+      return { data: [...instruments, ...bonds] };
+    },
     15000,
   );
 
-  const rawInstruments: SecuritiesInstrument[] = (data as any)?.data ?? (data as any)?.instruments ?? (Array.isArray(data) ? data : []);
+  const rawInstruments: SecuritiesInstrument[] = (data as any)?.data ?? [];
 
   const filtered = rawInstruments.filter(inst => {
     if (!search) return true;
