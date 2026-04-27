@@ -20,6 +20,8 @@ func (s *Server) handleSurveillanceAlerts(w http.ResponseWriter, r *http.Request
 	switch r.Method {
 	case http.MethodGet:
 		s.handleListAlerts(w, r)
+	case http.MethodPost:
+		s.handleCreateAlert(w, r)
 	default:
 		s.writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	}
@@ -78,6 +80,27 @@ func (s *Server) handleListAlerts(w http.ResponseWriter, r *http.Request) {
 		"data":  alerts,
 		"total": len(alerts),
 	})
+}
+
+// handleCreateAlert handles POST /api/v1/securities/surveillance/alerts.
+func (s *Server) handleCreateAlert(w http.ResponseWriter, r *http.Request) {
+	var alert types.SurveillanceAlert
+	if err := json.NewDecoder(r.Body).Decode(&alert); err != nil {
+		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid request body", nil)
+		return
+	}
+	if alert.ID == "" {
+		alert.ID = time.Now().Format("20060102150405") + "-" + string(alert.AlertType)
+	}
+	if alert.Status == "" {
+		alert.Status = types.AlertStatusOpen
+	}
+	alert.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.surveillanceStore.CreateAlert(&alert); err != nil {
+		s.writeError(w, http.StatusConflict, "CONFLICT", err.Error(), nil)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, alert)
 }
 
 // resolveAlertRequest is the request body for PUT .../resolve.
