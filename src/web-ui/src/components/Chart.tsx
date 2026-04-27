@@ -83,28 +83,12 @@ export const Chart: React.FC<ChartProps> = ({ instrumentId }) => {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchCandles = useCallback(async () => {
-    if (!instrumentId) return;
-    setLoading(true);
-    try {
-      const now = Date.now();
-      const from = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-      const to = new Date(now).toISOString();
-      const data = await apiRequest<{ candles: Candle[] }>(
-        `/market-data/candles?instrument_id=${instrumentId}&interval=${timeframe}&from=${from}&to=${to}`,
-      );
-      setCandles(data.candles || []);
-    } catch {
-      // Use empty candles on error
-      setCandles([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [instrumentId, timeframe]);
-
+  // Candle data is not available for securities-service instruments.
+  // Skip the fetch to avoid 404 console noise.
   useEffect(() => {
-    fetchCandles();
-  }, [fetchCandles]);
+    setCandles([]);
+    setLoading(false);
+  }, [instrumentId, timeframe]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

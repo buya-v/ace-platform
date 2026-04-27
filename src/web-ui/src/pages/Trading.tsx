@@ -76,17 +76,19 @@ export const Trading: React.FC = () => {
     dispatch({ type: 'WS_STATUS_CHANGE', status });
   }, [dispatch]);
 
+  // WebSocket feeds are not available for securities-service instruments.
+  // Disabled to avoid connection errors in console.
   useWebSocket({
-    url: instrumentId ? `${wsBase}/api/v1/ws/book?instrument_id=${instrumentId}` : null,
+    url: null,
     onMessage: handleBookMessage,
     onStatusChange: handleWsStatus,
-    enabled: !!instrumentId,
+    enabled: false,
   });
 
   useWebSocket({
-    url: instrumentId ? `${wsBase}/api/v1/ws/trades?instrument_id=${instrumentId}` : null,
+    url: null,
     onMessage: handleTradeMessage,
-    enabled: !!instrumentId,
+    enabled: false,
   });
 
   // Fetch instruments list
