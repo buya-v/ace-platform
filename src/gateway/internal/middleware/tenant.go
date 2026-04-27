@@ -28,6 +28,7 @@ var tenantHealthPaths = map[string]bool{
 // These are platform-level APIs that operate above tenant scope.
 var tenantBypassPrefixes = []string{
 	"/platform/",
+	"/api/v1/platform/",
 	"/api/v1/auth/",
 	"/api/v1/admin/",
 	"/api/v1/instruments/",

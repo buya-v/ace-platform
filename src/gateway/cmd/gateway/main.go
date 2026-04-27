@@ -133,6 +133,15 @@ func main() {
 	rt.Handle("GET", "/platform/v1/tenants/{id}", platformHandler)
 	rt.Handle("PATCH", "/platform/v1/tenants/{id}", platformHandler)
 	rt.Handle("PUT", "/platform/v1/tenants/{id}/status", platformHandler)
+	// Admin-UI calls /api/v1/platform/v1/tenants — strip /api/v1 prefix before forwarding
+	platformAliasHandler := func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/v1")
+		r.RequestURI = r.URL.RequestURI()
+		platformProxy.ServeHTTP(w, r)
+	}
+	rt.Handle("GET", "/api/v1/platform/v1/tenants", platformAliasHandler)
+	rt.Handle("POST", "/api/v1/platform/v1/tenants", platformAliasHandler)
+	rt.Handle("PUT", "/api/v1/platform/v1/tenants/{id}/status", platformAliasHandler)
 	logger.Info("platform-service routes registered", slog.String("upstream", platformBaseURL))
 
 	// Register securities-service routes: /api/v1/securities/* → securities-service:8089
@@ -408,6 +417,7 @@ func main() {
 			"/api/v1/ws/",
 			"/api/v1/admin/demo/",
 			"/api/v1/securities/demo/",
+			"/api/v1/platform/",
 			"/platform/",
 		},
 		// Wire the router as a RouteChecker so unknown paths get 404 before auth runs.
