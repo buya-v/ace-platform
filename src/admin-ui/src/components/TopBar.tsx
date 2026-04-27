@@ -28,7 +28,7 @@ export function TopBar() {
   const { currentTenant, tenants, setCurrentTenant, isLoading: tenantLoading, fetchError: tenantError } = useTenant();
   const { showToast } = useToast();
   const [time, setTime] = useState(() => formatTime(new Date()));
-  const wsHealth = useWebSocket('/health', { enabled: true });
+  const wsHealth = useWebSocket('/health', { enabled: false });
 
   const handleTenantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;

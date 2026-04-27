@@ -201,14 +201,9 @@ export function BotProvider({
     dispatch({ type: 'HIDE_TICKET_FORM' });
   }, []);
 
-  const loadSuggestions = useCallback((page: string) => {
-    getBotSuggestions(page)
-      .then((suggestions) => {
-        dispatch({ type: 'SET_SUGGESTIONS', payload: suggestions });
-      })
-      .catch(() => {
-        /* silently ignore suggestion load failures */
-      });
+  const loadSuggestions = useCallback((_page: string) => {
+    // Bot suggestions endpoint not available in current deployment — skip to avoid console noise
+    dispatch({ type: 'SET_SUGGESTIONS', payload: [] });
   }, []);
 
   useEffect(() => {
