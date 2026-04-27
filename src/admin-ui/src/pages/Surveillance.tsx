@@ -111,7 +111,7 @@ export function SurveillancePage() {
     id: a.id,
     timestamp: a.timestamp || a.created_at || '',
     participant_id: a.participant_id || '',
-    participant_name: a.participant_name || a.resolved_by || '—',
+    participant_name: a.resolved_by ? a.resolved_by : (a.status === 'OPEN' ? 'Pending review' : '—'),
     instrument_id: a.instrument_id || '',
     rule_type: a.rule_type || a.alert_type || '',
     severity: a.severity || (a.alert_type === 'LARGE_TRADE' ? 'HIGH' : a.alert_type === 'PRICE_SPIKE' ? 'MEDIUM' : 'LOW'),
@@ -171,7 +171,7 @@ export function SurveillancePage() {
         <thead>
           <tr>
             <th>Time</th>
-            <th>Participant</th>
+            <th>Reviewed By</th>
             <th>Instrument</th>
             <th>Rule Type</th>
             <th>Severity</th>
@@ -216,8 +216,8 @@ export function SurveillancePage() {
               <span className={styles.detailValue}>{formatAlertTime(selectedAlert.timestamp || (selectedAlert as any).created_at)}</span>
             </div>
             <div className={styles.detailField}>
-              <span className={styles.detailLabel}>Participant</span>
-              <span className={styles.detailValue}>{selectedAlert.participant_name || (selectedAlert as any).resolved_by || '—'}</span>
+              <span className={styles.detailLabel}>Reviewed By</span>
+              <span className={styles.detailValue}>{selectedAlert.participant_name}</span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Instrument</span>
