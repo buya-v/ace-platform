@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePolling } from '../hooks/usePolling';
-import { fetchSettlementCycles, apiFetch } from '../services/api';
+import { fetchSettlementCycles, fetchSecuritiesInstruments, apiFetch } from '../services/api';
 import { SettlementCycle } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { DataGrid, Column } from '../components/DataGrid';
@@ -30,20 +30,50 @@ interface SecuritiesSettlement {
 export function SettlementStatusPage() {
   const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
   const [secSettlements, setSecSettlements] = useState<SecuritiesSettlement[]>([]);
+  const [instrumentMap, setInstrumentMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    fetchSecuritiesInstruments().then((res: any) => {
+      const list = res?.data ?? [];
+      const map = new Map<string, string>();
+      list.forEach((i: any) => map.set(i.id, i.ticker || i.name || i.id));
+      setInstrumentMap(map);
+    }).catch(() => {});
+  }, []);
 
   const { data, isLoading } = usePolling(
     (signal) => fetchSettlementCycles({}, signal),
     15000,
   );
 
-  // Also fetch securities settlements
+  // Fetch securities settlements — query multiple date windows to catch all
   const { data: secData } = usePolling(
-    (signal) => apiFetch<{ data?: SecuritiesSettlement[]; obligations?: SecuritiesSettlement[] }>('/securities/settlements', {}, signal),
+    async (signal) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const t2 = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+      const t3 = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      const results = await Promise.allSettled([
+        apiFetch<SecuritiesSettlement[]>(`/securities/settlements?date=${today}`, {}, signal),
+        apiFetch<SecuritiesSettlement[]>(`/securities/settlements?date=${t2}`, {}, signal),
+        apiFetch<SecuritiesSettlement[]>(`/securities/settlements?date=${t3}`, {}, signal),
+      ]);
+      const all: SecuritiesSettlement[] = [];
+      const seen = new Set<string>();
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const list = Array.isArray(r.value) ? r.value : ((r.value as any)?.data ?? []);
+          for (const s of list) {
+            if (!seen.has(s.id)) { seen.add(s.id); all.push(s); }
+          }
+        }
+      }
+      return all;
+    },
     15000,
   );
 
   React.useEffect(() => {
-    const list = (secData as any)?.data ?? (secData as any)?.obligations ?? (Array.isArray(secData) ? secData : []);
+    const list = Array.isArray(secData) ? secData : [];
     setSecSettlements(list);
   }, [secData]);
 
@@ -124,22 +154,34 @@ export function SettlementStatusPage() {
         ))}
       </div>
 
-      <h2>Securities Settlement Obligations</h2>
+      <h2>Securities Settlement Obligations ({secSettlements.length})</h2>
       {secSettlements.length === 0 ? (
-        <div className={styles.noActive}>No settlement obligations found</div>
+        <div className={styles.noActive}>No settlement obligations found. Run the demo runbook to generate trades.</div>
       ) : (
-        <div className={styles.historyList}>
-          {secSettlements.map((s, i) => (
-            <div key={s.id || i} className={styles.historyRow}>
-              <span className={styles.historyId}>{(s.id || '').slice(0, 8)}</span>
-              <StatusBadge status={s.status || 'PENDING'} />
-              <span>{s.instrument_id?.slice(0, 8) || '—'}</span>
-              <span>Qty: {s.quantity}</span>
-              <span>Price: {s.price}</span>
-              <span>Settle: {s.settlement_date || '—'}</span>
-            </div>
-          ))}
-        </div>
+        <table className={styles.table || ''} style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border, #333)', textAlign: 'left' }}>
+              <th style={{ padding: '8px' }}>Instrument</th>
+              <th style={{ padding: '8px' }}>Qty</th>
+              <th style={{ padding: '8px' }}>Price</th>
+              <th style={{ padding: '8px' }}>Net Amount</th>
+              <th style={{ padding: '8px' }}>Settle Date</th>
+              <th style={{ padding: '8px' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {secSettlements.map((s, i) => (
+              <tr key={s.id || i} style={{ borderBottom: '1px solid var(--border, #222)' }}>
+                <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{instrumentMap.get(s.instrument_id) || s.instrument_id?.slice(0, 8)}</td>
+                <td style={{ padding: '6px 8px' }}>{s.quantity}</td>
+                <td style={{ padding: '6px 8px' }}>{Number(s.price).toLocaleString()} MNT</td>
+                <td style={{ padding: '6px 8px', fontWeight: 600 }}>{((s as any).net_amount || s.quantity * s.price).toLocaleString()} MNT</td>
+                <td style={{ padding: '6px 8px' }}>{s.settlement_date}</td>
+                <td style={{ padding: '6px 8px' }}><StatusBadge status={s.status || 'PENDING'} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
