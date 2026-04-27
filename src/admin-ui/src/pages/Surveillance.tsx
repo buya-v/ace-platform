@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePolling } from '../hooks/usePolling';
-import { fetchSurveillanceAlerts, resolveSurveillanceAlert } from '../services/api';
+import { fetchSurveillanceAlerts, resolveSurveillanceAlert, fetchSecuritiesInstruments } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../contexts/ToastContext';
 import styles from './Surveillance.module.css';
@@ -88,14 +88,36 @@ export function SurveillancePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedAlert, setSelectedAlert] = useState<SurveillanceAlert | null>(null);
   const [resolveTarget, setResolveTarget] = useState<SurveillanceAlert | null>(null);
+  const [instrumentMap, setInstrumentMap] = useState<Map<string, string>>(new Map());
   const { showToast } = useToast();
+
+  // Load instruments for ID → ticker mapping
+  useEffect(() => {
+    fetchSecuritiesInstruments().then((res: any) => {
+      const list = res?.data ?? res?.instruments ?? [];
+      const map = new Map<string, string>();
+      list.forEach((i: any) => map.set(i.id, i.ticker || i.name || i.id));
+      setInstrumentMap(map);
+    }).catch(() => {});
+  }, []);
 
   const { data, refresh } = usePolling(
     (signal) => fetchSurveillanceAlerts({ severity: severityFilter || undefined, status: statusFilter || undefined }, signal),
     15000,
   );
 
-  const rawAlerts: SurveillanceAlert[] = data?.data ?? [];
+  // Normalize alerts from securities-service format to UI format
+  const rawAlerts: SurveillanceAlert[] = (data?.data ?? []).map((a: any) => ({
+    id: a.id,
+    timestamp: a.timestamp || a.created_at || '',
+    participant_id: a.participant_id || '',
+    participant_name: a.participant_name || a.resolved_by || '—',
+    instrument_id: a.instrument_id || '',
+    rule_type: a.rule_type || a.alert_type || '',
+    severity: a.severity || (a.alert_type === 'LARGE_TRADE' ? 'HIGH' : a.alert_type === 'PRICE_SPIKE' ? 'MEDIUM' : 'LOW'),
+    status: a.status || 'OPEN',
+    description: a.description || a.message || '',
+  }));
   const filtered = filterAlerts(rawAlerts, severityFilter, statusFilter);
   const alerts = sortSurveillanceAlerts(filtered);
   const counts = computeSeverityCounts(rawAlerts);
@@ -161,7 +183,7 @@ export function SurveillancePage() {
             <tr key={alert.id} onClick={() => setSelectedAlert(alert)}>
               <td>{formatAlertTime(alert.timestamp || (alert as any).created_at)}</td>
               <td>{alert.participant_name || (alert as any).resolved_by || '—'}</td>
-              <td>{alert.instrument_id}</td>
+              <td>{instrumentMap.get(alert.instrument_id) || alert.instrument_id?.slice(0, 8) || '—'}</td>
               <td>{(alert.rule_type || (alert as any).alert_type || '—').replace(/_/g, ' ')}</td>
               <td>
                 <span className={styles[severityClassName(alert.severity || 'MEDIUM')]}>
@@ -199,7 +221,7 @@ export function SurveillancePage() {
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Instrument</span>
-              <span className={styles.detailValue}>{selectedAlert.instrument_id}</span>
+              <span className={styles.detailValue}>{instrumentMap.get(selectedAlert.instrument_id) || selectedAlert.instrument_id}</span>
             </div>
             <div className={styles.detailField}>
               <span className={styles.detailLabel}>Alert Type</span>
