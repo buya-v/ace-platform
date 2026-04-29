@@ -668,6 +668,50 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		return ChatResponse{Reply: fmt.Sprintf("❌ Failed to run batch screening: %s", respBody)}
 	}
 
+	// ── Ticket Creation (must run before guided prompts which catch "report" keyword) ──
+	if strings.HasPrefix(lower, "report a bug:") || strings.HasPrefix(lower, "report bug:") {
+		desc := strings.TrimSpace(message[strings.Index(lower, ":")+1:])
+		if desc != "" {
+			payload := map[string]string{"title": "Bug: " + desc, "description": desc, "category": "bug_report", "priority": "medium"}
+			body, status := e.doRequest("POST", "/api/v1/tickets", payload, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{
+					Reply:   fmt.Sprintf("🎫 Bug report created!\n\n**%s**\n\nView in Tickets page.", desc),
+					Actions: []Action{{Label: "View Tickets", Type: "link", URL: "/dashboard/tickets"}},
+				}
+			}
+			return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create ticket: %s", body)}
+		}
+	}
+	if strings.HasPrefix(lower, "create ticket:") || strings.HasPrefix(lower, "new ticket:") {
+		title := strings.TrimSpace(message[strings.Index(lower, ":")+1:])
+		if title != "" {
+			payload := map[string]string{"title": title, "description": title, "category": "support", "priority": "medium"}
+			body, status := e.doRequest("POST", "/api/v1/tickets", payload, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{
+					Reply:   fmt.Sprintf("🎫 Ticket created!\n\n**%s**\n\nView in Tickets page.", title),
+					Actions: []Action{{Label: "View Tickets", Type: "link", URL: "/dashboard/tickets"}},
+				}
+			}
+			return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create ticket: %s", body)}
+		}
+	}
+	if strings.HasPrefix(lower, "feature request:") || strings.HasPrefix(lower, "feature:") {
+		desc := strings.TrimSpace(message[strings.Index(lower, ":")+1:])
+		if desc != "" {
+			payload := map[string]string{"title": "Feature: " + desc, "description": desc, "category": "feature_request", "priority": "medium"}
+			body, status := e.doRequest("POST", "/api/v1/tickets", payload, userToken)
+			if status >= 200 && status < 300 {
+				return ChatResponse{
+					Reply:   fmt.Sprintf("🎫 Feature request created!\n\n**%s**\n\nView in Tickets page.", desc),
+					Actions: []Action{{Label: "View Tickets", Type: "link", URL: "/dashboard/tickets"}},
+				}
+			}
+			return ChatResponse{Reply: fmt.Sprintf("❌ Failed to create ticket: %s", body)}
+		}
+	}
+
 	// ── Guided prompts for incomplete CRUD commands ──────────────────
 	// When user says "create X" or "new X" but doesn't provide all required fields,
 	// guide them with the required format instead of falling through to list handlers.
@@ -828,7 +872,7 @@ func (e *ActionExecutor) Execute(message, userToken string) ChatResponse {
 		}
 	}
 
-	// --- Tickets ---
+	// --- Ticket Listing ---
 	if containsAny(lower, "ticket") || containsAny(norm, "ticket") {
 		body, status := e.doRequest("GET", "/api/v1/tickets", nil, userToken)
 		if status >= 200 && status < 300 {

@@ -123,7 +123,8 @@ export async function getBotSuggestions(page: string): Promise<Suggestion[]> {
 }
 
 export async function createTicket(ticket: TicketInput): Promise<TicketResult> {
-  const url = buildBotUrl('/tickets');
+  const config = getConfig();
+  const url = `${config.API_BASE_URL}/tickets`;
   const response = await fetch(url, {
     method: 'POST',
     headers: buildAuthHeaders(),
