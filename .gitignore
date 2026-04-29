@@ -65,3 +65,4 @@ __pycache__/
 .venv/
 tests/playwright/test-results/
 tests/playwright/playwright-report/data/
+test-results/
