@@ -515,7 +515,7 @@ services:
     ports:
       - "3010:3010"
     environment:
-      - GEMINI_API_KEY=AIzaSyBTkTNskrYdKBT_bw9ihEWQHdbs3yUS290
+      - GEMINI_API_KEY=AIzaSyBTkTNskrYdKBT_bw9ihEWQHdbs3yUS290,AIzaSyD9jexozI5KV_gdya6E1GTUcx46hzflIX0
       - PORT=3010
     restart: unless-stopped
     healthcheck:

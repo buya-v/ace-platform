@@ -5,7 +5,8 @@ const path = require("path");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const PORT = process.env.PORT || 3010;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEYS = (process.env.GEMINI_API_KEY || "").split(",").filter(Boolean);
+const GEMINI_API_KEY = GEMINI_API_KEYS[0];
 
 // ─── Load knowledge base on startup ───────────────────────────────────────────
 
@@ -74,13 +75,15 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "message is required" });
   }
 
-  // Try multiple models in order of preference
-  const models = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-001"];
+  // Try multiple API keys and models in order of preference
+  const modelNames = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-001"];
   let lastError = null;
 
-  for (const modelName of models) {
+  for (const apiKey of GEMINI_API_KEYS) {
+    const ai = new GoogleGenerativeAI(apiKey);
+    for (const modelName of modelNames) {
     try {
-      const model = genAI.getGenerativeModel({
+      const model = ai.getGenerativeModel({
         model: modelName,
         systemInstruction: SYSTEM_PROMPT,
         generationConfig: {
@@ -102,12 +105,13 @@ app.post("/api/chat", async (req, res) => {
       res.json({ response });
       return;
     } catch (err) {
-      console.error(`${modelName} error:`, err?.message || err);
+      console.error(`key=${apiKey.slice(-6)} ${modelName} error:`, err?.message || err);
       lastError = err;
     }
   }
+  }
 
-  // All models failed
+  // All keys and models failed
   console.error("All Gemini models failed:", lastError?.message);
   {
     res.json({
