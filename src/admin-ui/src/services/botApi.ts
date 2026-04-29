@@ -40,6 +40,7 @@ export function buildBotUrl(path: string): string {
 export function buildAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-GarudaX-Tenant': localStorage.getItem('garudax-tenant') || 'mse-equities',
   };
   const token = getAccessToken();
   if (token) {
