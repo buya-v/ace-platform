@@ -74,32 +74,45 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "message is required" });
   }
 
-  try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: SYSTEM_PROMPT,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-      },
-    });
+  // Try multiple models in order of preference
+  const models = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-001"];
+  let lastError = null;
 
-    // Convert history to Gemini format
-    const geminiHistory = history.map((entry) => ({
-      role: entry.role === "assistant" ? "model" : "user",
-      parts: [{ text: entry.content }],
-    }));
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: SYSTEM_PROMPT,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+        },
+      });
 
-    const chat = model.startChat({ history: geminiHistory });
-    const result = await chat.sendMessage(message);
-    const response = result.response.text();
+      const geminiHistory = history.map((entry) => ({
+        role: entry.role === "assistant" ? "model" : "user",
+        parts: [{ text: entry.content }],
+      }));
 
-    res.json({ response });
-  } catch (err) {
-    console.error("Gemini error:", err?.message || err);
+      const chat = model.startChat({ history: geminiHistory });
+      const result = await chat.sendMessage(message);
+      const response = result.response.text();
+
+      console.log(`Response from ${modelName} (${response.length} chars)`);
+      res.json({ response });
+      return;
+    } catch (err) {
+      console.error(`${modelName} error:`, err?.message || err);
+      lastError = err;
+    }
+  }
+
+  // All models failed
+  console.error("All Gemini models failed:", lastError?.message);
+  {
     res.json({
       response:
-        "I apologize, I'm having trouble connecting. Please try again.",
+        "I apologize, I'm having trouble connecting to my AI backend. All models are currently unavailable. Please try again in a moment.",
       error: true,
     });
   }
