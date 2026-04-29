@@ -1,35 +1,56 @@
 {
-  "run_id": "20260427-trade-portal-securities",
-  "feature": "Trade Portal — Securities Service Integration",
-  "requirement": "Rewire web-ui from commodity matching-engine endpoints to securities-service endpoints for MSE equities demo",
-  "status": "done",
+  "run_id": "20260427-architect-bot",
+  "feature": "GarudaX Architect AI Chatbot",
+  "requirement": "AI chatbot using Gemini that acts as GarudaX Chief Architect for MSE pitch sessions",
+  "status": "planning",
   "tasks": [
     {
       "id": "T1",
-      "title": "API service + types — securities endpoint rewiring",
+      "title": "Knowledge base for system prompt",
+      "description": "Create the comprehensive knowledge base files that will be concatenated into the Gemini system prompt.\n\nCreate directory: src/architect-bot/knowledge/\n\nFile 1: src/architect-bot/knowledge/garudax-overview.md\n- GarudaX is a multi-tenant, AI-native securities exchange platform\n- Architecture: 11 Go microservices + 3 React SPAs + FIX gateway\n- Services: matching-engine, clearing-engine, margin-engine, settlement-engine, auth-service, compliance-service, market-data-service, warehouse-service, gateway, securities-service, platform-service\n- Multi-tenant: X-GarudaX-Tenant header, tenant middleware, platform control plane\n- Current tenants: mse-equities (Mongolian Stock Exchange, ACTIVE, flagship), ace-commodities (suspended)\n- Tech stack: Go 1.25, React 19, PostgreSQL (TimescaleDB), Kafka, Redis, Docker, Kubernetes\n- 65 domain types, 48 store interfaces, 94 handler files, 2540+ tests\n- Securities module: instruments (equity+bond), order matching (price-time priority), T+2 settlement, corporate actions, surveillance (12 alert patterns), day lifecycle state machine\n- FIX 4.4 protocol gateway with TCP session management, 95.3% parser coverage\n- Native binary protocol codec (92.5% coverage)\n\nFile 2: src/architect-bot/knowledge/millenniumit-comparison.md\n- Copy key sections from docs/millenniumit-gap-analysis.md\n- 86 features scored: FULL 3, SUBSTANTIAL 28, BASIC 35, STUB 8, MISSING 12\n- GarudaX at 47% depth vs MillenniumIT\n- Key GarudaX advantages over MIT: multi-tenant (MIT is single-venue), AI-native, modern stack, FIX 4.4, comprehensive test suite, open infrastructure\n- What MIT has that GarudaX doesn't: 20+ years production hardening, partitions, definition/template system, rule builder\n\nFile 3: src/architect-bot/knowledge/securities-domain.md\n- Order types: LIMIT, MARKET, STOP-LIMIT, STOP-MARKET, ICEBERG\n- Time-in-force: DAY, GTC, GTD, IOC, FOK\n- Matching: price-time priority with iceberg support, self-trade prevention\n- Auction: call auction with price-ladder clearing price algorithm, random end\n- Day lifecycle: CLOSED → PRE_OPEN → TRADING (continuous) → POST_CLOSE → CLOSED\n- Settlement: T+2, DVP (delivery vs payment), settlement obligations, netting\n- Corporate actions: dividends, stock splits, rights issues, entitlement processing\n- Surveillance: 12 alert patterns (large trade, price spike, wash trade, spoofing, layering, etc.)\n- Circuit breakers: static + dynamic price bands, configurable per instrument\n- Trading parameters: tick tables, lot sizes, allowed order types per instrument\n- Indices: weighted basket calculation, real-time recalculation\n- Instrument folders: hierarchical grouping\n- Entity permissions: role-based CRUD matrix\n\nFile 4: src/architect-bot/knowledge/mse-context.md\n- Mongolia Stock Exchange (MSE): established 1991, ~200 listed companies\n- Current system: MillenniumIT (London Stock Exchange Technology)\n- MSE challenges: aging technology, high licensing costs, limited customization\n- FRC (Financial Regulatory Commission): regulatory body, daily reporting requirements\n- MCSD (Mongolian Central Securities Depository): settlement and custody\n- GarudaX value proposition for MSE: modern platform, lower TCO, AI-native operations, multi-tenant for future venue expansion\n- Settlement: MNT (Mongolian Tugrik), T+2 cycle, MCSD integration planned\n\nFile 5: src/architect-bot/knowledge/competitive-landscape.md\n- Nasdaq Market Technology: SMARTS surveillance, Genium INET matching\n- NYSE/ICE: Pillar trading platform\n- London Stock Exchange: MillenniumIT (Sri Lanka), Turquoise MTF\n- HKEX: Orion Trading Platform (OTP)\n- Deutsche Börse: T7 trading system\n- Other vendors: Aquis Technologies, TradingScreen, Exactpro\n- GarudaX differentiation: multi-tenant (one platform, many venues), AI-native, open infrastructure, modern Go+React stack\n\nKeep each file concise but authoritative. Total combined size should be under 15KB to fit Gemini context.\n\nWrite handoff to .softhouse/handoff/T1.md",
       "agent_role": "coder",
       "model": "opus",
-      "target": "frontend",
-      "status": "done",
-      "attempts": 1
+      "target": "backend",
+      "files_hint": ["src/architect-bot/knowledge/"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
     },
     {
       "id": "T2",
-      "title": "Update web-ui tests for securities fields",
-      "agent_role": "test_writer",
+      "title": "Architect-bot backend service",
+      "description": "Create the Express.js backend service that proxies chat to Gemini.\n\nDirectory: src/architect-bot/\n\nFiles to create:\n\n1. src/architect-bot/package.json\n   - name: @garudax/architect-bot\n   - dependencies: express, @google/generative-ai, cors\n   - scripts: start, dev\n\n2. src/architect-bot/server.js\n   - Express server on port 3010\n   - CORS enabled (allow demo.garudax.asla.mn, admin.garudax.asla.mn)\n   - POST /api/chat — main endpoint\n     - Request: { message: string, history?: { role: string, parts: string }[] }\n     - Response: { response: string } (streamed if possible, otherwise full response)\n   - GET /api/health — health check\n   - On startup, load all knowledge/*.md files, concatenate into system prompt\n   - System prompt format:\n     ```\n     You are the Chief Architect of GarudaX, a multi-tenant AI-native securities exchange platform.\n     You are presenting GarudaX to the Mongolian Stock Exchange (MSE) board and technical team.\n     \n     Your persona:\n     - Confident but honest — acknowledge gaps when asked directly\n     - Technical depth — you know the codebase intimately (65 types, 48 stores, 94 handlers)\n     - Strategic vision — you can explain WHY GarudaX is better than MillenniumIT for MSE\n     - Business-aware — you understand TCO, time-to-market, and operational efficiency\n     \n     When answering:\n     - Be concise but thorough\n     - Use specific numbers and technical details\n     - Compare to MillenniumIT when relevant\n     - Speak about GarudaX capabilities with confidence\n     - If asked about something GarudaX doesn't have, be honest but pivot to strengths\n     \n     KNOWLEDGE BASE:\n     {concatenated knowledge files}\n     ```\n   - Gemini API key from env: GEMINI_API_KEY\n   - Model: gemini-2.0-flash\n   - Max tokens: 1024\n   - Temperature: 0.7\n\n3. src/architect-bot/Dockerfile\n   - FROM node:22-alpine\n   - WORKDIR /app\n   - COPY package*.json → npm install --production\n   - COPY . .\n   - EXPOSE 3010\n   - CMD [\"node\", \"server.js\"]\n\n4. Add to docker-compose.yml:\n   ```yaml\n   architect-bot:\n     build: src/architect-bot\n     ports:\n       - '3010:3010'\n     environment:\n       - GEMINI_API_KEY=AIzaSyBTkTNskrYdKBT_bw9ihEWQHdbs3yUS290\n       - PORT=3010\n     restart: unless-stopped\n   ```\n\n5. Add nginx route in /etc/nginx/sites-enabled/garudax.asla.mn:\n   - Under the demo.garudax.asla.mn server block, add:\n     ```\n     location /api/architect/ {\n         proxy_pass http://127.0.0.1:3010/api/;\n         proxy_set_header Host $host;\n         proxy_set_header X-Real-IP $remote_addr;\n         add_header 'Access-Control-Allow-Origin' $cors_origin always;\n         add_header 'Access-Control-Allow-Headers' 'Content-Type' always;\n         add_header 'Access-Control-Allow-Methods' 'POST, GET, OPTIONS' always;\n     }\n     ```\n\nTest: npm start, then curl -X POST http://localhost:3010/api/chat -H 'Content-Type: application/json' -d '{\"message\":\"What is GarudaX?\"}'\n\nWrite handoff to .softhouse/handoff/T2.md",
+      "agent_role": "coder",
       "model": "sonnet",
-      "target": "frontend",
-      "status": "done",
-      "attempts": 1
+      "target": "backend",
+      "files_hint": ["src/architect-bot/server.js", "src/architect-bot/package.json", "src/architect-bot/Dockerfile", "docker-compose.yml"],
+      "dependencies": ["T1"],
+      "status": "pending",
+      "attempts": 0
     },
     {
       "id": "T3",
-      "title": "Build and deploy web-ui container",
+      "title": "Chat widget in demo-runner",
+      "description": "Add an 'Ask the Architect' chat widget to the demo-runner SPA.\n\nFiles to create/modify:\n\n1. src/demo-runner/src/components/ArchitectChat.tsx\n   - Floating button (bottom-right, fixed position): brain/chat icon + 'Ask the Architect'\n   - On click, expands to chat panel (400px wide, 500px tall)\n   - Chat panel has:\n     - Header: 'GarudaX Architect' with close button\n     - Message list: user messages (right-aligned, blue) and bot messages (left-aligned, dark)\n     - Input field + send button at bottom\n   - Bot responses rendered as markdown (use a simple markdown-to-html function, no heavy lib)\n   - Loading indicator while waiting for response\n   - Conversation persisted in component state (lost on page refresh is OK)\n   - API call: POST to /api/architect/chat with { message, history }\n   - The gateway URL from DemoContext should be used, but for architect bot the URL is relative: /api/architect/chat (proxied by nginx)\n\n2. src/demo-runner/src/components/ArchitectChat.module.css\n   - Dark theme matching demo-runner styling\n   - Floating button: round, 56px, gradient background, box-shadow\n   - Chat panel: dark background, rounded corners, slide-up animation\n   - Messages: bubbles with proper spacing\n   - Input: dark input with send button\n   - Responsive: on mobile, chat panel goes full-width\n\n3. src/demo-runner/src/App.tsx\n   - Import and render <ArchitectChat /> at the top level (outside section content)\n\nDo NOT use any new npm dependencies. Use fetch API for HTTP calls. Simple markdown rendering (bold, italic, lists, code blocks) using string replace.\n\nBuild: cd src/demo-runner && npm run build\n\nWrite handoff to .softhouse/handoff/T3.md",
+      "agent_role": "coder",
+      "model": "sonnet",
+      "target": "frontend",
+      "files_hint": ["src/demo-runner/src/components/ArchitectChat.tsx", "src/demo-runner/src/components/ArchitectChat.module.css", "src/demo-runner/src/App.tsx"],
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "T4",
+      "title": "Deploy and test end-to-end",
+      "description": "Deploy architect-bot, rebuild demo-runner, configure nginx, and test.\n\n1. cd src/architect-bot && npm install\n2. docker compose build architect-bot\n3. docker compose up -d architect-bot\n4. Verify: curl http://localhost:3010/api/health\n5. Update nginx config for demo.garudax.asla.mn to proxy /api/architect/\n6. sudo nginx -t && sudo systemctl reload nginx\n7. docker compose build demo-runner && docker compose up -d demo-runner\n8. Test through nginx: curl -X POST https://demo.garudax.asla.mn/api/architect/chat -H 'Content-Type: application/json' -d '{\"message\":\"What is GarudaX?\"}'\n9. Verify the chat widget appears on demo.garudax.asla.mn\n\nWrite handoff to .softhouse/handoff/T4.md",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "infra",
-      "status": "done",
-      "attempts": 1
+      "files_hint": ["docker-compose.yml"],
+      "dependencies": ["T2", "T3"],
+      "status": "pending",
+      "attempts": 0
     }
   ]
 }
