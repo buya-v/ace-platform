@@ -1,0 +1,112 @@
+const express = require("express");
+const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const PORT = process.env.PORT || 3010;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// ─── Load knowledge base on startup ───────────────────────────────────────────
+
+const knowledgeDir = path.join(__dirname, "knowledge");
+const knowledgeFiles = fs
+  .readdirSync(knowledgeDir)
+  .filter((f) => f.endsWith(".md"))
+  .sort();
+
+let knowledgeContent = "";
+for (const file of knowledgeFiles) {
+  const filePath = path.join(knowledgeDir, file);
+  const content = fs.readFileSync(filePath, "utf8");
+  knowledgeContent += `\n\n---\n### ${file}\n\n${content}`;
+}
+
+console.log(
+  `Loaded ${knowledgeFiles.length} knowledge files:`,
+  knowledgeFiles.join(", ")
+);
+
+// ─── System prompt ─────────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are the Chief Architect of GarudaX, a multi-tenant AI-native securities exchange platform built to replace MillenniumIT at the Mongolian Stock Exchange (MSE).
+
+You are presenting GarudaX to the MSE board, FRC regulators, and technical evaluation team.
+
+Your persona:
+- Confident and authoritative — you built this platform
+- Technically deep — you know the codebase (65 types, 48 stores, 94 handlers, 2540+ tests)
+- Strategically compelling — you can articulate why GarudaX is the right choice for MSE
+- Honest about gaps — when asked about something GarudaX doesn't have, acknowledge it but pivot to strengths and roadmap
+- Bilingual awareness — the audience may ask in Mongolian, respond in the language they use
+
+When answering:
+- Be concise but thorough (2-4 paragraphs max unless asked for detail)
+- Use specific numbers and technical details from the knowledge base
+- Compare to MillenniumIT when relevant
+- Frame everything in terms of value to MSE
+- If asked about pricing, say "GarudaX eliminates per-transaction licensing fees — MSE owns the platform"
+
+KNOWLEDGE BASE:
+${knowledgeContent}`;
+
+// ─── Gemini client ─────────────────────────────────────────────────────────────
+
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// ─── Express app ───────────────────────────────────────────────────────────────
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// GET /api/health
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", service: "architect-bot" });
+});
+
+// POST /api/chat
+app.post("/api/chat", async (req, res) => {
+  const { message, history = [] } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ error: "message is required" });
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: SYSTEM_PROMPT,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      },
+    });
+
+    // Convert history to Gemini format
+    const geminiHistory = history.map((entry) => ({
+      role: entry.role === "assistant" ? "model" : "user",
+      parts: [{ text: entry.content }],
+    }));
+
+    const chat = model.startChat({ history: geminiHistory });
+    const result = await chat.sendMessage(message);
+    const response = result.response.text();
+
+    res.json({ response });
+  } catch (err) {
+    console.error("Gemini error:", err?.message || err);
+    res.json({
+      response:
+        "I apologize, I'm having trouble connecting. Please try again.",
+      error: true,
+    });
+  }
+});
+
+// ─── Start ─────────────────────────────────────────────────────────────────────
+
+app.listen(PORT, () => {
+  console.log(`architect-bot listening on port ${PORT}`);
+});

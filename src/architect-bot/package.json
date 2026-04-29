@@ -1,0 +1,14 @@
+{
+  "name": "@garudax/architect-bot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "@google/generative-ai": "^0.21.0",
+    "cors": "^2.8.5"
+  }
+}
