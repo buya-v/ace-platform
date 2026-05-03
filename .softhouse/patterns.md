@@ -192,4 +192,10 @@
   - Consider combining instrument + order handlers into one task (same package)
   - Sequential chain (4 levels) is clean but slow — 2 levels would suffice
 
+### Run 20260503-ai-admin-ops — AI Admin & Ops Through Chatbot (2026-05-03)
+- **What worked**: 6/6 tasks completed on first attempt, zero rejections. All implemented directly in main context after background agents were blocked by tool permissions.
+- **What failed**: Background worktree agents cannot prompt for tool permissions — all 3 Level 0 agents (T1, T2, T3) were blocked. Switched to direct implementation in main context.
+- **New knowledge**: Alias ordering matters for NLP command parsing — longer aliases must be checked before shorter ones (e.g., "halt all" before "halt"). Built a global alias index sorted by length.
+- **Planning advice**: Do NOT use background agents when tool permissions haven't been pre-approved. Either run agents in foreground or implement directly. For small runs (6 tasks), direct implementation is faster than agent overhead.
+
 <!-- LEARNED PATTERNS END -->

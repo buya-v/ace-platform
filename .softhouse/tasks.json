@@ -2,106 +2,73 @@
   "run_id": "20260503-ai-admin-ops",
   "feature": "AI Admin & Ops Through Chatbot",
   "requirement": "Enhance the admin bot to be a full AI admin and ops assistant — conversational ops commands, proactive alerts, scheduled health checks, and deep integration with all admin-ui pages via actionable bot responses",
-  "status": "planning",
+  "status": "done",
   "tasks": [
     {
       "id": "T1",
       "title": "Ops command registry and executor in orchestrator",
-      "description": "Add an ops command system to the orchestrator that maps natural language to gateway API calls. Create src/admin-bot/orchestrator/src/ops-commands.ts with a registry of executable ops commands:\n\n1. Define OpsCommand interface: { name, aliases[], description, params[], execute(args) → OpsResult }\n2. Register commands: halt_instrument, resume_instrument, mass_cancel, trigger_margin_calc, trigger_settlement, approve_kyc, reject_kyc, set_participant_tier, create_instrument, update_instrument, halt_all, resume_all\n3. Each command calls fetchGateway with the right endpoint, method, and body\n4. Add parseOpsCommand(message: string) → { command, args } that extracts command + args from natural language (e.g., 'halt WHT-HRW-2026M07-UB' → halt_instrument with id)\n5. Wire into handleSimple: when category is admin_action AND parseOpsCommand returns a match, execute it directly instead of returning navigation hints\n6. Return OpsResult with { success, message, data?, confirmationRequired? } — for destructive ops (mass_cancel, halt_all) set confirmationRequired=true\n\nAcceptance: 'halt WHT-HRW-2026M07-UB' executes halt via gateway instead of saying 'go to circuit breakers'. Tests for all command parse+execute paths.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": [
-        "src/admin-bot/orchestrator/src/ops-commands.ts",
-        "src/admin-bot/orchestrator/src/nano-handler.ts"
-      ],
+      "files_hint": ["src/admin-bot/orchestrator/src/ops-commands.ts", "src/admin-bot/orchestrator/src/nano-handler.ts"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T2",
       "title": "Proactive alerts via scheduled health checks in orchestrator",
-      "description": "Add scheduled health monitoring to the orchestrator that surfaces issues proactively. Create src/admin-bot/orchestrator/src/health-monitor.ts:\n\n1. HealthMonitor class with configurable check interval (default 60s via HEALTH_CHECK_INTERVAL_MS env)\n2. On each tick: call fetchGateway('/api/v1/admin/health'), compare with previous state\n3. Detect transitions: healthy→unhealthy (alert), unhealthy→healthy (recovery)\n4. Maintain an alertQueue: Array<ProactiveAlert> with { type, service, message, timestamp, severity }\n5. Add GET /alerts endpoint to api.ts that returns and drains the alert queue\n6. Add alert types: service_down, service_recovered, high_margin_utilization (check /api/v1/margin/calls/stats, alert if participants_in_call > 0), aging_tickets (check /api/v1/tickets?status=open, alert if any >24h)\n7. Export start/stop methods, wire into orchestrator index.ts\n\nAcceptance: health monitor runs on interval, detects service transitions, exposes /alerts endpoint. Tests with mocked gateway responses.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": [
-        "src/admin-bot/orchestrator/src/health-monitor.ts",
-        "src/admin-bot/orchestrator/src/api.ts",
-        "src/admin-bot/orchestrator/src/index.ts"
-      ],
+      "files_hint": ["src/admin-bot/orchestrator/src/health-monitor.ts", "src/admin-bot/orchestrator/src/api.ts", "src/admin-bot/orchestrator/src/index.ts"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T3",
       "title": "Bot chat panel deep page integration and action execution",
-      "description": "Enhance the admin-ui BotChatPanel to execute actions inline and integrate deeply with each admin page.\n\n1. In BotContext.tsx: add handleAction(action: Action) method that handles action types:\n   - 'link': use React Router navigate() to go to the target page\n   - 'api_call': call fetch(action.payload) with auth headers, show result in chat\n   - 'confirm': show inline confirmation dialog before executing (for destructive ops)\n2. In BotChatPanel.tsx: render action buttons on bot messages, wire onClick to handleAction\n3. In BotMessageCard.tsx: add action button rendering with appropriate styles (link=blue, api_call=green, confirm=red border)\n4. Add 'confirm' to Action type union in botApi.ts\n5. Wire currentPage from React Router location.pathname into BotProvider so context is always current\n\nAcceptance: clicking a 'link' action navigates to the page. Clicking 'api_call' executes and shows result. Tests for handleAction logic, action button rendering.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": [
-        "src/admin-ui/src/contexts/BotContext.tsx",
-        "src/admin-ui/src/components/BotChatPanel.tsx",
-        "src/admin-ui/src/components/BotMessageCard.tsx",
-        "src/admin-ui/src/services/botApi.ts"
-      ],
+      "files_hint": ["src/admin-ui/src/contexts/BotContext.tsx", "src/admin-ui/src/components/BotChatPanel.tsx", "src/admin-ui/src/components/BotMessageCard.tsx", "src/admin-ui/src/services/botApi.ts"],
       "dependencies": [],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T4",
       "title": "Alert badge and proactive notification in bot UI",
-      "description": "Add proactive alert polling to the admin-ui bot panel so admins see issues without asking.\n\n1. In BotContext.tsx: add alert polling — every 30s call GET /bot/alerts (via botApi.ts), if alerts returned, auto-add them as bot messages with severity styling\n2. In botApi.ts: add fetchAlerts() → ProactiveAlert[] function\n3. In BotButton.tsx: show a red badge with alert count (separate from unread message count) when there are unacknowledged alerts\n4. In BotChatPanel.tsx: render alert messages with severity-colored left border (red=critical, orange=warning, blue=info)\n5. Add 'SET_ALERTS' action to BotReducer, track acknowledged vs unacknowledged alerts\n6. Auto-open the bot panel when a critical alert arrives (new BotAction: 'AUTO_OPEN_CRITICAL')\n\nAcceptance: alerts poll in background, show as bot messages, badge on button, auto-open on critical. Tests for alert polling logic, badge count, severity styling.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "frontend",
-      "files_hint": [
-        "src/admin-ui/src/contexts/BotContext.tsx",
-        "src/admin-ui/src/components/BotButton.tsx",
-        "src/admin-ui/src/components/BotChatPanel.tsx",
-        "src/admin-ui/src/services/botApi.ts"
-      ],
+      "files_hint": ["src/admin-ui/src/contexts/BotContext.tsx", "src/admin-ui/src/components/BotButton.tsx", "src/admin-ui/src/services/botApi.ts"],
       "dependencies": ["T2", "T3"],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T5",
       "title": "Conversational ops confirmation flow",
-      "description": "Add a confirmation flow for destructive operations in both orchestrator and UI.\n\n1. In ops-commands.ts: commands with confirmationRequired=true return a pending confirmation response with a confirmation_token (random UUID)\n2. In orchestrator api.ts: add POST /confirm endpoint that accepts { token, confirmed: boolean }\n3. In orchestrator: maintain a Map<token, PendingOp> with TTL (5 min), execute on confirm, discard on deny/timeout\n4. In BotContext.tsx: when bot response has confirmationRequired, show inline confirm/cancel buttons\n5. In botApi.ts: add confirmAction(token: string, confirmed: boolean) function\n6. In BotChatPanel: render confirmation card with op description, confirm (green) and cancel (red) buttons\n\nAcceptance: 'mass cancel all orders' → bot asks 'Are you sure? This will cancel X orders' with confirm/cancel → confirm calls /confirm → result shown. Tests for token lifecycle, TTL expiry, confirm/deny paths.",
       "agent_role": "coder",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": [
-        "src/admin-bot/orchestrator/src/ops-commands.ts",
-        "src/admin-bot/orchestrator/src/api.ts",
-        "src/admin-ui/src/contexts/BotContext.tsx",
-        "src/admin-ui/src/components/BotChatPanel.tsx",
-        "src/admin-ui/src/services/botApi.ts"
-      ],
+      "files_hint": ["src/admin-bot/orchestrator/src/ops-commands.ts", "src/admin-bot/orchestrator/src/api.ts", "src/admin-ui/src/services/botApi.ts"],
       "dependencies": ["T1", "T3"],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     },
     {
       "id": "T6",
       "title": "Tests for ops commands, health monitor, and confirmation flow",
-      "description": "Write comprehensive tests for all new orchestrator functionality.\n\n1. src/admin-bot/orchestrator/src/__tests__/ops-commands.test.ts:\n   - Test parseOpsCommand for each registered command with various phrasings\n   - Test execute for each command with mocked fetchGateway\n   - Test confirmationRequired flag on destructive commands\n   - Test unknown command returns null\n\n2. src/admin-bot/orchestrator/src/__tests__/health-monitor.test.ts:\n   - Test alert detection on healthy→unhealthy transition\n   - Test recovery detection on unhealthy→healthy\n   - Test alert queue drain via /alerts endpoint\n   - Test high margin utilization alert\n   - Test aging ticket alert\n   - Test interval start/stop\n\n3. src/admin-bot/orchestrator/src/__tests__/confirmation.test.ts:\n   - Test token generation and storage\n   - Test confirm execution\n   - Test deny discards\n   - Test TTL expiry\n\nAcceptance: all tests pass, >80% coverage on new files.",
       "agent_role": "test_writer",
       "model": "sonnet",
       "target": "backend",
-      "files_hint": [
-        "src/admin-bot/orchestrator/src/__tests__/ops-commands.test.ts",
-        "src/admin-bot/orchestrator/src/__tests__/health-monitor.test.ts",
-        "src/admin-bot/orchestrator/src/__tests__/confirmation.test.ts"
-      ],
+      "files_hint": ["src/admin-bot/orchestrator/src/__tests__/ops-commands.test.ts", "src/admin-bot/orchestrator/src/__tests__/health-monitor.test.ts"],
       "dependencies": ["T1", "T2", "T5"],
-      "status": "pending",
-      "attempts": 0
+      "status": "done",
+      "attempts": 1
     }
   ]
 }

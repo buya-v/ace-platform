@@ -4,13 +4,14 @@ import styles from './BotButton.module.css';
 
 export function BotButton() {
   const { state, togglePanel } = useBot();
-  const { unreadCount, isOpen } = state;
+  const { unreadCount, alertCount, isOpen } = state;
+  const badgeCount = unreadCount + alertCount;
 
   if (isOpen) return null;
 
   return (
     <button
-      className={`${styles.button}${unreadCount > 0 ? ` ${styles.pulsing}` : ''}`}
+      className={`${styles.button}${badgeCount > 0 ? ` ${styles.pulsing}` : ''}`}
       onClick={togglePanel}
       aria-label="Open GarudaX Bot"
       type="button"
@@ -27,9 +28,9 @@ export function BotButton() {
         {/* Chat tail */}
         <path d="M8 18 L6 22 L12 18" fill="currentColor" />
       </svg>
-      {unreadCount > 0 && (
-        <span className={styles.badge} data-testid="bot-badge">
-          {unreadCount > 9 ? '9+' : unreadCount}
+      {badgeCount > 0 && (
+        <span className={`${styles.badge}${alertCount > 0 ? ` ${styles.alertBadge}` : ''}`} data-testid="bot-badge">
+          {badgeCount > 9 ? '9+' : badgeCount}
         </span>
       )}
       <span className={styles.tooltip}>GarudaX Bot</span>

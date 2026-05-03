@@ -1,8 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { classifyRequest } from './router.js';
-import { handleSimple } from './nano-handler.js';
+import { handleSimple, fetchGateway } from './nano-handler.js';
 import { handleComplex } from './claude-handler.js';
 import type { ChatRequest, ChatResponse, Suggestion } from './types.js';
+import { HealthMonitor } from './health-monitor.js';
+import { confirmOp } from './ops-commands.js';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -134,6 +136,31 @@ function handleHealth(_req: IncomingMessage, res: ServerResponse): void {
   });
 }
 
+let healthMonitor: HealthMonitor | null = null;
+
+export function setHealthMonitor(monitor: HealthMonitor): void {
+  healthMonitor = monitor;
+}
+
+function handleAlerts(_req: IncomingMessage, res: ServerResponse): void {
+  const alerts = healthMonitor ? healthMonitor.drainAlerts() : [];
+  sendJSON(res, 200, { alerts });
+}
+
+async function handleConfirm(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = parseURL(req);
+  const token = url.searchParams.get('token');
+  const confirmed = url.searchParams.get('confirmed') === 'true';
+
+  if (!token) {
+    sendJSON(res, 400, { error: 'Missing token parameter' });
+    return;
+  }
+
+  const result = await confirmOp(token, confirmed, fetchGateway);
+  sendJSON(res, 200, result);
+}
+
 export function createAPIServer() {
   const server = createServer(async (req, res) => {
     // Handle CORS preflight
@@ -156,6 +183,12 @@ export function createAPIServer() {
           break;
         case '/health':
           handleHealth(req, res);
+          break;
+        case '/alerts':
+          handleAlerts(req, res);
+          break;
+        case '/confirm':
+          await handleConfirm(req, res);
           break;
         default:
           sendJSON(res, 404, { error: 'Not found' });

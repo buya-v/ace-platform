@@ -161,18 +161,30 @@ describe('handleSimple', () => {
 
   // --- admin_action ---
   describe('admin_action', () => {
-    it('returns confirmation message with action links', async () => {
+    it('executes ops command when message matches (halt)', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true });
       const result = await handleSimple(
-        { message: 'halt trading on wheat' },
+        { message: 'halt WHT-001' },
         'admin_action',
       );
 
-      expect(result.reply).toContain('Admin action requested');
-      expect(result.reply).toContain('halt trading on wheat');
-      expect(result.reply).toContain('confirmation');
+      expect(result.reply).toContain('halted');
+      expect(result.reply).toContain('WHT-001');
       expect(result.category).toBe('admin_action');
-      expect(result.actions).toHaveLength(2);
-      expect(result.actions![0].label).toBe('Open Admin Panel');
+    });
+
+    it('falls back to instrument list for non-command queries', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: 'WHT-001' }] }),
+      });
+      const result = await handleSimple(
+        { message: 'list instruments' },
+        'admin_action',
+      );
+
+      expect(result.reply).toContain('instrument');
+      expect(result.category).toBe('admin_action');
     });
   });
 

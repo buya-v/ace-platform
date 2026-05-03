@@ -1,5 +1,6 @@
 import React from 'react';
 import { Action } from '../services/botApi';
+import { useBot, getActionStyle } from '../contexts/BotContext';
 import styles from './BotMessageCard.module.css';
 
 export type SegmentType = 'success' | 'error' | 'warning' | 'bullet' | 'heading' | 'kv' | 'text';
@@ -71,12 +72,7 @@ interface BotMessageCardProps {
  */
 export function BotMessageCard({ reply, actions }: BotMessageCardProps) {
   const segments = parseMessageSegments(reply);
-
-  const handleActionClick = (action: Action) => {
-    if (action.type === 'link') {
-      window.location.pathname = action.payload;
-    }
-  };
+  const { handleAction } = useBot();
 
   return (
     <div className={styles.card}>
@@ -97,16 +93,19 @@ export function BotMessageCard({ reply, actions }: BotMessageCardProps) {
       })}
       {actions && actions.length > 0 && (
         <div className={styles.actions}>
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              className={styles.actionPill}
-              onClick={() => handleActionClick(action)}
-              type="button"
-            >
-              {action.label}
-            </button>
-          ))}
+          {actions.map((action) => {
+            const styleClass = getActionStyle(action.type);
+            return (
+              <button
+                key={action.id}
+                className={`${styles.actionPill} ${styles[styleClass] ?? ''}`}
+                onClick={() => handleAction(action)}
+                type="button"
+              >
+                {action.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

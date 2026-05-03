@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import { sendBotMessage, getBotSuggestions, Suggestion, Action } from '../services/botApi';
+import { sendBotMessage, getBotSuggestions, Suggestion, Action, confirmAction, fetchAlerts, ProactiveAlert } from '../services/botApi';
 
 export interface BotMessage {
   id: string;
@@ -13,6 +13,7 @@ export interface BotState {
   isOpen: boolean;
   messages: BotMessage[];
   unreadCount: number;
+  alertCount: number;
   isTyping: boolean;
   suggestions: Suggestion[];
   showTicketForm: boolean;
@@ -28,12 +29,15 @@ export type BotAction =
   | { type: 'CLEAR_UNREAD' }
   | { type: 'SET_SUGGESTIONS'; payload: Suggestion[] }
   | { type: 'SHOW_TICKET_FORM'; payload: { category: string } }
-  | { type: 'HIDE_TICKET_FORM' };
+  | { type: 'HIDE_TICKET_FORM' }
+  | { type: 'SET_ALERT_COUNT'; payload: number }
+  | { type: 'AUTO_OPEN_CRITICAL' };
 
 export const initialBotState: BotState = {
   isOpen: false,
   messages: [],
   unreadCount: 0,
+  alertCount: 0,
   isTyping: false,
   suggestions: [],
   showTicketForm: false,
@@ -88,6 +92,10 @@ export function botReducer(state: BotState, action: BotAction): BotState {
       return { ...state, showTicketForm: true, ticketCategory: action.payload.category };
     case 'HIDE_TICKET_FORM':
       return { ...state, showTicketForm: false };
+    case 'SET_ALERT_COUNT':
+      return { ...state, alertCount: action.payload };
+    case 'AUTO_OPEN_CRITICAL':
+      return { ...state, isOpen: true };
     default:
       return state;
   }
@@ -112,6 +120,18 @@ export function filterSuggestionsByQuery(suggestions: Suggestion[], query: strin
   );
 }
 
+/**
+ * Resolve an action type to a CSS style class suffix.
+ */
+export function getActionStyle(type: Action['type']): 'link' | 'apiCall' | 'confirm' | 'default' {
+  switch (type) {
+    case 'link': return 'link';
+    case 'api_call': return 'apiCall';
+    case 'confirm': return 'confirm';
+    default: return 'default';
+  }
+}
+
 interface BotContextValue {
   state: BotState;
   sendMessage: (text: string) => void;
@@ -122,6 +142,7 @@ interface BotContextValue {
   showTicketForm: (category: string) => void;
   hideTicketForm: () => void;
   loadSuggestions: (page: string) => void;
+  handleAction: (action: Action) => void;
 }
 
 const BotContext = createContext<BotContextValue | null>(null);
@@ -206,6 +227,84 @@ export function BotProvider({
     dispatch({ type: 'SET_SUGGESTIONS', payload: [] });
   }, []);
 
+  const handleAction = useCallback((action: Action) => {
+    if (action.type === 'link') {
+      // Navigate via window.location for simplicity (works with React Router)
+      window.location.pathname = action.payload;
+    } else if (action.type === 'api_call') {
+      dispatch({ type: 'SET_TYPING', payload: true });
+      // api_call actions have the URL in payload — use botApi's buildBotUrl for relative bot paths
+      const url = action.payload.startsWith('/bot/')
+        ? action.payload
+        : action.payload;
+      import('../services/botApi').then(({ buildBotUrl, buildAuthHeaders }) => {
+        const fullUrl = url.startsWith('http') ? url : buildBotUrl(url.replace(/^\/bot/, ''));
+        fetch(fullUrl, { method: 'POST', headers: buildAuthHeaders() })
+          .then((res) => res.json())
+          .then((data: { message?: string; reply?: string; success?: boolean }) => {
+            const msgId = generateMessageId();
+            dispatch({
+              type: 'ADD_BOT_MESSAGE',
+              payload: {
+                id: msgId,
+                content: data.message ?? data.reply ?? JSON.stringify(data),
+                timestamp: Date.now(),
+              },
+            });
+          })
+          .catch(() => {
+            const msgId = generateMessageId();
+            dispatch({
+              type: 'ADD_BOT_MESSAGE',
+              payload: { id: msgId, content: 'Action failed. Please try again.', timestamp: Date.now() },
+            });
+          })
+          .finally(() => dispatch({ type: 'SET_TYPING', payload: false }));
+      });
+    } else if (action.type === 'confirm') {
+      // Extract token from payload and confirm
+      const params = new URLSearchParams(action.payload.split('?')[1] ?? '');
+      const token = params.get('token') ?? '';
+      confirmAction(token, true).then((result) => {
+        const msgId = generateMessageId();
+        dispatch({
+          type: 'ADD_BOT_MESSAGE',
+          payload: { id: msgId, content: result.message, timestamp: Date.now() },
+        });
+      });
+    }
+  }, []);
+
+  // Poll for proactive alerts every 30 seconds
+  useEffect(() => {
+    const pollAlerts = () => {
+      fetchAlerts().then((alerts) => {
+        if (alerts.length > 0) {
+          dispatch({ type: 'SET_ALERT_COUNT', payload: alerts.length });
+          for (const alert of alerts) {
+            const msgId = generateMessageId();
+            const prefix = alert.severity === 'critical' ? '\u{1F6A8}' : alert.severity === 'warning' ? '\u26A0\uFE0F' : '\u2139\uFE0F';
+            dispatch({
+              type: 'ADD_BOT_MESSAGE',
+              payload: {
+                id: msgId,
+                content: `${prefix} [${alert.type}] ${alert.message}`,
+                timestamp: alert.timestamp,
+              },
+            });
+          }
+          // Auto-open on critical alerts
+          if (alerts.some((a) => a.severity === 'critical')) {
+            dispatch({ type: 'AUTO_OPEN_CRITICAL' });
+          }
+        }
+      }).catch(() => { /* silent — alerts are best-effort */ });
+    };
+
+    const interval = setInterval(pollAlerts, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (currentPage) {
       loadSuggestions(currentPage);
@@ -224,6 +323,7 @@ export function BotProvider({
         showTicketForm: showTicketFormAction,
         hideTicketForm,
         loadSuggestions,
+        handleAction,
       }}
     >
       {children}

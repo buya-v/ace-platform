@@ -4,8 +4,16 @@ import { getAccessToken } from './api';
 export interface Action {
   id: string;
   label: string;
-  type: 'link' | 'action' | 'api_call';
+  type: 'link' | 'action' | 'api_call' | 'confirm';
   payload: string;
+}
+
+export interface ProactiveAlert {
+  type: 'service_down' | 'service_recovered' | 'high_margin_utilization' | 'aging_tickets';
+  service: string;
+  message: string;
+  timestamp: number;
+  severity: 'critical' | 'warning' | 'info';
 }
 
 export interface Suggestion {
@@ -120,6 +128,29 @@ export async function getBotSuggestions(page: string): Promise<Suggestion[]> {
   const json = await response.json();
   const items: Record<string, string>[] = json.data ?? json;
   return items.map(normalizeSuggestion);
+}
+
+export async function fetchAlerts(): Promise<ProactiveAlert[]> {
+  const url = buildBotUrl('/alerts');
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: buildAuthHeaders(),
+  });
+  if (!response.ok) return [];
+  const json = await response.json();
+  return json.alerts ?? [];
+}
+
+export async function confirmAction(token: string, confirmed: boolean): Promise<{ success: boolean; message: string }> {
+  const url = buildBotUrl(`/confirm?token=${encodeURIComponent(token)}&confirmed=${confirmed}`);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: buildAuthHeaders(),
+  });
+  if (!response.ok) {
+    return { success: false, message: `Confirmation failed (HTTP ${response.status})` };
+  }
+  return response.json();
 }
 
 export async function createTicket(ticket: TicketInput): Promise<TicketResult> {

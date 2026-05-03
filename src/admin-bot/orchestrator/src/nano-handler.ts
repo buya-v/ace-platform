@@ -7,6 +7,7 @@ import type {
   RequestCategory,
   TicketPayload,
 } from './types.js';
+import { parseOpsCommand, executeOpsCommand, opsResultToChatResponse } from './ops-commands.js';
 
 let cachedToken: string | undefined;
 
@@ -33,7 +34,7 @@ async function ensureToken(): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-async function fetchGateway(path: string, options?: RequestInit): Promise<Response> {
+export async function fetchGateway(path: string, options?: RequestInit): Promise<Response> {
   const baseUrl = getGatewayBaseUrl();
   const token = await ensureToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -296,6 +297,13 @@ function extractTicketId(message: string): string | undefined {
 }
 
 async function handleAdminAction(message: string): Promise<ChatResponse> {
+  // Try ops command execution first
+  const parsed = parseOpsCommand(message);
+  if (parsed) {
+    const result = await executeOpsCommand(parsed, fetchGateway);
+    return opsResultToChatResponse(result);
+  }
+
   const lower = message.toLowerCase();
 
   // Instrument queries

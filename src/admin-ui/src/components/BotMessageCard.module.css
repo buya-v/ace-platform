@@ -94,3 +94,26 @@
   background: var(--bg-primary);
   border-color: var(--accent-blue);
 }
+
+/* Action type styles */
+.link {
+  color: var(--accent-blue);
+}
+
+.apiCall {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.apiCall:hover {
+  border-color: var(--accent-green);
+}
+
+.confirm {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
+.confirm:hover {
+  border-color: var(--accent-red);
+}
