@@ -10,10 +10,10 @@ import (
 )
 
 // Clearing-engine Kafka wiring:
-//   Consumer: ace.trades.executed
-//   Consumer: ace.settlement.completed
-//   Consumer: ace.warehouse.delivery-completed
-//   Producer: ace.clearing.novated (partition key: instrument_id)
+//   Consumer: ace-commodities.trades.executed
+//   Consumer: ace-commodities.settlement.completed
+//   Consumer: ace-commodities.warehouse.delivery-completed
+//   Producer: ace-commodities.clearing.novated (partition key: instrument_id)
 
 const ServiceName = "clearing-engine"
 
@@ -33,7 +33,7 @@ func NewProducerFromEnv() Producer {
 	return p
 }
 
-// ClearingNovatedPayload is the event payload for ace.clearing.novated.
+// ClearingNovatedPayload is the event payload for ace-commodities.clearing.novated.
 type ClearingNovatedPayload struct {
 	ObligationID        string          `json:"obligation_id"`
 	TradeID             string          `json:"trade_id"`

@@ -7,17 +7,26 @@ import (
 	"time"
 )
 
-// Topics used by the GarudaX platform.
+// TenantID is the GarudaX tenant this deployment serves. Every Kafka topic
+// this service produces to or consumes from is scoped under this tenant, per
+// the platform invariant that tenant ID is never optional. A second tenant
+// (e.g. "mse-equities") runs as a separate deployment with its own TenantID;
+// changing this one constant re-scopes every topic below to that tenant.
+const TenantID = "ace-commodities"
+
+// Topics used by the GarudaX platform. Each name follows the canonical
+// {tenant_id}.{domain}.{event} convention and is derived from TenantID so the
+// tenant prefix is single-sourced and cannot drift across services.
 const (
-	TopicTradesExecuted        = "ace-commodities.trades.executed"
-	TopicClearingNovated       = "ace-commodities.clearing.novated"
-	TopicMarginCallIssued      = "ace-commodities.margin.call-issued"
-	TopicSettlementCompleted   = "ace-commodities.settlement.completed"
-	TopicComplianceChanged     = "ace-commodities.compliance.status-changed"
-	TopicMarketDataIngested    = "ace-commodities.market-data.trade-ingested"
-	TopicWarehouseReceiptPledged   = "ace-commodities.warehouse.receipt-pledged"
-	TopicWarehouseDeliveryCompleted = "ace-commodities.warehouse.delivery-completed"
-	TopicAuthUserRegistered    = "ace-commodities.auth.user-registered"
+	TopicTradesExecuted             = TenantID + ".trades.executed"
+	TopicClearingNovated            = TenantID + ".clearing.novated"
+	TopicMarginCallIssued           = TenantID + ".margin.call-issued"
+	TopicSettlementCompleted        = TenantID + ".settlement.completed"
+	TopicComplianceChanged          = TenantID + ".compliance.status-changed"
+	TopicMarketDataIngested         = TenantID + ".market-data.trade-ingested"
+	TopicWarehouseReceiptPledged    = TenantID + ".warehouse.receipt-pledged"
+	TopicWarehouseDeliveryCompleted = TenantID + ".warehouse.delivery-completed"
+	TopicAuthUserRegistered         = TenantID + ".auth.user-registered"
 )
 
 // ConfigFromEnv loads Kafka configuration from environment variables.
