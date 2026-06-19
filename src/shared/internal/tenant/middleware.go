@@ -5,6 +5,11 @@ import (
 	"net/http"
 )
 
+// HeaderName is the canonical HTTP header that carries the tenant identifier.
+// Tenant context travels in this header on every inbound request
+// (GarudaX_Strategy_Directive §3.3 — "Tenant context travels in a signed header").
+const HeaderName = "X-GarudaX-Tenant"
+
 // healthPaths is the set of paths that bypass tenant validation.
 // These endpoints must be reachable without a tenant header for liveness
 // probes, readiness probes, and Prometheus scraping.
@@ -12,6 +17,17 @@ var healthPaths = map[string]bool{
 	"/healthz": true,
 	"/readyz":  true,
 	"/metrics": true,
+}
+
+// buildTenantSet converts a whitelist slice into an O(1) lookup set so that
+// per-request validation cost is independent of the number of registered
+// tenants. Shared by the HTTP middleware and the gRPC interceptors.
+func buildTenantSet(validTenants []string) map[string]bool {
+	m := make(map[string]bool, len(validTenants))
+	for _, t := range validTenants {
+		m[t] = true
+	}
+	return m
 }
 
 // errorBody is the canonical error response shape for this service.
@@ -49,10 +65,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 //   - Unknown tenant → 403 UNKNOWN_TENANT
 func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 	// Build O(1) lookup map once at construction time.
-	tenantMap := make(map[string]bool, len(validTenants))
-	for _, t := range validTenants {
-		tenantMap[t] = true
-	}
+	tenantMap := buildTenantSet(validTenants)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +75,7 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 				return
 			}
 
-			header := r.Header.Get("X-GarudaX-Tenant")
+			header := r.Header.Get(HeaderName)
 			if header == "" {
 				writeError(w, http.StatusUnauthorized,
 					"TENANT_REQUIRED",
