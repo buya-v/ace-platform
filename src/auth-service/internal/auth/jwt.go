@@ -16,10 +16,14 @@ import (
 )
 
 var (
-	ErrInvalidToken     = errors.New("invalid token")
-	ErrTokenExpired     = errors.New("token expired")
-	ErrUnsupportedAlg   = errors.New("unsupported signing algorithm")
+	ErrInvalidToken   = errors.New("invalid token")
+	ErrTokenExpired   = errors.New("token expired")
+	ErrUnsupportedAlg = errors.New("unsupported signing algorithm")
 )
+
+// Issuer is the canonical `iss` claim for every token GarudaX auth mints
+// (platform-architecture.md §5.2).
+const Issuer = "garudax-auth"
 
 // SigningAlgorithm represents the JWT signing algorithm.
 type SigningAlgorithm string
@@ -35,15 +39,46 @@ type JWTHeader struct {
 	Kid string `json:"kid,omitempty"`
 }
 
+// TokenGrants carries the multi-tenant authorization data embedded into an
+// access token. It is assembled by the Service from platform.tenant_user_roles.
+type TokenGrants struct {
+	// TenantRoles maps a tenant_id to the roles the user holds in that tenant.
+	// An empty/absent entry means no access to that tenant.
+	TenantRoles map[string][]types.Role
+	// PlatformRoles are cross-tenant roles (e.g. platform-admin). Empty for
+	// ordinary users.
+	PlatformRoles []types.PlatformRole
+	// ActiveTenant is the tenant the user selected at login. Informational only —
+	// the authoritative tenant for a request is the X-GarudaX-Tenant header.
+	ActiveTenant string
+}
+
+// JWTClaims is the GarudaX access/refresh token payload. Multi-tenant claims
+// follow platform-architecture.md §5.2.
 type JWTClaims struct {
-	Sub         string             `json:"sub"`
-	Email       string             `json:"email"`
-	Role        types.Role         `json:"role"`
+	Sub  string `json:"sub"`
+	Iss  string `json:"iss,omitempty"`
+	Name string `json:"name,omitempty"`
+
+	Email string `json:"email,omitempty"`
+
+	// Multi-tenant authorization claims.
+	TenantRoles   map[string][]types.Role `json:"tenant_roles,omitempty"`
+	PlatformRoles []types.PlatformRole    `json:"platform_roles,omitempty"`
+	ActiveTenant  string                  `json:"active_tenant,omitempty"`
+
+	// Permissions are the resolved permissions for the ActiveTenant's roles —
+	// a convenience for downstream services so they need not re-derive them.
 	Permissions []types.Permission `json:"permissions,omitempty"`
-	Iat         int64              `json:"iat"`
-	Exp         int64              `json:"exp"`
-	Jti         string             `json:"jti,omitempty"`
-	Type        string             `json:"type"`
+
+	// Role is the user's primary role in the active tenant. Retained for
+	// backward compatibility with single-tenant consumers.
+	Role types.Role `json:"role,omitempty"`
+
+	Iat  int64  `json:"iat"`
+	Exp  int64  `json:"exp"`
+	Jti  string `json:"jti,omitempty"`
+	Type string `json:"type"`
 }
 
 // JWTService handles JWT token generation and validation.
@@ -89,25 +124,55 @@ func (j *JWTService) Algorithm() SigningAlgorithm {
 	return j.algorithm
 }
 
+// GenerateAccessToken mints a single-tenant access token. The user's top-level
+// role is scoped to the DefaultTenant. Retained for backward compatibility;
+// multi-tenant callers should use GenerateAccessTokenWithGrants.
 func (j *JWTService) GenerateAccessToken(user *types.User, jti string) (string, error) {
+	grants := TokenGrants{
+		TenantRoles:  map[string][]types.Role{types.DefaultTenant: {user.Role}},
+		ActiveTenant: types.DefaultTenant,
+	}
+	return j.GenerateAccessTokenWithGrants(user, jti, grants)
+}
+
+// GenerateAccessTokenWithGrants mints an access token carrying the user's full
+// per-tenant role map, platform roles, and active tenant (platform-architecture.md §5.2).
+func (j *JWTService) GenerateAccessTokenWithGrants(user *types.User, jti string, grants TokenGrants) (string, error) {
 	now := time.Now()
+
+	activeRoles := grants.TenantRoles[grants.ActiveTenant]
 	claims := JWTClaims{
-		Sub:         user.ID,
-		Email:       user.Email,
-		Role:        user.Role,
-		Permissions: types.RolePermissions[user.Role],
-		Iat:         now.Unix(),
-		Exp:         now.Add(j.accessTTL).Unix(),
-		Jti:         jti,
-		Type:        "access",
+		Sub:           user.ID,
+		Iss:           Issuer,
+		Name:          user.Name,
+		Email:         user.Email,
+		TenantRoles:   grants.TenantRoles,
+		PlatformRoles: grants.PlatformRoles,
+		ActiveTenant:  grants.ActiveTenant,
+		Permissions:   types.PermissionsForRoles(activeRoles),
+		Role:          primaryRole(activeRoles),
+		Iat:           now.Unix(),
+		Exp:           now.Add(j.accessTTL).Unix(),
+		Jti:           jti,
+		Type:          "access",
 	}
 	return j.sign(claims)
+}
+
+// primaryRole returns the first role in the active-tenant role set, used to
+// populate the backward-compatible single `role` claim.
+func primaryRole(roles []types.Role) types.Role {
+	if len(roles) == 0 {
+		return ""
+	}
+	return roles[0]
 }
 
 func (j *JWTService) GenerateRefreshToken(user *types.User, jti string) (string, error) {
 	now := time.Now()
 	claims := JWTClaims{
 		Sub:  user.ID,
+		Iss:  Issuer,
 		Iat:  now.Unix(),
 		Exp:  now.Add(j.refreshTTL).Unix(),
 		Jti:  jti,

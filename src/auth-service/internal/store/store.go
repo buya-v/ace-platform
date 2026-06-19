@@ -15,23 +15,25 @@ var (
 
 // InMemoryStore implements the auth.Store interface for testing and development.
 type InMemoryStore struct {
-	mu       sync.RWMutex
-	users    map[string]*types.User
-	emails   map[string]string // email -> userID
-	sessions map[string]*types.Session
-	apiKeys  map[string]*types.APIKey
-	keyHash  map[string]string // hash -> keyID
-	pkce     map[string]*types.PKCEChallenge
+	mu          sync.RWMutex
+	users       map[string]*types.User
+	emails      map[string]string // email -> userID
+	sessions    map[string]*types.Session
+	apiKeys     map[string]*types.APIKey
+	keyHash     map[string]string // hash -> keyID
+	pkce        map[string]*types.PKCEChallenge
+	tenantRoles map[string][]*types.TenantUserRole // userID -> assignments
 }
 
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
-		users:    make(map[string]*types.User),
-		emails:   make(map[string]string),
-		sessions: make(map[string]*types.Session),
-		apiKeys:  make(map[string]*types.APIKey),
-		keyHash:  make(map[string]string),
-		pkce:     make(map[string]*types.PKCEChallenge),
+		users:       make(map[string]*types.User),
+		emails:      make(map[string]string),
+		sessions:    make(map[string]*types.Session),
+		apiKeys:     make(map[string]*types.APIKey),
+		keyHash:     make(map[string]string),
+		pkce:        make(map[string]*types.PKCEChallenge),
+		tenantRoles: make(map[string][]*types.TenantUserRole),
 	}
 }
 
@@ -191,6 +193,36 @@ func (s *InMemoryStore) MarkPKCEUsed(authCode string) error {
 	return nil
 }
 
+func (s *InMemoryStore) GetTenantRoles(userID string) ([]types.TenantUserRole, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []types.TenantUserRole
+	for _, a := range s.tenantRoles[userID] {
+		if a.Revoked {
+			continue
+		}
+		out = append(out, *a)
+	}
+	return out, nil
+}
+
+func (s *InMemoryStore) AssignTenantRole(assignment *types.TenantUserRole) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Idempotent on (tenant_id, user_id, role): reactivate any revoked match.
+	for _, a := range s.tenantRoles[assignment.UserID] {
+		if a.TenantID == assignment.TenantID && a.Role == assignment.Role {
+			a.Revoked = false
+			a.GrantedBy = assignment.GrantedBy
+			a.GrantedAt = assignment.GrantedAt
+			return nil
+		}
+	}
+	cp := *assignment
+	s.tenantRoles[assignment.UserID] = append(s.tenantRoles[assignment.UserID], &cp)
+	return nil
+}
+
 func (s *InMemoryStore) ListUsers() []*types.User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -212,4 +244,5 @@ func (s *InMemoryStore) Reset() {
 	s.apiKeys = make(map[string]*types.APIKey)
 	s.keyHash = make(map[string]string)
 	s.pkce = make(map[string]*types.PKCEChallenge)
+	s.tenantRoles = make(map[string][]*types.TenantUserRole)
 }
