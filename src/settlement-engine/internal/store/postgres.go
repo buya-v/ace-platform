@@ -31,7 +31,7 @@ func (s *PostgresCycleStore) SaveCycle(cycle types.SettlementCycle) error {
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO settlement.cycles
+		`INSERT INTO ace_settlement.cycles
 			(id, status, settle_date, total_payin, total_payout, error_message, started_at, completed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
@@ -67,7 +67,7 @@ func (s *PostgresCycleStore) GetCycle(cycleID string) (types.SettlementCycle, bo
 	)
 	err := s.db.QueryRow(
 		`SELECT id, status, settle_date, total_payin, total_payout, error_message, started_at, completed_at
-		FROM settlement.cycles WHERE id = $1`, cycleID,
+		FROM ace_settlement.cycles WHERE id = $1`, cycleID,
 	).Scan(
 		&cycle.CycleID,
 		&statusStr,
@@ -100,7 +100,7 @@ func (s *PostgresCycleStore) GetCycle(cycleID string) (types.SettlementCycle, bo
 func (s *PostgresCycleStore) GetAllCycles() ([]types.SettlementCycle, error) {
 	rows, err := s.db.Query(
 		`SELECT id, status, settle_date, total_payin, total_payout, error_message, started_at, completed_at
-		FROM settlement.cycles ORDER BY started_at`)
+		FROM ace_settlement.cycles ORDER BY started_at`)
 	if err != nil {
 		return nil, fmt.Errorf("postgres cycles list: %w", err)
 	}
@@ -171,7 +171,7 @@ func (s *PostgresInstructionStore) SaveInstruction(inst types.SettlementInstruct
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO settlement.instructions
+		`INSERT INTO ace_settlement.instructions
 			(id, cycle_id, participant_id, amount, direction, status, error_message, created_at, submitted_at, confirmed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
@@ -200,7 +200,7 @@ func (s *PostgresInstructionStore) SaveInstruction(inst types.SettlementInstruct
 func (s *PostgresInstructionStore) GetByCycleID(cycleID string) ([]types.SettlementInstruction, error) {
 	rows, err := s.db.Query(
 		`SELECT id, cycle_id, participant_id, amount, direction, status, error_message, created_at, submitted_at, confirmed_at
-		FROM settlement.instructions WHERE cycle_id = $1 ORDER BY created_at`, cycleID)
+		FROM ace_settlement.instructions WHERE cycle_id = $1 ORDER BY created_at`, cycleID)
 	if err != nil {
 		return nil, fmt.Errorf("postgres instructions by cycle: %w", err)
 	}
@@ -212,7 +212,7 @@ func (s *PostgresInstructionStore) GetByCycleID(cycleID string) ([]types.Settlem
 func (s *PostgresInstructionStore) GetByParticipantID(participantID string) ([]types.SettlementInstruction, error) {
 	rows, err := s.db.Query(
 		`SELECT id, cycle_id, participant_id, amount, direction, status, error_message, created_at, submitted_at, confirmed_at
-		FROM settlement.instructions WHERE participant_id = $1 ORDER BY created_at`, participantID)
+		FROM ace_settlement.instructions WHERE participant_id = $1 ORDER BY created_at`, participantID)
 	if err != nil {
 		return nil, fmt.Errorf("postgres instructions by participant: %w", err)
 	}
@@ -224,7 +224,7 @@ func (s *PostgresInstructionStore) GetByParticipantID(participantID string) ([]t
 func (s *PostgresInstructionStore) GetByStatus(status types.SettlementInstructionStatus) ([]types.SettlementInstruction, error) {
 	rows, err := s.db.Query(
 		`SELECT id, cycle_id, participant_id, amount, direction, status, error_message, created_at, submitted_at, confirmed_at
-		FROM settlement.instructions WHERE status = $1 ORDER BY created_at`, status.String())
+		FROM ace_settlement.instructions WHERE status = $1 ORDER BY created_at`, status.String())
 	if err != nil {
 		return nil, fmt.Errorf("postgres instructions by status: %w", err)
 	}
@@ -295,7 +295,7 @@ func (s *PostgresPriceStore) SetSettlementPrice(instrumentID string, date time.T
 
 	var prevPriceStr string
 	err := s.db.QueryRow(
-		`SELECT settlement_price FROM settlement.prices
+		`SELECT settlement_price FROM ace_settlement.prices
 		WHERE instrument_id = $1 AND price_date = $2`,
 		instrumentID, prevDate,
 	).Scan(&prevPriceStr)
@@ -304,7 +304,7 @@ func (s *PostgresPriceStore) SetSettlementPrice(instrumentID string, date time.T
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO settlement.prices
+		`INSERT INTO ace_settlement.prices
 			(instrument_id, settlement_price, previous_price, price_date)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (instrument_id, price_date) DO UPDATE SET
@@ -331,7 +331,7 @@ func (s *PostgresPriceStore) GetSettlementPrice(instrumentID string, date time.T
 	)
 	err := s.db.QueryRow(
 		`SELECT instrument_id, settlement_price, previous_price, price_date
-		FROM settlement.prices WHERE instrument_id = $1 AND price_date = $2`,
+		FROM ace_settlement.prices WHERE instrument_id = $1 AND price_date = $2`,
 		instrumentID, date,
 	).Scan(
 		&sp.InstrumentID,
@@ -356,7 +356,7 @@ func (s *PostgresPriceStore) HasPreviousPrice(instrumentID string, date time.Tim
 	prevDate := date.AddDate(0, 0, -1)
 	var count int
 	err := s.db.QueryRow(
-		`SELECT COUNT(*) FROM settlement.prices
+		`SELECT COUNT(*) FROM ace_settlement.prices
 		WHERE instrument_id = $1 AND price_date = $2`,
 		instrumentID, prevDate,
 	).Scan(&count)

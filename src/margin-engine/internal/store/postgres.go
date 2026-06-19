@@ -37,7 +37,7 @@ func NewPostgresPortfolioStore(db *sql.DB) *PostgresPortfolioStore {
 func (s *PostgresPortfolioStore) SavePortfolioMargin(pm types.PortfolioMargin) error {
 	id := fmt.Sprintf("pm-%s-%d", pm.ParticipantID, pm.CalculatedAt.UnixNano())
 	_, err := s.db.Exec(
-		`INSERT INTO margin.portfolio_margins
+		`INSERT INTO ace_margin.portfolio_margins
 			(id, participant_id, initial_margin, maintenance_margin, collateral_value, excess_deficit, calculated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		id,
@@ -66,7 +66,7 @@ func (s *PostgresPortfolioStore) GetLatestByParticipant(participantID string) (t
 	)
 	err := s.db.QueryRow(
 		`SELECT participant_id, initial_margin, maintenance_margin, collateral_value, excess_deficit, calculated_at
-		FROM margin.portfolio_margins
+		FROM ace_margin.portfolio_margins
 		WHERE participant_id = $1
 		ORDER BY calculated_at DESC
 		LIMIT 1`,
@@ -106,7 +106,7 @@ func NewPostgresMarginCallStore(db *sql.DB) *PostgresMarginCallStore {
 // SaveMarginCall inserts a new margin call.
 func (s *PostgresMarginCallStore) SaveMarginCall(call types.MarginCall) error {
 	_, err := s.db.Exec(
-		`INSERT INTO margin.margin_calls
+		`INSERT INTO ace_margin.margin_calls
 			(id, participant_id, call_amount, status, deadline, issued_at, resolved_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		call.CallID,
@@ -126,7 +126,7 @@ func (s *PostgresMarginCallStore) SaveMarginCall(call types.MarginCall) error {
 // UpdateMarginCall updates an existing margin call (status, deficit, resolved_at).
 func (s *PostgresMarginCallStore) UpdateMarginCall(call types.MarginCall) error {
 	_, err := s.db.Exec(
-		`UPDATE margin.margin_calls
+		`UPDATE ace_margin.margin_calls
 		SET call_amount = $1, status = $2, resolved_at = $3
 		WHERE id = $4`,
 		decimalToString(call.Deficit),
@@ -151,7 +151,7 @@ func (s *PostgresMarginCallStore) GetActiveByParticipant(participantID string) (
 	)
 	err := s.db.QueryRow(
 		`SELECT id, participant_id, call_amount, status, deadline, issued_at, resolved_at
-		FROM margin.margin_calls
+		FROM ace_margin.margin_calls
 		WHERE participant_id = $1 AND status = 'ISSUED'
 		ORDER BY issued_at DESC
 		LIMIT 1`,
@@ -186,7 +186,7 @@ func (s *PostgresMarginCallStore) GetActiveByParticipant(participantID string) (
 func (s *PostgresMarginCallStore) GetAllActive() ([]types.MarginCall, error) {
 	rows, err := s.db.Query(
 		`SELECT id, participant_id, call_amount, status, deadline, issued_at, resolved_at
-		FROM margin.margin_calls
+		FROM ace_margin.margin_calls
 		WHERE status = 'ISSUED'
 		ORDER BY issued_at`)
 	if err != nil {
