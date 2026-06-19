@@ -1,45 +1,82 @@
-# GarudaX Platform — AI Powered Commodity Exchange
+# GarudaX — Multi-Tenant AI-Native Trading Platform
 ## Project Knowledge Base
 
 ---
 
 ## 1. PROJECT OVERVIEW
 
-**Project name:** AI Powered Commodity Exchange (GarudaX)
-**Platform type:** Full-scale commodity exchange — physical delivery + financial settlement
+> **Supersedes the prior framing as a single-purpose "AI Powered Commodity Exchange."**
+> Per `GarudaX_Strategy_Directive.md`, the product is GarudaX — a multi-tenant platform that hosts regulated trading venues. The commodity exchange is now one tenant on that platform.
+
+**Product name:** GarudaX
+**Platform type:** Multi-tenant, AI-native operating platform for regulated trading venues
 **Target market:** Mongolia (Ulaanbaatar, MNT currency)
-**Delivery method:** AI agent-driven development, 9 phases, 18 calendar weeks
-**Total tasks:** 49 tasks across 9 phases
-**Agent types:** Architect · Builder · QA · DevOps
+**Delivery method:** AI agent-driven development (Self-Learning Softhouse pipeline)
+**Agent types:** Architect · Builder · QA · DevOps — all tenant-aware by design
+
+### Platform Invariant
+
+> **GarudaX is the platform. Tenants are the venues. MSE is the flagship. Tenant ID is never optional.**
+
+Every runtime artefact — every database row, Kafka message, S3 object, metric, log line, cache key, and IAM role — carries an explicit `tenant_id`. A query without a tenant filter is a bug. Three layers of isolation hold simultaneously: data, operational, and governance (see §2.2 of the Strategy Directive).
+
+### Tenants
+
+| Tenant | Venue | Status | Domain & settlement |
+|--------|-------|--------|---------------------|
+| **`ace-commodities`** | ACE Commodity Exchange | **ACTIVE** | Wheat, barley, cattle, cashmere, wool; physical delivery via eWR; T+0 / daily mark-to-market |
+| **`mse-equities`** | Mongolian Stock Exchange | **ONBOARDING (flagship)** | Equities, bonds, ETFs; corporate actions, auctions, short selling; T+2 book-entry via MCSD; FRC reporting |
+
+`ace-commodities` is live. `mse-equities` is the incoming **flagship tenant** and drives platform-level design decisions — when the flagship's needs conflict with a secondary tenant's, the flagship wins, and `ace-commodities` rework is expected and acceptable. Per-tenant config lives under `venues/ace-commodities/` and `venues/mse-equities/`.
 
 ---
 
-## 2. DEVELOPMENT PLAN — 9 PHASES
+## 2. DEVELOPMENT PLAN
 
-| Ph | Name | Weeks | Agents | Key modules |
-|----|------|-------|--------|-------------|
-| 0 | Foundation & infrastructure | 1–2 | 2 | Cloud arch, IaC, DB schema, Auth |
-| 1 | Exchange engine | 2–6 | 4 | CLOB, matching engine, price discovery, trade ledger |
-| 2 | Market participants | 3–6 | 2 | KYC/AML, farmer/coop accounts, broker management |
-| 3 | Physical commodity layer | 5–8 | 3 | eWR system, grading, inspection, delivery scheduling |
-| 4 | Financial infrastructure | 6–10 | 4 | Clearing engine, SPAN margin, daily settlement, payment gateway |
-| 5 | Compliance & regulation | 8–11 | 2 | Trade reporting, position limits, audit trail, regulator portal |
-| 6 | Market data & analytics | 9–12 | 2 | Real-time feed, tick store, commodity indices, analytics API |
-| 7 | Frontend interfaces | 10–15 | 3 | Web terminal, mobile app, broker portal, admin dashboard |
-| 8 | Integrations & launch | 14–18 | 3 | Bank APIs, FIX gateway, govt feeds, load test, go-live |
+### 2a. Original exchange foundation — Phases 0–8 (complete)
 
-**Critical path (Stream A):** Ph0 → Ph1 → Ph4 → Ph5
-**Parallel stream B:** Ph2 → Ph3 → Ph6
-**Parallel stream C:** Ph7 → Ph8 (starts mid-build)
+These phases delivered the original ACE exchange. Under the multi-tenant pivot, everything they produced is **reinterpreted as the `ace-commodities` tenant** — extended, not thrown away.
+
+| Ph | Name | Key modules |
+|----|------|-------------|
+| 0 | Foundation & infrastructure | Cloud arch, IaC, DB schema, Auth |
+| 1 | Exchange engine | CLOB, matching engine, price discovery, trade ledger |
+| 2 | Market participants | KYC/AML, farmer/coop accounts, broker management |
+| 3 | Physical commodity layer | eWR system, grading, inspection, delivery scheduling |
+| 4 | Financial infrastructure | Clearing engine, SPAN margin, daily settlement, payment gateway |
+| 5 | Compliance & regulation | Trade reporting, position limits, audit trail, regulator portal |
+| 6 | Market data & analytics | Real-time feed, tick store, commodity indices, analytics API |
+| 7 | Frontend interfaces / securities | Web terminal, admin dashboard, demo runner, securities module |
+| 8 | Integrations & launch | Bank APIs, FIX gateway, govt feeds, load test, go-live |
 
 **Highest-risk seam:** T027→T028→T029 (clearing engine → SPAN margin → daily settlement)
+
+### 2b. Multi-tenant platform cluster — Phase 0.5+ (the pivot)
+
+Introduced by `GarudaX_Strategy_Directive.md`. Sequenced as its own cluster: the `ace-commodities` retrofit must complete **before** `mse-equities` flagship builder work, so the platform is clean when MSE onboards.
+
+| Ph | Name | Status | Scope |
+|----|------|--------|-------|
+| **0.5** | Multi-tenant platform specs | **Complete** | Platform architecture, Flyway migrations V29–V30, tenant-context design, `venues/*/config.json` |
+| **0.6** | `ace-commodities` retrofit | **Next** | Schema renames (`reference → ace_reference`, …), tenant-context middleware, application code updates, Kafka topic rename to `ace-commodities.*` (dual-write then cutover), IRSA role rename, audit event `tenant_id` annotation — **zero downtime for live commodity operations** |
+| **0.7** | Platform control plane | Pending | Tenant registry service, tenant lifecycle/provisioning workflows, platform-admin API + UI (platform operators only) |
+| **0.8** | `mse-equities` flagship build | Pending | Equities domain, corporate actions service, opening/closing auctions, short selling + locate, T+2 settlement profile, FRC reporting, MCSD integration |
+| 9 | FIX protocol gateway | Pending | Tenant-aware broker connectivity |
+| 10 | AI bot expansion | Pending | Tenant-scoped agent operations |
+
+**Critical path (platform):** Ph0.5 → Ph0.6 (retrofit) → Ph0.7 (control plane) → Ph0.8 (MSE flagship)
 
 ---
 
 ## 3. COMPLETED TASKS
 
+> **Multi-tenant annotation:** T001, T002, and T004 are accepted as foundation work for the **GarudaX platform**, not just for ACE. They are extended, not re-done:
+> - **T001** (cloud architecture / ADR-001) stands as-is; node groups and RDS instances gain a platform-level role label (shared infra vs tenant-specific) but the topology is unchanged.
+> - **T002** (Terraform modules) stands as-is; module inputs accept a `tenant_id` where applicable and the state backend gains a per-tenant workspace convention.
+> - **T004** (core DB schema, V1–V5) stands as-is, **but the interpretation changes**: what was "the ACE database" is now "the `ace-commodities` tenant schema inside the GarudaX platform database." V29–V30 introduce the `platform.*` schema and rename ACE's schemas into the `ace_*` namespace (see §2b, Phase 0.6).
+
 ### T001 — Cloud Architecture Design ✅
-**Status:** ACCEPTED (ADR-001)
+**Status:** ACCEPTED (ADR-001) — applies to the GarudaX platform (all tenants)
 **Deliverables:** ADR Word doc, variables.tf, prod.tfvars, staging.tfvars
 
 **Decision:** AWS dual-region active/passive
@@ -177,15 +214,24 @@ PositionLimit → PositionLimitBreach
 
 ## 5. NEXT TASKS (UNLOCKED)
 
-**Week 2 — currently in progress:**
-- **T003** — EKS cluster + Istio service mesh (DevOps, dep: T002)
-- **T005** — Auth & IAM service (Builder, dep: T004)
-- **T006** — CI/CD pipeline (DevOps, dep: T002)
+The original exchange foundation (Phases 0–8) is complete and lives as the `ace-commodities` tenant. Active work is now the multi-tenant platform cluster (see §2b):
 
-**Week 3 onward:**
-- **T007** — Exchange engine architecture spec (Architect, dep: T004) — CRITICAL PATH
-- **T008** — Order matching engine (Builder, dep: T007) — HIGH RISK
-- **T015** — KYC/AML architecture spec (Architect, no dep)
+**Phase 0.6 — `ace-commodities` retrofit (NEXT, critical path):**
+- Schema rename `reference → ace_reference`, `exchange → ace_exchange`, etc. via Flyway (V30), application code updated in the same deployment
+- Tenant-context middleware on every inbound request (HTTP / FIX / Kafka consumer) — no service accepts traffic with an unresolved tenant
+- Kafka topic rename to `ace-commodities.{domain}.{event}` — dual-write transition, then cutover
+- IRSA role rename to `garudax-ace-commodities-{service}`; audit events annotated `tenant_id = 'ace-commodities'`
+- Constraint: **zero downtime** for live commodity operations
+
+**Phase 0.7 — platform control plane:**
+- Tenant registry service (`platform.tenants`) — identity, status, routing, flagship flag
+- Tenant lifecycle/provisioning workflow (schemas, IAM roles, Kafka topics, Redis keyspaces, dashboards) as one repeatable operation
+- Platform-admin API + UI — platform operators only, distinct from any tenant surface
+
+**Phase 0.8 — `mse-equities` flagship build:**
+- Equities domain, corporate actions service (dividends, splits, rights issues)
+- Opening/closing call auctions, short selling + locate, T+2 settlement profile
+- FRC reporting interface and MCSD (Mongolian Central Securities Depository) integration
 
 ---
 

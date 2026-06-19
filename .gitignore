@@ -67,3 +67,5 @@ tests/playwright/test-results/
 tests/playwright/playwright-report/data/
 test-results/
 test-results/
+.softfactory/
+.env.local
