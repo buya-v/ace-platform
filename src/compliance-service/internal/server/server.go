@@ -9,9 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/garudax-platform/compliance-service/integration"
 	"github.com/garudax-platform/compliance-service/internal/onboarding"
 	"github.com/garudax-platform/compliance-service/internal/screening"
 	"github.com/garudax-platform/compliance-service/internal/types"
+	"github.com/garudax-platform/compliance-service/reporting"
 )
 
 // Server wraps the compliance services with health checks and HTTP endpoints.
@@ -20,6 +22,28 @@ type Server struct {
 	screening  *screening.Service
 	cfg        Config
 	ready      atomic.Bool
+
+	// frc and frcPublisher drive the FRC regulatory reporting pipeline. Both
+	// are optional — routes are only registered when a reporter is wired.
+	frc          *reporting.Reporter
+	frcPublisher *reporting.RecordingPublisher
+
+	// csd is the MCSD integration adapter. Optional — routes are only
+	// registered when an adapter is wired.
+	csd integration.CSDAdapter
+}
+
+// SetFRCReporter wires the FRC reporting pipeline. The RecordingPublisher backs
+// the GET /frc/reports listing; pass the same publisher the reporter was built
+// with. Passing nil for either leaves FRC reporting disabled.
+func (s *Server) SetFRCReporter(r *reporting.Reporter, pub *reporting.RecordingPublisher) {
+	s.frc = r
+	s.frcPublisher = pub
+}
+
+// SetCSDAdapter wires the MCSD integration adapter, enabling the /csd routes.
+func (s *Server) SetCSDAdapter(a integration.CSDAdapter) {
+	s.csd = a
 }
 
 // AuditEvent represents a compliance audit trail event.
@@ -88,6 +112,22 @@ func (s *Server) mountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/alerts", s.handleAlerts)
 	mux.HandleFunc("/audit-trail", s.handleAuditTrail)
 	mux.HandleFunc("/risk-score", s.handleRiskScore)
+
+	// FRC regulatory reporting pipeline (mse-equities flagship). Registered
+	// only when a reporter is wired so existing deployments are unaffected.
+	if s.frc != nil {
+		mux.HandleFunc("/frc/reports", s.handleFRCReports)
+	}
+
+	// MCSD custody/settlement integration. Registered only when an adapter is wired.
+	if s.csd != nil {
+		mux.HandleFunc("/csd/accounts", s.handleCSDAccounts)
+		mux.HandleFunc("/csd/accounts/balance", s.handleCSDBalance)
+		mux.HandleFunc("/csd/transfers", s.handleCSDTransfers)
+		mux.HandleFunc("/csd/transfers/dvp", s.handleCSDInstructDvP)
+		mux.HandleFunc("/csd/transfers/fop", s.handleCSDInstructFoP)
+		mux.HandleFunc("/csd/corporate-actions", s.handleCSDCorporateActions)
+	}
 }
 
 // handleApplication handles single-application creation (POST) and retrieval (GET).
