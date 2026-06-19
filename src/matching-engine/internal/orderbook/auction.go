@@ -35,6 +35,27 @@ type priceVolume struct {
 	volume uint64
 }
 
+// IndicativeAuctionResult is the non-executing view of a call auction. It is
+// published during the auction's call period so participants can see where the
+// book would uncross before any orders are matched. No order state is mutated
+// when producing it.
+type IndicativeAuctionResult struct {
+	// Crossed is true when the accumulated book has executable volume.
+	Crossed bool
+	// IndicativePrice is the equilibrium (clearing) price the auction would
+	// uncross at if it closed now. Zero when Crossed is false.
+	IndicativePrice types.Decimal
+	// IndicativeVolume is the volume that would be matched at IndicativePrice.
+	IndicativeVolume uint64
+	// ImbalanceSide is the side that has unfilled residual volume at the
+	// indicative price (SideUnspecified when the auction is balanced or does
+	// not cross).
+	ImbalanceSide types.Side
+	// ImbalanceQty is the magnitude of the surplus on ImbalanceSide at the
+	// indicative price.
+	ImbalanceQty uint64
+}
+
 // RunAuction finds the equilibrium price that maximizes matched volume,
 // generates trades at that price, and returns remaining orders on the book.
 // The referencePrice is typically the last trade price or previous close,
@@ -50,23 +71,74 @@ type priceVolume struct {
 func (ae *AuctionEngine) RunAuction(instrumentID string, bids, asks []*PriceLevel, referencePrice types.Decimal) AuctionResult {
 	result := AuctionResult{}
 
-	if len(bids) == 0 || len(asks) == 0 {
+	equilibrium, maxVol, ok := ae.computeEquilibrium(bids, asks, referencePrice)
+	if !ok {
 		return result
 	}
+	result.EquilibriumPrice = equilibrium
 
-	// Check if the book crosses at all: best bid must be >= best ask
-	// bids are sorted descending (best first), asks ascending (best first)
-	if bids[0].Price.LessThan(asks[0].Price) {
-		return result // no crossing
+	// Execute fills at the equilibrium price.
+	result.Trades, result.ExecutionReports = ae.executeFills(instrumentID, bids, asks, equilibrium, maxVol)
+
+	return result
+}
+
+// Indicative computes where the accumulated book would uncross without
+// executing any fills. It runs steps 1-4 of the clearing-price algorithm and
+// reports the indicative price, matchable volume, and order imbalance. This is
+// what a venue disseminates during the call phase of an opening/closing
+// auction.
+func (ae *AuctionEngine) Indicative(bids, asks []*PriceLevel, referencePrice types.Decimal) IndicativeAuctionResult {
+	equilibrium, maxVol, ok := ae.computeEquilibrium(bids, asks, referencePrice)
+	if !ok {
+		return IndicativeAuctionResult{}
 	}
 
-	// Step 1: Collect all unique candidate prices from both sides
+	res := IndicativeAuctionResult{
+		Crossed:          true,
+		IndicativePrice:  equilibrium,
+		IndicativeVolume: maxVol,
+	}
+
+	// Imbalance is the residual interest on the heavier side at the
+	// equilibrium price (eligible bid volume vs eligible ask volume).
+	bidVol := cumulativeBidVolume(bids, equilibrium)
+	askVol := cumulativeAskVolume(asks, equilibrium)
+	switch {
+	case bidVol > askVol:
+		res.ImbalanceSide = types.SideBuy
+		res.ImbalanceQty = bidVol - askVol
+	case askVol > bidVol:
+		res.ImbalanceSide = types.SideSell
+		res.ImbalanceQty = askVol - bidVol
+	}
+
+	return res
+}
+
+// computeEquilibrium runs the price-discovery half of the clearing-price
+// algorithm (steps 1-4): it determines the single equilibrium price that
+// maximizes matchable volume and the volume matched at that price. It mutates
+// no order state, so it backs both RunAuction (which then executes fills) and
+// Indicative (which does not). ok is false when the book does not cross.
+func (ae *AuctionEngine) computeEquilibrium(bids, asks []*PriceLevel, referencePrice types.Decimal) (types.Decimal, uint64, bool) {
+	if len(bids) == 0 || len(asks) == 0 {
+		return types.DecimalZero(), 0, false
+	}
+
+	// Check if the book crosses at all: best bid must be >= best ask.
+	// bids are sorted descending (best first), asks ascending (best first).
+	if bids[0].Price.LessThan(asks[0].Price) {
+		return types.DecimalZero(), 0, false // no crossing
+	}
+
+	// Step 1: Collect all unique candidate prices from both sides.
 	candidates := ae.collectCandidatePrices(bids, asks)
 	if len(candidates) == 0 {
-		return result
+		return types.DecimalZero(), 0, false
 	}
 
-	// Step 2: For each candidate price, compute matchable volume
+	// Step 2: For each candidate price, compute matchable volume.
 	pvs := make([]priceVolume, 0, len(candidates))
 	for _, price := range candidates {
 		bidVol := cumulativeBidVolume(bids, price)
@@ -78,10 +150,10 @@ func (ae *AuctionEngine) RunAuction(instrumentID string, bids, asks []*PriceLeve
 	}
 
 	if len(pvs) == 0 {
-		return result
+		return types.DecimalZero(), 0, false
 	}
 
-	// Step 3: Find maximum volume
+	// Step 3: Find maximum volume.
 	maxVol := pvs[0].volume
 	for _, pv := range pvs[1:] {
 		if pv.volume > maxVol {
@@ -89,7 +161,7 @@ func (ae *AuctionEngine) RunAuction(instrumentID string, bids, asks []*PriceLeve
 		}
 	}
 
-	// Filter to only prices with max volume
+	// Filter to only prices with max volume.
 	maxPVs := make([]priceVolume, 0)
 	for _, pv := range pvs {
 		if pv.volume == maxVol {
@@ -97,14 +169,8 @@ func (ae *AuctionEngine) RunAuction(instrumentID string, bids, asks []*PriceLeve
 		}
 	}
 
-	// Step 4: Tiebreaker — closest to reference price, then higher price
-	equilibrium := ae.selectEquilibriumPrice(maxPVs, referencePrice)
-	result.EquilibriumPrice = equilibrium
-
-	// Step 5: Execute fills at equilibrium price
-	result.Trades, result.ExecutionReports = ae.executeFills(instrumentID, bids, asks, equilibrium, maxVol)
-
-	return result
+	// Step 4: Tiebreaker — closest to reference price, then higher price.
+	return ae.selectEquilibriumPrice(maxPVs, referencePrice), maxVol, true
 }
 
 // collectCandidatePrices returns sorted unique prices from both bid and ask levels.
