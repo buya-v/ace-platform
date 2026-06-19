@@ -83,3 +83,25 @@ func (pl *PriceLevel) Len() int {
 func (pl *PriceLevel) ReduceQty(qty uint64) {
 	pl.TotalQty -= qty
 }
+
+// RemoveFilled drops fully-filled orders (RemainingQty == 0) from the level and
+// recomputes TotalQty and OrderCount from the survivors. It is used to
+// reconcile the level after an auction uncrossing, which fills orders in place
+// without maintaining the level aggregates. Returns the IDs of removed orders.
+func (pl *PriceLevel) RemoveFilled() []string {
+	var removed []string
+	survivors := pl.orders[:0]
+	var total uint64
+	for _, o := range pl.orders {
+		if o.RemainingQty == 0 {
+			removed = append(removed, o.OrderID)
+			continue
+		}
+		survivors = append(survivors, o)
+		total += o.RemainingQty
+	}
+	pl.orders = survivors
+	pl.TotalQty = total
+	pl.OrderCount = uint32(len(survivors))
+	return removed
+}

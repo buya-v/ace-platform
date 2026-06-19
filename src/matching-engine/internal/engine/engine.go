@@ -22,15 +22,16 @@ type Engine struct {
 	mu        sync.RWMutex
 	globalSeq uint64
 
-	idGen          orderbook.IDGenerator
-	tradeHandler   TradeHandler
-	execHandler    ExecReportHandler
+	idGen        orderbook.IDGenerator
+	tradeHandler TradeHandler
+	execHandler  ExecReportHandler
 }
 
 type bookEntry struct {
-	book         *orderbook.OrderBook
-	phaseManager *orderbook.PhaseManager
-	mu           sync.Mutex // Per-instrument lock for single-threaded matching
+	book          *orderbook.OrderBook
+	phaseManager  *orderbook.PhaseManager
+	auctionEngine *orderbook.AuctionEngine
+	mu            sync.Mutex // Per-instrument lock for single-threaded matching
 }
 
 // NewEngine creates a new matching engine.
@@ -63,8 +64,9 @@ func (e *Engine) RegisterInstrument(instrumentID string) error {
 	book := orderbook.NewOrderBook(instrumentID, e.idGen, &e.globalSeq)
 	auctionEngine := orderbook.NewAuctionEngine(e.idGen, &e.globalSeq)
 	e.books[instrumentID] = &bookEntry{
-		book:         book,
-		phaseManager: orderbook.NewPhaseManager(auctionEngine),
+		book:          book,
+		phaseManager:  orderbook.NewPhaseManager(auctionEngine),
+		auctionEngine: auctionEngine,
 	}
 	return nil
 }

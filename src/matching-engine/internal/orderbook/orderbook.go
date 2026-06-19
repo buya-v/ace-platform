@@ -356,6 +356,42 @@ func (ob *OrderBook) OrderCount() int {
 	return len(ob.orderIndex)
 }
 
+// RemoveFilledOrders reconciles the book after an auction uncrossing.
+//
+// An auction uncrossing (AuctionEngine.executeFills) fills resting orders in
+// place — mutating each order's RemainingQty/FilledQty — without updating the
+// price-level aggregates or the order indexes the way continuous matching does.
+// This sweep removes every fully-filled order from its level and the indexes,
+// recomputes each level's TotalQty/OrderCount from the surviving (partially
+// filled or untouched) orders, and drops levels that are now empty. Partially
+// filled residual orders remain on the book for the next phase.
+//
+// It returns the IDs of the orders that were removed. Calling it on a book that
+// has no filled orders is a safe no-op.
+func (ob *OrderBook) RemoveFilledOrders() []string {
+	var removed []string
+	ob.bids, removed = ob.compactLevels(ob.bids, removed)
+	ob.asks, removed = ob.compactLevels(ob.asks, removed)
+	return removed
+}
+
+// compactLevels removes filled orders from every level on one side, deletes
+// them from the book indexes, and discards levels left empty.
+func (ob *OrderBook) compactLevels(levels []*PriceLevel, removed []string) ([]*PriceLevel, []string) {
+	surviving := levels[:0]
+	for _, level := range levels {
+		for _, id := range level.RemoveFilled() {
+			delete(ob.orderIndex, id)
+			delete(ob.orderLevelIndex, id)
+			removed = append(removed, id)
+		}
+		if !level.IsEmpty() {
+			surviving = append(surviving, level)
+		}
+	}
+	return surviving, removed
+}
+
 // validateOrder performs pre-trade validation.
 func (ob *OrderBook) validateOrder(order *types.Order) string {
 	if ob.State != types.BookStateContinuous && ob.State != types.BookStateAuction && ob.State != types.BookStatePreOpen {
