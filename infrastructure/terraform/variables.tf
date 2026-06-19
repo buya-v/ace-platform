@@ -95,6 +95,17 @@ variable "redis_replicas_per_shard" {
   default     = 2
 }
 
+variable "tenant_ids" {
+  description = "List of tenant (venue) identifiers provisioned on the platform. Each tenant gets isolated IRSA roles and KMS CMKs across EKS, RDS, and MSK. Platform invariant: tenant ID is never optional."
+  type        = list(string)
+  default     = ["ace-commodities"]
+
+  validation {
+    condition     = length(var.tenant_ids) > 0
+    error_message = "At least one tenant_id must be provisioned."
+  }
+}
+
 variable "tags" {
   description = "Common resource tags"
   type        = map(string)

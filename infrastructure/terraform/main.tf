@@ -11,7 +11,7 @@ terraform {
   backend "s3" {
     bucket         = "garudax-platform-tfstate"
     key            = "infrastructure/terraform.tfstate"
-    region         = "eu-west-1"  # Out-of-band from primary region
+    region         = "eu-west-1" # Out-of-band from primary region
     dynamodb_table = "garudax-platform-tflock"
     encrypt        = true
   }
@@ -52,27 +52,29 @@ module "vpc" {
 }
 
 module "eks" {
-  source              = "./modules/eks"
-  project_name        = var.project_name
-  environment         = var.environment
-  cluster_version     = var.eks_cluster_version
-  vpc_id              = module.vpc.vpc_id
-  private_subnet_ids  = module.vpc.private_app_subnet_ids
-  node_groups         = var.eks_node_groups
-  tags                = var.tags
+  source             = "./modules/eks"
+  project_name       = var.project_name
+  environment        = var.environment
+  cluster_version    = var.eks_cluster_version
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_app_subnet_ids
+  node_groups        = var.eks_node_groups
+  tenant_ids         = var.tenant_ids
+  tags               = var.tags
 }
 
 module "rds" {
-  source             = "./modules/rds"
-  project_name       = var.project_name
-  environment        = var.environment
-  instance_class     = var.rds_instance_class
-  allocated_storage  = var.rds_allocated_storage
-  multi_az           = var.rds_multi_az
-  vpc_id             = module.vpc.vpc_id
-  data_subnet_ids    = module.vpc.private_data_subnet_ids
-  eks_node_sg_id     = module.eks.node_security_group_id
-  tags               = var.tags
+  source            = "./modules/rds"
+  project_name      = var.project_name
+  environment       = var.environment
+  instance_class    = var.rds_instance_class
+  allocated_storage = var.rds_allocated_storage
+  multi_az          = var.rds_multi_az
+  vpc_id            = module.vpc.vpc_id
+  data_subnet_ids   = module.vpc.private_data_subnet_ids
+  eks_node_sg_id    = module.eks.node_security_group_id
+  tenant_ids        = var.tenant_ids
+  tags              = var.tags
 }
 
 module "msk" {
@@ -84,6 +86,7 @@ module "msk" {
   vpc_id          = module.vpc.vpc_id
   data_subnet_ids = module.vpc.private_data_subnet_ids
   eks_node_sg_id  = module.eks.node_security_group_id
+  tenant_ids      = var.tenant_ids
   tags            = var.tags
 }
 

@@ -72,3 +72,25 @@ output "node_group_status" {
   description = "Status of all EKS managed node groups"
   value       = { for k, v in aws_eks_node_group.this : k => v.status }
 }
+
+# --- Per-tenant isolation outputs ---
+
+output "tenant_irsa_role_arns" {
+  description = "Map of tenant_id => per-tenant IRSA IAM role ARN (annotate service accounts with these)"
+  value       = { for t, r in aws_iam_role.tenant_irsa : t => r.arn }
+}
+
+output "tenant_kms_key_arns" {
+  description = "Map of tenant_id => per-tenant KMS CMK ARN"
+  value       = { for t, k in aws_kms_key.tenant : t => k.arn }
+}
+
+output "tenant_kms_alias_names" {
+  description = "Map of tenant_id => per-tenant KMS alias name"
+  value       = { for t, a in aws_kms_alias.tenant : t => a.name }
+}
+
+output "tenant_namespaces" {
+  description = "Map of tenant_id => Kubernetes namespace where tenant workloads run"
+  value       = local.tenant_namespaces
+}
