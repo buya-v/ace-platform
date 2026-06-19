@@ -356,6 +356,58 @@ func (s *PostgresStore) MarkPKCEUsed(authCode string) error {
 	return nil
 }
 
+// --- Tenant role methods (platform.tenant_user_roles, migration V31) ---
+
+// GetTenantRoles returns the user's active (non-revoked) per-tenant role
+// assignments. Platform-scoped rows (tenant_id = 'platform') are included.
+func (s *PostgresStore) GetTenantRoles(userID string) ([]types.TenantUserRole, error) {
+	query := `
+		SELECT tenant_id, user_id, role, COALESCE(granted_by, ''), granted_at, revoked
+		FROM platform.tenant_user_roles
+		WHERE user_id = $1 AND revoked = FALSE
+		ORDER BY tenant_id, role`
+
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get tenant roles: %w", err)
+	}
+	defer rows.Close()
+
+	var out []types.TenantUserRole
+	for rows.Next() {
+		var a types.TenantUserRole
+		if err := rows.Scan(&a.TenantID, &a.UserID, &a.Role, &a.GrantedBy, &a.GrantedAt, &a.Revoked); err != nil {
+			return nil, fmt.Errorf("scan tenant role: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// AssignTenantRole upserts a (tenant_id, user_id, role) assignment, reactivating
+// it if it was previously revoked. Idempotent per the uq_tenant_user_role constraint.
+func (s *PostgresStore) AssignTenantRole(a *types.TenantUserRole) error {
+	var grantedBy *string
+	if a.GrantedBy != "" {
+		grantedBy = &a.GrantedBy
+	}
+	query := `
+		INSERT INTO platform.tenant_user_roles (tenant_id, user_id, role, granted_by, granted_at, revoked)
+		VALUES ($1, $2, $3, $4, $5, FALSE)
+		ON CONFLICT (tenant_id, user_id, role)
+		DO UPDATE SET revoked = FALSE, revoked_at = NULL,
+		              granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at`
+
+	grantedAt := a.GrantedAt
+	if grantedAt.IsZero() {
+		grantedAt = time.Now()
+	}
+	if _, err := s.db.Exec(query, a.TenantID, a.UserID, a.Role, grantedBy, grantedAt); err != nil {
+		return fmt.Errorf("assign tenant role: %w", err)
+	}
+	return nil
+}
+
 // --- Internal helpers ---
 
 func (s *PostgresStore) scanUser(row *sql.Row) (*types.User, error) {

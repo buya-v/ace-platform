@@ -41,6 +41,9 @@ type sessionStore interface {
 	MarkPKCEUsed(authCode string) error
 
 	ListUsers() []*types.User
+
+	GetTenantRoles(userID string) ([]types.TenantUserRole, error)
+	AssignTenantRole(assignment *types.TenantUserRole) error
 }
 
 // RedisSessionStore wraps an underlying store and layers Redis-backed
@@ -247,6 +250,14 @@ func (s *RedisSessionStore) MarkPKCEUsed(authCode string) error {
 
 func (s *RedisSessionStore) ListUsers() []*types.User {
 	return s.inner.ListUsers()
+}
+
+func (s *RedisSessionStore) GetTenantRoles(userID string) ([]types.TenantUserRole, error) {
+	return s.inner.GetTenantRoles(userID)
+}
+
+func (s *RedisSessionStore) AssignTenantRole(assignment *types.TenantUserRole) error {
+	return s.inner.AssignTenantRole(assignment)
 }
 
 // Close closes the Redis connection.

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/garudax-platform/auth-service/internal/types"
@@ -23,6 +24,7 @@ var (
 	ErrPKCECodeExpired     = errors.New("authorization code expired")
 	ErrPKCECodeUsed        = errors.New("authorization code already used")
 	ErrAPIKeyNotFound      = errors.New("api key not found")
+	ErrTenantAccessDenied  = errors.New("user has no role in the requested tenant")
 )
 
 // Store defines the repository interface used by Service.
@@ -47,6 +49,14 @@ type Store interface {
 	MarkPKCEUsed(authCode string) error
 
 	ListUsers() []*types.User
+
+	// GetTenantRoles returns the active (non-revoked) per-tenant role assignments
+	// for a user from platform.tenant_user_roles. Platform-scoped assignments
+	// (TenantID == types.PlatformScope) are included.
+	GetTenantRoles(userID string) ([]types.TenantUserRole, error)
+	// AssignTenantRole grants a user a role in a tenant (or platform scope). It is
+	// idempotent on (tenant_id, user_id, role).
+	AssignTenantRole(assignment *types.TenantUserRole) error
 }
 
 type Service struct {
@@ -88,7 +98,17 @@ func (s *Service) Register(email, password string, role types.Role) (*types.User
 	return user, nil
 }
 
+// Login authenticates a user and issues a token pair scoped to the user's
+// default active tenant (resolved from their tenant role assignments).
 func (s *Service) Login(email, password string) (*types.TokenPair, error) {
+	return s.LoginWithTenant(email, password, "")
+}
+
+// LoginWithTenant authenticates a user and issues a token pair with the given
+// tenant pre-selected as the active tenant. If activeTenant is non-empty and the
+// user holds no role in it (and is not a platform-admin), ErrTenantAccessDenied
+// is returned — enforcing that tenant context is never silently dropped.
+func (s *Service) LoginWithTenant(email, password, activeTenant string) (*types.TokenPair, error) {
 	user, err := s.store.GetUserByEmail(email)
 	if err != nil {
 		return nil, ErrInvalidCredentials
@@ -116,7 +136,7 @@ func (s *Service) Login(email, password string) (*types.TokenPair, error) {
 		s.store.UpdateUser(user)
 	}
 
-	return s.createTokenPair(user)
+	return s.createTokenPair(user, activeTenant)
 }
 
 func (s *Service) RefreshSession(sessionID, refreshToken string) (*types.TokenPair, error) {
@@ -147,7 +167,7 @@ func (s *Service) RefreshSession(sessionID, refreshToken string) (*types.TokenPa
 		return nil, ErrUserNotFound
 	}
 
-	return s.createTokenPair(user)
+	return s.createTokenPair(user, "")
 }
 
 func (s *Service) RevokeSession(sessionID string) error {
@@ -200,7 +220,7 @@ func (s *Service) ExchangeCode(authCode, codeVerifier string) (*types.TokenPair,
 		return nil, ErrUserNotFound
 	}
 
-	return s.createTokenPair(user)
+	return s.createTokenPair(user, "")
 }
 
 // CreateAPIKey generates a new API key for the user.
@@ -267,11 +287,96 @@ func (s *Service) ValidateToken(token string) (*JWTClaims, error) {
 	return s.jwt.ValidateToken(token)
 }
 
-func (s *Service) createTokenPair(user *types.User) (*types.TokenPair, error) {
+// AssignTenantRole grants a user a role within a tenant (or platform scope).
+func (s *Service) AssignTenantRole(tenantID, userID, role, grantedBy string) error {
+	return s.store.AssignTenantRole(&types.TenantUserRole{
+		TenantID:  tenantID,
+		UserID:    userID,
+		Role:      role,
+		GrantedBy: grantedBy,
+		GrantedAt: time.Now(),
+	})
+}
+
+// buildGrants assembles the multi-tenant authorization grants for a user from
+// their platform.tenant_user_roles assignments, resolving the active tenant.
+func (s *Service) buildGrants(user *types.User, activeTenant string) (TokenGrants, error) {
+	assignments, err := s.store.GetTenantRoles(user.ID)
+	if err != nil {
+		return TokenGrants{}, fmt.Errorf("load tenant roles: %w", err)
+	}
+
+	tenantRoles := make(map[string][]types.Role)
+	var platformRoles []types.PlatformRole
+	for _, a := range assignments {
+		if a.Revoked {
+			continue
+		}
+		if a.TenantID == types.PlatformScope {
+			platformRoles = append(platformRoles, types.PlatformRole(a.Role))
+			continue
+		}
+		tenantRoles[a.TenantID] = append(tenantRoles[a.TenantID], types.Role(a.Role))
+	}
+
+	// Backward-compat bootstrap: a user with no explicit tenant assignments keeps
+	// their top-level role, scoped to the default tenant. This preserves
+	// single-tenant logins during the multi-tenant retrofit.
+	if len(tenantRoles) == 0 && user.Role != "" {
+		tenantRoles[types.DefaultTenant] = []types.Role{user.Role}
+	}
+
+	isPlatformAdmin := false
+	for _, pr := range platformRoles {
+		if pr == types.PlatformRoleAdmin {
+			isPlatformAdmin = true
+			break
+		}
+	}
+
+	if activeTenant != "" {
+		if _, ok := tenantRoles[activeTenant]; !ok && !isPlatformAdmin {
+			return TokenGrants{}, ErrTenantAccessDenied
+		}
+	} else {
+		activeTenant = resolveActiveTenant(tenantRoles)
+	}
+
+	return TokenGrants{
+		TenantRoles:   tenantRoles,
+		PlatformRoles: platformRoles,
+		ActiveTenant:  activeTenant,
+	}, nil
+}
+
+// resolveActiveTenant deterministically picks a default active tenant: the
+// DefaultTenant if the user has access to it, otherwise the alphabetically-first
+// tenant. Returns "" when the user has no tenant roles.
+func resolveActiveTenant(tenantRoles map[string][]types.Role) string {
+	if len(tenantRoles) == 0 {
+		return ""
+	}
+	if _, ok := tenantRoles[types.DefaultTenant]; ok {
+		return types.DefaultTenant
+	}
+	keys := make([]string, 0, len(tenantRoles))
+	for k := range tenantRoles {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys[0]
+}
+
+func (s *Service) createTokenPair(user *types.User, activeTenant string) (*types.TokenPair, error) {
+	grants, err := s.buildGrants(user, activeTenant)
+	if err != nil {
+		return nil, err
+	}
+
 	sessionID := generateID()
 	jti := generateID()
 
-	accessToken, err := s.jwt.GenerateAccessToken(user, jti)
+	accessToken, err := s.jwt.GenerateAccessTokenWithGrants(user, jti, grants)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}

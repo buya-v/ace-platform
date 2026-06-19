@@ -30,6 +30,10 @@ type registerRequest struct {
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// Tenant optionally selects the active tenant for this session. When set, the
+	// user must hold a role in it (or be a platform-admin), otherwise login is
+	// rejected. It may also be supplied via the X-GarudaX-Tenant header.
+	Tenant string `json:"active_tenant"`
 }
 
 type refreshRequest struct {
@@ -139,11 +143,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.service.Login(req.Email, req.Password)
+	// The X-GarudaX-Tenant header takes precedence over the body field, matching
+	// how the gateway scopes every request to a tenant.
+	activeTenant := req.Tenant
+	if hdr := r.Header.Get("X-GarudaX-Tenant"); hdr != "" {
+		activeTenant = hdr
+	}
+
+	tokens, err := h.service.LoginWithTenant(req.Email, req.Password, activeTenant)
 	if err != nil {
 		switch err {
 		case auth.ErrAccountLocked:
 			writeError(w, "account locked", http.StatusForbidden)
+		case auth.ErrTenantAccessDenied:
+			writeError(w, "no access to the requested tenant", http.StatusForbidden)
 		default:
 			writeError(w, "invalid credentials", http.StatusUnauthorized)
 		}

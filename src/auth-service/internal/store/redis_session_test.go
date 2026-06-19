@@ -177,6 +177,31 @@ func TestRedisDelegatesUserMethods(t *testing.T) {
 	}
 }
 
+func TestRedisDelegatesTenantRoles(t *testing.T) {
+	rs := testRedisStore(t)
+
+	if err := rs.AssignTenantRole(&types.TenantUserRole{
+		TenantID:  "mse-equities",
+		UserID:    "u1",
+		Role:      string(types.RoleViewer),
+		GrantedBy: "system",
+		GrantedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("AssignTenantRole: %v", err)
+	}
+
+	roles, err := rs.GetTenantRoles("u1")
+	if err != nil {
+		t.Fatalf("GetTenantRoles: %v", err)
+	}
+	if len(roles) != 1 {
+		t.Fatalf("GetTenantRoles returned %d, want 1", len(roles))
+	}
+	if roles[0].TenantID != "mse-equities" || roles[0].Role != string(types.RoleViewer) {
+		t.Errorf("unexpected role assignment: %+v", roles[0])
+	}
+}
+
 func TestRedisDelegatesPKCE(t *testing.T) {
 	rs := testRedisStore(t)
 
