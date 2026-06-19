@@ -7,7 +7,7 @@ import (
 )
 
 // Matching-engine Kafka wiring:
-//   Producer: ace.trades.executed (partition key: instrument_id)
+//   Producer: ace-commodities.trades.executed (partition key: instrument_id)
 
 const (
 	ServiceName = "matching-engine"
@@ -27,7 +27,7 @@ func NewProducerFromEnv() Producer {
 	return NewTradeProducer(DefaultProducerConfig())
 }
 
-// TradeExecutedPayload is the event payload for ace.trades.executed.
+// TradeExecutedPayload is the event payload for ace-commodities.trades.executed.
 type TradeExecutedPayload struct {
 	TradeID              string `json:"trade_id"`
 	InstrumentID         string `json:"instrument_id"`

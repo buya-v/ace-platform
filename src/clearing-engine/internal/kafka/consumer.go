@@ -161,7 +161,7 @@ func (c *ChannelConsumer) sendToDLQ(topic string, rec Record, err error) {
 	if c.dlqProducer == nil {
 		return
 	}
-	dlqTopic := "ace-commodities.dlq." + topicWithoutPrefix(topic)
+	dlqTopic := TenantID + ".dlq." + topicWithoutPrefix(topic)
 	dlqErr := c.dlqProducer.Publish(dlqTopic, rec.Key, &Event{
 		ID:        fmt.Sprintf("dlq-%s", rec.Key),
 		Type:      "dlq.failure",
