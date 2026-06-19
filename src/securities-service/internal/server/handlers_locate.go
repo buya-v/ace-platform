@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
+	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -54,25 +54,14 @@ func (s *Server) handleRequestLocate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.InstrumentID == 0 {
-		s.writeError(w, http.StatusUnprocessableEntity, "MISSING_FIELD", "instrument_id is required", nil)
-		return
-	}
-	if req.BorrowerFirmID == 0 {
-		s.writeError(w, http.StatusUnprocessableEntity, "MISSING_FIELD", "borrower_firm_id is required", nil)
-		return
-	}
-	if req.Quantity <= 0 {
-		s.writeError(w, http.StatusUnprocessableEntity, "INVALID_FIELD", "quantity must be greater than 0", nil)
-		return
-	}
-
-	// Default expiry to 24 hours if not provided.
-	if req.ExpiresAt == "" {
-		req.ExpiresAt = time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-	}
-
-	if err := s.locateStore.Create(&req); err != nil {
+	// Validate and persist via the locate workflow engine. The engine applies a
+	// default 24h expiry, enforces required fields, and creates the request.
+	le := engine.NewLocateEngine(s.locateStore)
+	if err := le.Request(&req); err != nil {
+		if ssErr, ok := err.(*engine.ShortSellError); ok {
+			s.writeError(w, ssErr.HTTPStatus(), ssErr.Code, ssErr.Message, nil)
+			return
+		}
 		s.writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error(), nil)
 		return
 	}
