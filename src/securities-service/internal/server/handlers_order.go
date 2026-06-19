@@ -123,41 +123,17 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// (i) SHORT_SELL: check instrument restriction, then validate locate.
+	// (i) SHORT_SELL: enforce short-sell compliance (instrument restriction,
+	// locate presence, and locate validity/consumption) via the short-sell engine.
 	if order.Side == types.OrderSideShortSell {
-		// Reject if instrument is flagged as short-sell restricted.
-		if inst.ShortSellRestricted {
-			s.writeError(w, http.StatusUnprocessableEntity, "SHORT_SELL_RESTRICTED",
-				"short selling is restricted for this instrument", nil)
+		sse := engine.NewShortSellEngine(s.instrumentStore, s.locateStore)
+		if err := sse.EvaluateOrder(&order, inst); err != nil {
+			if ssErr, ok := err.(*engine.ShortSellError); ok {
+				s.writeError(w, ssErr.HTTPStatus(), ssErr.Code, ssErr.Message, nil)
+				return
+			}
+			s.writeError(w, http.StatusUnprocessableEntity, "INVALID_LOCATE", err.Error(), nil)
 			return
-		}
-
-		// Require a locate_id in the order body.
-		if order.LocateID == "" {
-			s.writeError(w, http.StatusUnprocessableEntity, "LOCATE_REQUIRED",
-				"locate_id is required for short sell orders", nil)
-			return
-		}
-
-		// Validate locate exists, is APPROVED, and is not used/expired.
-		if s.locateStore != nil {
-			locate, locErr := s.locateStore.Get(order.LocateID)
-			if locErr != nil {
-				s.writeError(w, http.StatusUnprocessableEntity, "INVALID_LOCATE",
-					fmt.Sprintf("locate %s not found", order.LocateID), nil)
-				return
-			}
-			if locate.Status != "APPROVED" {
-				s.writeError(w, http.StatusUnprocessableEntity, "INVALID_LOCATE",
-					fmt.Sprintf("locate %s is not in APPROVED status (current: %s)", order.LocateID, locate.Status), nil)
-				return
-			}
-			// Mark locate as USED so it cannot be reused.
-			if useErr := s.locateStore.Use(order.LocateID); useErr != nil {
-				s.writeError(w, http.StatusUnprocessableEntity, "INVALID_LOCATE",
-					fmt.Sprintf("failed to consume locate %s: %s", order.LocateID, useErr.Error()), nil)
-				return
-			}
 		}
 	}
 
