@@ -262,7 +262,7 @@ resource "aws_security_group" "node" {
 
   tags = merge(local.common_tags, {
     Name                                          = "${local.cluster_name}-node-sg"
-    "kubernetes.io/cluster/${local.cluster_name}"  = "owned"
+    "kubernetes.io/cluster/${local.cluster_name}" = "owned"
   })
 
   lifecycle {
@@ -463,9 +463,9 @@ resource "aws_iam_role_policy" "karpenter_controller" {
         Resource = "*"
       },
       {
-        Sid    = "PassNodeRole"
-        Effect = "Allow"
-        Action = "iam:PassRole"
+        Sid      = "PassNodeRole"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
         Resource = aws_iam_role.node.arn
       },
       {
@@ -477,9 +477,9 @@ resource "aws_iam_role_policy" "karpenter_controller" {
         Resource = aws_eks_cluster.this.arn
       },
       {
-        Sid    = "SSMAccess"
-        Effect = "Allow"
-        Action = "ssm:GetParameter"
+        Sid      = "SSMAccess"
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
         Resource = "arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.name}:*:parameter/aws/service/*"
       },
       {

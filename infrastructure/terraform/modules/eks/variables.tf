@@ -58,6 +58,17 @@ variable "cluster_log_types" {
   default     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 }
 
+variable "tenant_ids" {
+  description = "List of tenant (venue) identifiers. Each tenant receives an isolated IRSA role and a dedicated KMS CMK. Platform invariant: tenant ID is never optional."
+  type        = list(string)
+  default     = ["ace-commodities"]
+
+  validation {
+    condition     = length(var.tenant_ids) == length(toset(var.tenant_ids))
+    error_message = "tenant_ids must be unique."
+  }
+}
+
 variable "tags" {
   description = "Common resource tags"
   type        = map(string)

@@ -8,6 +8,11 @@ environment     = "dev"       # dev | staging | prod
 aws_region      = "ap-northeast-1"
 dr_region       = "ap-southeast-1"
 
+# --- Tenants (venues) ---
+# Each tenant gets isolated IRSA roles + KMS CMKs across EKS, RDS, and MSK.
+# ace-commodities is ACTIVE; mse-equities is the onboarding flagship.
+tenant_ids = ["ace-commodities", "mse-equities"]
+
 # --- VPC ---
 vpc_cidr        = "10.0.0.0/16"
 
