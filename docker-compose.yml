@@ -341,7 +341,7 @@ services:
         condition: service_healthy
     environment:
       <<: *common-env
-      API_PORT: "8090"
+      API_PORT: "8095"
       HEALTH_PORT: "9095"
       DB_HOST: postgres
       DB_PORT: "5432"
@@ -429,7 +429,7 @@ services:
       MARKET_DATA_SERVICE_ADDR: market-data-service:50057
       WAREHOUSE_SERVICE_ADDR: warehouse-service:50058
       SECURITIES_SERVICE_ADDR: securities-service:50059
-      PLATFORM_SERVICE_ADDR: platform-service:8090
+      PLATFORM_SERVICE_ADDR: platform-service:8095
       FIX_GATEWAY_ADDR: fix-gateway:8091
       BOT_ORCHESTRATOR_URL: "http://admin-bot-orchestrator:3100"
     ports:
