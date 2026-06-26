@@ -1,10 +1,9 @@
 name: Docker Build & Push
 
+# GUARDED: image build/push to ECR is a deploy step, not part of the CI
+# build+test gate. The auto push trigger is disabled; this runs only on manual
+# dispatch. Re-enable the push trigger in a dedicated deploy task when ready.
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "src/**"
   workflow_dispatch:
     inputs:
       service:

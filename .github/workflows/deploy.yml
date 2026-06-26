@@ -1,10 +1,11 @@
 name: Deploy to EKS
 
+# GUARDED: cluster deploy is not part of the CI build+test gate. The automatic
+# workflow_run trigger (deploy-on-image-build) is disabled; this runs only on
+# manual dispatch, and each deploy/promotion job additionally requires GitHub
+# environment approval. Re-enable the workflow_run trigger in a dedicated deploy
+# task when ready.
 on:
-  workflow_run:
-    workflows: ["Docker Build & Push"]
-    types: [completed]
-    branches: [main, develop]
   workflow_dispatch:
     inputs:
       environment:

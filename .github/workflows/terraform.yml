@@ -1,15 +1,11 @@
 name: Terraform Plan / Apply
 
+# GUARDED: infra apply is not part of the CI build+test gate. Auto PR/push
+# triggers are disabled; this workflow runs only on manual dispatch (and the
+# apply jobs additionally require GitHub environment approval). Re-enable the
+# pull_request/push triggers in a dedicated infra task when ready.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "infrastructure/terraform/**"
-      - ".github/workflows/terraform.yml"
-  push:
-    branches: [main]
-    paths:
-      - "infrastructure/terraform/**"
+  workflow_dispatch:
 
 env:
   TF_VERSION: "1.7.0"
