@@ -1466,6 +1466,55 @@
       ],
       "started_at": "2026-06-26T13:40:44Z",
       "finished_at": "2026-06-26T13:59:13Z"
+    },
+    {
+      "id": "R025",
+      "title": "Fix DB init: zero-pad migration filenames + reconcile duplicate market_data.trades",
+      "description": "P1 infra defect from R015's fresh full-stack run (handoff/integration-run-20260626-051039.md): a clean Postgres cannot initialize. TWO sub-defects, both in infrastructure/db/migrations/. (1) Migration filenames are NOT zero-padded, so Postgres docker-entrypoint-initdb.d applies them in LEXICOGRAPHIC order, not version order: V10__..V33__ and V6__..V9__ all sort BEFORE V1__core_schemas.sql, so V11__matching_engine_tables.sql runs before the 'exchange' schema exists -> 'ERROR: schema \"exchange\" does not exist' -> postgres exits -> whole stack fails. FIX: rename every migration to zero-padded 3-digit form (V1__ -> V001__, V6__ -> V006__, ... V33__ -> V033__) so lexicographic order == version order. Present files: V1, V6, V7, V8, V9, V10-V33 (there is intentionally no V2-V5 after R017 dropped the empty stubs; Flyway/initdb tolerate version gaps). Update ANY references to these filenames (docker-compose volume mounts, Flyway config, deploy manifests, docs) so nothing breaks. (2) Duplicate/conflicting market_data.trades: V8__market_data_timescaledb.sql creates market_data.trades(executed_at ...) and V16__market_data_tables.sql re-creates it as (traded_at ...) + create_hypertable(...,'traded_at'). On a fresh DB V8 wins the CREATE, then V16's CREATE IF NOT EXISTS no-ops and its create_hypertable/index on traded_at fails ('column \"traded_at\" does not exist'). The SERVICE CODE uses the V16 shape (ace_market_data.trades.traded_at), so V8 is the stale duplicate (V32's own header already flags this). FIX: remove/neutralize the duplicate market_data.trades definition in V8 (keep any other non-conflicting objects V8 creates) so the V16 definition is authoritative. VERIFY: bring up a FRESH Postgres (empty volume) via docker compose (or psql apply in lexicographic order) and confirm ALL migrations apply cleanly with zero errors and the expected schemas/tables exist. Scope: infrastructure/db/migrations/ + any files that reference migration filenames. Do NOT change application source. terraform/docker may not be installed in the worker env — if a live fresh-DB bring-up is not possible, apply the migrations in sorted order with a local psql/sqlite-free dry check and document exactly how to verify, and flag it for the R027 integration run.",
+      "agent_role": "devops",
+      "phase": 13,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "pending",
+      "worktree_branch": "feature/R025-fix-db-init",
+      "deliverables": [
+        "infrastructure/db/migrations"
+      ]
+    },
+    {
+      "id": "R026",
+      "title": "Fix Dockerfile build contexts so images build from current source (shared modules in scope)",
+      "description": "P1 infra defect from R015's fresh full-stack run: fresh service images CANNOT be built with the committed Dockerfiles, which is why every on-disk image was 4 days / one whole R-series stale (built 2026-06-22, pre-R007-R022). Root cause: every service Docker build uses context ./src/<svc> only (see docker-compose.yml 'context: ./src/<svc>'), but after R002 (shared/pkg/types/decimal) and R010 (shared/pkg/tenant) the consuming modules use relative 'replace github.com/garudax-platform/... => ../shared/...', which points OUTSIDE the build context -> 'replacement directory ../shared/pkg/tenant does not exist' -> build fails. FIX (preferred): widen each affected service's build CONTEXT to ./src (in docker-compose.yml, docker-compose.prod*.yml, and any k8s/deploy build refs) and update each Dockerfile's COPY/WORKDIR paths so it copies both the service dir AND src/shared, preserving the relative ../shared layout the replace directives expect (e.g. context ./src, dockerfile src/<svc>/Dockerfile, COPY <svc> ./<svc>, COPY shared ./shared, WORKDIR /build/<svc>). Apply to EVERY service whose go.mod has a 'replace ../shared' (matching/clearing/margin/settlement engines, gateway, securities-service, and any other consumer) — services with zero external deps and no shared replace can keep their narrow context. Keep CGO_ENABLED=0 static builds, non-root runtime, GOTOOLCHAIN=auto (modules declare go 1.25). VERIFY: 'docker compose build' (or 'docker build' per service) succeeds for ALL services from a clean checkout with NO /tmp workarounds. Scope: src/*/Dockerfile + docker-compose*.yml + deploy build refs. Do NOT change application Go source. If docker is unavailable in the worker env, statically verify the COPY paths resolve the ../shared replace targets and document the exact build commands for R027 to run.",
+      "agent_role": "devops",
+      "phase": 13,
+      "dependencies": [],
+      "blockedBy": [],
+      "estimate_minutes": 15,
+      "status": "pending",
+      "worktree_branch": "feature/R026-fix-docker-build-context"
+    },
+    {
+      "id": "R027",
+      "title": "Live fresh-stack verification — confirm cross-service Kafka propagation (bug class #3) FIXED",
+      "description": "Final verification that closes historical e2e bug class #3 with a LIVE run, now that R024 wired the engines, R025 lets a fresh DB initialize, and R026 lets fresh images build. This is an R015-style fresh full-stack run but on current source with the deploy pipeline actually repaired. Steps: (1) build all service images from committed Dockerfiles via 'docker compose build' (R026 must make this work with no /tmp workarounds — if it still needs workarounds, that is an R026 regression, report it); (2) bring up the full stack on a FRESH Postgres volume (R025 must make initdb apply all migrations cleanly) + real Kafka broker (cp-kafka, KAFKA_BROKERS=kafka:9092 injected into every engine, as docker-compose already does); (3) SEED a registered, tradeable instrument (e.g. WHT-HRW-2026M07-UB) in matching-engine so TestFullTradingLifecycle and tests/kafka-e2e exercise a REAL trade rather than passing vacuously on an empty result; (4) run tests/kafka-e2e (the R024 cross-process test) AND tests/e2e against the live gateway; (5) verify cross-service propagation concretely: 'kafka-topics --list' shows the ace-commodities.* topics, engine logs show producer/consumer activity, and a published trade propagates matching->clearing(novated)->margin(call-issued)/settlement(completed). VERDICT: declare bug class #3 (cross-service Kafka propagation) CONFIRMED-FIXED only if the seeded trade demonstrably flows across all four engine processes on the live broker; otherwise report exactly where it breaks. Also re-confirm bug classes #1 (gateway 404-before-auth) and #2 (compliance KYC object) remain FIXED, and report the standard build/test/e2e/-race matrix. Write the integration handoff to handoff/integration-run-<id>.md. The known 26 frontend fixture-drift unit tests are out of scope and should be reported as PARTIAL test-debt per the e2e-canary verdict-granularity pattern, not FAIL.",
+      "agent_role": "test_writer",
+      "phase": 13,
+      "dependencies": [
+        "R024",
+        "R025",
+        "R026"
+      ],
+      "blockedBy": [
+        "R025",
+        "R026"
+      ],
+      "estimate_minutes": 25,
+      "status": "pending",
+      "worktree_branch": "feature/R027-live-fresh-stack-verification",
+      "deliverables": [
+        "handoff"
+      ]
     }
   ]
 }
