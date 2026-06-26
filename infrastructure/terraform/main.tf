@@ -90,6 +90,19 @@ module "msk" {
   tags            = var.tags
 }
 
+module "elasticache" {
+  source             = "./modules/elasticache"
+  project_name       = var.project_name
+  environment        = var.environment
+  node_type          = var.redis_node_type
+  num_shards         = var.redis_num_shards
+  replicas_per_shard = var.redis_replicas_per_shard
+  vpc_id             = module.vpc.vpc_id
+  data_subnet_ids    = module.vpc.private_data_subnet_ids
+  eks_node_sg_id     = module.eks.node_security_group_id
+  tags               = var.tags
+}
+
 module "security_groups" {
   source       = "./modules/security-groups"
   project_name = var.project_name
