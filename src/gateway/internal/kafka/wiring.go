@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"testing"
 )
 
 // Gateway Kafka wiring:
@@ -15,21 +16,40 @@ import (
 
 const ServiceName = "gateway"
 
+// kafkaBrokersConfigured reports whether the KAFKA_BROKERS environment variable
+// is set to a non-empty (non-whitespace) value.
+func kafkaBrokersConfigured() bool {
+	return strings.TrimSpace(os.Getenv("KAFKA_BROKERS")) != ""
+}
+
 // NewConsumerFromEnv creates a Consumer based on environment configuration.
-// If KAFKA_BROKERS is set and non-empty, returns a real KafkaConsumer.
-// Otherwise returns a ChannelConsumer for local/test use.
+// If KAFKA_BROKERS is set and non-empty, returns a real KafkaConsumer. If it is
+// unset, it FAILS FAST (log.Fatal) outside of unit tests rather than silently
+// returning the in-process channel adapter, which would never receive
+// cross-process events in a multi-process deployment. The in-process adapter is
+// reachable only under testing.Testing() via newInProcessConsumer.
 func NewConsumerFromEnv(dlqProducer Producer) Consumer {
-	brokers := os.Getenv("KAFKA_BROKERS")
 	groupID := os.Getenv("KAFKA_GROUP_ID")
 	if groupID == "" {
 		groupID = ServiceName
 	}
-	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+	if kafkaBrokersConfigured() {
 		cfg := ConsumerConfigFromEnv(groupID)
 		log.Printf("[%s] using real Kafka consumer, brokers=%v, group=%s", ServiceName, cfg.Brokers, cfg.GroupID)
 		return NewKafkaConsumer(cfg, dlqProducer)
 	}
-	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based consumer", ServiceName)
+	if !testing.Testing() {
+		log.Fatalf("[%s] KAFKA_BROKERS is required but not set; refusing to fall back to the in-process channel consumer in a multi-process deployment — cross-service events would never be received. Set KAFKA_BROKERS, or build the in-process adapter explicitly via newInProcessConsumer in unit tests.", ServiceName)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set; using in-process channel consumer (TEST MODE ONLY)", ServiceName)
+	return newInProcessConsumer(groupID, dlqProducer)
+}
+
+// newInProcessConsumer builds the in-process channel-based consumer used ONLY by
+// unit tests. Production code reaches it only via NewConsumerFromEnv under
+// testing.Testing(); the in-process adapter must never be used in a
+// multi-process deployment, where Go channels do not cross process boundaries.
+func newInProcessConsumer(groupID string, dlqProducer Producer) *ChannelConsumer {
 	return NewChannelConsumer(DefaultConsumerConfig(groupID), dlqProducer)
 }
 
