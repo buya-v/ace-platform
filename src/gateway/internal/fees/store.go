@@ -6,7 +6,19 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/garudax-platform/decimal"
 )
+
+// decFromFloat converts a float64 (e.g. a value scanned from a numeric DB
+// column or supplied on a JSON request DTO) into the shared fixed-point
+// Decimal, rounding half-to-even to 4 dp. The only error NewFromFloat can
+// return is for NaN/Inf, which numeric columns and validated request bodies
+// never carry, so a zero fallback is safe here.
+func decFromFloat(f float64) decimal.Decimal {
+	d, _ := decimal.NewFromFloat(f)
+	return d
+}
 
 // FeeSchedule represents a fee schedule with its effective period.
 type FeeSchedule struct {
@@ -20,28 +32,32 @@ type FeeSchedule struct {
 }
 
 // FeeRule defines how a specific fee is calculated.
+//
+// RateBPS, MinFee, MaxFee and PerContractFee are money/rate values and use the
+// shared fixed-point Decimal type rather than float64 (R006/R020).
 type FeeRule struct {
-	ID                string   `json:"id"`
-	ScheduleID        string   `json:"schedule_id"`
-	FeeType           string   `json:"fee_type"`
-	InstrumentPattern string   `json:"instrument_pattern"`
-	ParticipantTier   string   `json:"participant_tier"`
-	RateBPS           float64  `json:"rate_bps"`
-	MinFee            float64  `json:"min_fee"`
-	MaxFee            *float64 `json:"max_fee,omitempty"`
-	PerContractFee    float64  `json:"per_contract_fee"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                string           `json:"id"`
+	ScheduleID        string           `json:"schedule_id"`
+	FeeType           string           `json:"fee_type"`
+	InstrumentPattern string           `json:"instrument_pattern"`
+	ParticipantTier   string           `json:"participant_tier"`
+	RateBPS           decimal.Decimal  `json:"rate_bps"`
+	MinFee            decimal.Decimal  `json:"min_fee"`
+	MaxFee            *decimal.Decimal `json:"max_fee,omitempty"`
+	PerContractFee    decimal.Decimal  `json:"per_contract_fee"`
+	CreatedAt         time.Time        `json:"created_at"`
 }
 
-// FeeTransaction records a fee charged against a trade.
+// FeeTransaction records a fee charged against a trade. Amount is money and
+// uses the shared fixed-point Decimal type.
 type FeeTransaction struct {
-	ID            string    `json:"id"`
-	TradeID       string    `json:"trade_id"`
-	ParticipantID string    `json:"participant_id"`
-	FeeType       string    `json:"fee_type"`
-	Amount        float64   `json:"amount"`
-	Currency      string    `json:"currency"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            string          `json:"id"`
+	TradeID       string          `json:"trade_id"`
+	ParticipantID string          `json:"participant_id"`
+	FeeType       string          `json:"fee_type"`
+	Amount        decimal.Decimal `json:"amount"`
+	Currency      string          `json:"currency"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
 
 // ParticipantTier tracks a participant's fee tier and volume.
@@ -221,12 +237,16 @@ func (s *PgStore) CreateRule(ctx context.Context, rule FeeRule) error {
 		inMemoryFeeStore.mu.Unlock()
 		return nil
 	}
+	var maxFee interface{}
+	if rule.MaxFee != nil {
+		maxFee = rule.MaxFee.Float64()
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO fees.fee_rules (id, schedule_id, fee_type, instrument_pattern, participant_tier,
 		                            rate_bps, min_fee, max_fee, per_contract_fee)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, rule.ID, rule.ScheduleID, rule.FeeType, rule.InstrumentPattern,
-		rule.ParticipantTier, rule.RateBPS, rule.MinFee, rule.MaxFee, rule.PerContractFee)
+		rule.ParticipantTier, rule.RateBPS.Float64(), rule.MinFee.Float64(), maxFee, rule.PerContractFee.Float64())
 	return err
 }
 
@@ -287,10 +307,12 @@ func (s *PgStore) ListFeeTransactions(ctx context.Context, participantID, from, 
 	var txns []FeeTransaction
 	for rows.Next() {
 		var t FeeTransaction
+		var amount float64
 		if err := rows.Scan(&t.ID, &t.TradeID, &t.ParticipantID, &t.FeeType,
-			&t.Amount, &t.Currency, &t.CreatedAt); err != nil {
+			&amount, &t.Currency, &t.CreatedAt); err != nil {
 			return nil, err
 		}
+		t.Amount = decFromFloat(amount)
 		txns = append(txns, t)
 	}
 	return txns, rows.Err()
@@ -418,19 +440,24 @@ func (s *PgStore) UpdateRule(ctx context.Context, id string, updates FeeRuleUpda
 	}
 	// Fetch updated row
 	var rule FeeRule
+	var rateBPS, minFee, perContractFee float64
 	var maxFee sql.NullFloat64
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id, schedule_id, fee_type, instrument_pattern, participant_tier,
 		       rate_bps, min_fee, max_fee, per_contract_fee, created_at
 		FROM fees.fee_rules WHERE id = $1
 	`, id).Scan(&rule.ID, &rule.ScheduleID, &rule.FeeType, &rule.InstrumentPattern,
-		&rule.ParticipantTier, &rule.RateBPS, &rule.MinFee, &maxFee,
-		&rule.PerContractFee, &rule.CreatedAt)
+		&rule.ParticipantTier, &rateBPS, &minFee, &maxFee,
+		&perContractFee, &rule.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
+	rule.RateBPS = decFromFloat(rateBPS)
+	rule.MinFee = decFromFloat(minFee)
+	rule.PerContractFee = decFromFloat(perContractFee)
 	if maxFee.Valid {
-		rule.MaxFee = &maxFee.Float64
+		m := decFromFloat(maxFee.Float64)
+		rule.MaxFee = &m
 	}
 	return &rule, nil
 }
@@ -449,16 +476,17 @@ func inMemoryUpdateRule(id string, updates FeeRuleUpdate) (*FeeRule, error) {
 		rule.ParticipantTier = *updates.ParticipantTier
 	}
 	if updates.RateBPS != nil {
-		rule.RateBPS = *updates.RateBPS
+		rule.RateBPS = decFromFloat(*updates.RateBPS)
 	}
 	if updates.MinFee != nil {
-		rule.MinFee = *updates.MinFee
+		rule.MinFee = decFromFloat(*updates.MinFee)
 	}
 	if updates.MaxFee != nil {
-		rule.MaxFee = updates.MaxFee
+		m := decFromFloat(*updates.MaxFee)
+		rule.MaxFee = &m
 	}
 	if updates.PerContractFee != nil {
-		rule.PerContractFee = *updates.PerContractFee
+		rule.PerContractFee = decFromFloat(*updates.PerContractFee)
 	}
 	return rule, nil
 }
@@ -520,7 +548,7 @@ func (s *PgStore) SeedDefaults(ctx context.Context) error {
 			FeeType:           r.feeType,
 			InstrumentPattern: r.pattern,
 			ParticipantTier:   r.tier,
-			RateBPS:           r.rateBPS,
+			RateBPS:           decFromFloat(r.rateBPS),
 			CreatedAt:         time.Now().UTC(),
 		}); err != nil {
 			return fmt.Errorf("seed fee rule %s: %w", r.id, err)
@@ -562,14 +590,19 @@ func scanRules(rows *sql.Rows) ([]FeeRule, error) {
 	var rules []FeeRule
 	for rows.Next() {
 		var r FeeRule
+		var rateBPS, minFee, perContractFee float64
 		var maxFee sql.NullFloat64
 		if err := rows.Scan(&r.ID, &r.ScheduleID, &r.FeeType, &r.InstrumentPattern,
-			&r.ParticipantTier, &r.RateBPS, &r.MinFee, &maxFee,
-			&r.PerContractFee, &r.CreatedAt); err != nil {
+			&r.ParticipantTier, &rateBPS, &minFee, &maxFee,
+			&perContractFee, &r.CreatedAt); err != nil {
 			return nil, err
 		}
+		r.RateBPS = decFromFloat(rateBPS)
+		r.MinFee = decFromFloat(minFee)
+		r.PerContractFee = decFromFloat(perContractFee)
 		if maxFee.Valid {
-			r.MaxFee = &maxFee.Float64
+			m := decFromFloat(maxFee.Float64)
+			r.MaxFee = &m
 		}
 		rules = append(rules, r)
 	}

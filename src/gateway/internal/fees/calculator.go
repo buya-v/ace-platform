@@ -1,19 +1,24 @@
 package fees
 
 import (
-	"math"
 	"strings"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // FeeResult represents the result of a fee calculation.
+//
+// All money fields are the platform's shared fixed-point decimal type
+// (Decimal(18,4)) rather than float64: fees are money and must be computed
+// without float drift, silent overflow, or truncation bias (see R006 audit).
 type FeeResult struct {
-	FeeType        string  `json:"fee_type"`
-	RateBPS        float64 `json:"rate_bps"`
-	RateAmount     float64 `json:"rate_amount"`
-	PerContractAmt float64 `json:"per_contract_amount"`
-	TotalFee       float64 `json:"total_fee"`
-	MinApplied     bool    `json:"min_applied,omitempty"`
-	MaxApplied     bool    `json:"max_applied,omitempty"`
+	FeeType        string          `json:"fee_type"`
+	RateBPS        decimal.Decimal `json:"rate_bps"`
+	RateAmount     decimal.Decimal `json:"rate_amount"`
+	PerContractAmt decimal.Decimal `json:"per_contract_amount"`
+	TotalFee       decimal.Decimal `json:"total_fee"`
+	MinApplied     bool            `json:"min_applied,omitempty"`
+	MaxApplied     bool            `json:"max_applied,omitempty"`
 }
 
 // CalculateFee computes the fee for a trade given the active rules.
@@ -23,7 +28,7 @@ type FeeResult struct {
 // instrumentID is used for instrument pattern matching.
 // feeType is the type of fee to calculate (trading, clearing, data, membership).
 // rules should be the active rules from the current schedule.
-func CalculateFee(tradeValue float64, contracts int, participantTier, instrumentID, feeType string, rules []FeeRule) FeeResult {
+func CalculateFee(tradeValue decimal.Decimal, contracts int, participantTier, instrumentID, feeType string, rules []FeeRule) FeeResult {
 	result := FeeResult{
 		FeeType: feeType,
 	}
@@ -35,41 +40,43 @@ func CalculateFee(tradeValue float64, contracts int, participantTier, instrument
 
 	result.RateBPS = rule.RateBPS
 
-	// Calculate rate-based fee: tradeValue * (rateBPS / 10000)
-	rateFee := tradeValue * (rule.RateBPS / 10000.0)
-	result.RateAmount = roundTo4(rateFee)
+	// Rate-based fee: tradeValue * rateBPS / 10000. The multiply is performed
+	// before the divide so a fractional basis-point rate (e.g. 2.5 bps) is not
+	// lost to the fixed-point scale; the division then rounds half-to-even.
+	rateFee := tradeValue.MulDecimal(rule.RateBPS).DivInt64(10000)
+	result.RateAmount = rateFee
 
-	// Calculate per-contract fee
-	perContractTotal := rule.PerContractFee * float64(contracts)
-	result.PerContractAmt = roundTo4(perContractTotal)
+	// Per-contract fee: perContractFee * contracts.
+	perContractTotal := rule.PerContractFee.MulInt64(int64(contracts))
+	result.PerContractAmt = perContractTotal
 
-	// Total fee before min/max
-	totalFee := rateFee + perContractTotal
+	// Total fee before min/max.
+	totalFee := rateFee.Add(perContractTotal)
 
-	// Apply minimum fee
-	if totalFee < rule.MinFee && rule.MinFee > 0 {
+	// Apply minimum fee.
+	if rule.MinFee.IsPos() && totalFee.LessThan(rule.MinFee) {
 		totalFee = rule.MinFee
 		result.MinApplied = true
 	}
 
-	// Apply maximum fee cap
-	if rule.MaxFee != nil && totalFee > *rule.MaxFee {
+	// Apply maximum fee cap.
+	if rule.MaxFee != nil && totalFee.GreaterThan(*rule.MaxFee) {
 		totalFee = *rule.MaxFee
 		result.MaxApplied = true
 	}
 
-	result.TotalFee = roundTo4(totalFee)
+	result.TotalFee = totalFee
 	return result
 }
 
 // CalculateAllFees calculates all applicable fees for a trade.
 // Returns one FeeResult per matching fee type.
-func CalculateAllFees(tradeValue float64, contracts int, participantTier, instrumentID string, rules []FeeRule) []FeeResult {
+func CalculateAllFees(tradeValue decimal.Decimal, contracts int, participantTier, instrumentID string, rules []FeeRule) []FeeResult {
 	feeTypes := collectFeeTypes(rules)
 	var results []FeeResult
 	for _, ft := range feeTypes {
 		r := CalculateFee(tradeValue, contracts, participantTier, instrumentID, ft, rules)
-		if r.TotalFee > 0 || r.RateBPS > 0 {
+		if r.TotalFee.IsPos() || r.RateBPS.IsPos() {
 			results = append(results, r)
 		}
 	}
@@ -147,9 +154,4 @@ func collectFeeTypes(rules []FeeRule) []string {
 		}
 	}
 	return types
-}
-
-// roundTo4 rounds a float to 4 decimal places.
-func roundTo4(v float64) float64 {
-	return math.Round(v*10000) / 10000
 }

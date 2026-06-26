@@ -4,23 +4,40 @@ import (
 	"context"
 	"database/sql"
 	"math"
+
+	"github.com/garudax-platform/decimal"
 )
 
+// decFromFloat converts a float64 (e.g. a value scanned from a numeric DB
+// column) into the shared fixed-point Decimal, rounding half-to-even to 4 dp.
+// NewFromFloat only errors on NaN/Inf, which numeric columns never carry, so a
+// zero fallback is safe.
+func decFromFloat(f float64) decimal.Decimal {
+	d, _ := decimal.NewFromFloat(f)
+	return d
+}
+
 // OrderLimits holds the risk limits for a single instrument.
+//
+// MaxOrderQty and MaxOrderValue are order-value/quantity limits compared
+// against money/quantity and use the shared fixed-point Decimal type (R020).
+// PriceBandPct is a percentage (not money) and stays float64.
 type OrderLimits struct {
-	InstrumentID  string  `json:"instrument_id"`
-	MaxOrderQty   float64 `json:"max_order_qty"`
-	MaxOrderValue float64 `json:"max_order_value"`
-	PriceBandPct  float64 `json:"price_band_pct"`
+	InstrumentID  string          `json:"instrument_id"`
+	MaxOrderQty   decimal.Decimal `json:"max_order_qty"`
+	MaxOrderValue decimal.Decimal `json:"max_order_value"`
+	PriceBandPct  float64         `json:"price_band_pct"`
 }
 
 // PositionLimits holds position limits for a participant on an instrument.
+// MaxLong/MaxShort/MaxGross are quantity/value limits and use the shared
+// fixed-point Decimal type.
 type PositionLimits struct {
-	ParticipantID string  `json:"participant_id"`
-	InstrumentID  string  `json:"instrument_id"`
-	MaxLong       float64 `json:"max_long"`
-	MaxShort      float64 `json:"max_short"`
-	MaxGross      float64 `json:"max_gross"`
+	ParticipantID string          `json:"participant_id"`
+	InstrumentID  string          `json:"instrument_id"`
+	MaxLong       decimal.Decimal `json:"max_long"`
+	MaxShort      decimal.Decimal `json:"max_short"`
+	MaxGross      decimal.Decimal `json:"max_gross"`
 }
 
 // Store defines the interface for risk parameter queries.
@@ -44,17 +61,20 @@ func NewPgStore(db *sql.DB) *PgStore {
 // Returns nil, nil if no limits are configured.
 func (s *PgStore) GetOrderLimits(ctx context.Context, instrumentID string) (*OrderLimits, error) {
 	var ol OrderLimits
+	var maxQty, maxValue float64
 	err := s.db.QueryRowContext(ctx, `
 		SELECT instrument_id, max_order_qty, max_order_value, price_band_pct
 		FROM risk.order_limits
 		WHERE instrument_id = $1
-	`, instrumentID).Scan(&ol.InstrumentID, &ol.MaxOrderQty, &ol.MaxOrderValue, &ol.PriceBandPct)
+	`, instrumentID).Scan(&ol.InstrumentID, &maxQty, &maxValue, &ol.PriceBandPct)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+	ol.MaxOrderQty = decFromFloat(maxQty)
+	ol.MaxOrderValue = decFromFloat(maxValue)
 	return &ol, nil
 }
 
@@ -73,9 +93,12 @@ func (s *PgStore) ListOrderLimits(ctx context.Context) ([]OrderLimits, error) {
 	var limits []OrderLimits
 	for rows.Next() {
 		var ol OrderLimits
-		if err := rows.Scan(&ol.InstrumentID, &ol.MaxOrderQty, &ol.MaxOrderValue, &ol.PriceBandPct); err != nil {
+		var maxQty, maxValue float64
+		if err := rows.Scan(&ol.InstrumentID, &maxQty, &maxValue, &ol.PriceBandPct); err != nil {
 			return nil, err
 		}
+		ol.MaxOrderQty = decFromFloat(maxQty)
+		ol.MaxOrderValue = decFromFloat(maxValue)
 		limits = append(limits, ol)
 	}
 	return limits, rows.Err()
@@ -90,15 +113,20 @@ func (s *PgStore) UpsertOrderLimits(ctx context.Context, limits *OrderLimits) er
 			max_order_qty = EXCLUDED.max_order_qty,
 			max_order_value = EXCLUDED.max_order_value,
 			price_band_pct = EXCLUDED.price_band_pct
-	`, limits.InstrumentID, limits.MaxOrderQty, limits.MaxOrderValue, limits.PriceBandPct)
+	`, limits.InstrumentID, limits.MaxOrderQty.Float64(), limits.MaxOrderValue.Float64(), limits.PriceBandPct)
 	return err
 }
+
+// unlimited is an effectively-unbounded order limit: the largest value the
+// shared fixed-point Decimal can represent (~9.22e14). It stands in for the
+// previous math.MaxFloat64 sentinel now that limits are Decimal.
+var unlimited = decimal.DecimalFromRaw(math.MaxInt64)
 
 // DefaultOrderLimits returns conservative default limits when the DB is unavailable.
 func DefaultOrderLimits() *OrderLimits {
 	return &OrderLimits{
-		MaxOrderQty:   math.MaxFloat64,
-		MaxOrderValue: math.MaxFloat64,
+		MaxOrderQty:   unlimited,
+		MaxOrderValue: unlimited,
 		PriceBandPct:  100.0, // 100% = effectively no band
 	}
 }

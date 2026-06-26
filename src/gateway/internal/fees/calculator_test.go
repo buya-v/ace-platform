@@ -4,30 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/gateway/internal/auth"
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/router"
 )
 
+// d is a test helper that parses a decimal literal (panicking on bad input).
+func d(s string) decimal.Decimal { return decimal.MustParse(s) }
+
 // --- Calculator Tests ---
 
 func defaultRules() []FeeRule {
-	maxFee := 5000.0
+	maxFee := d("5000")
 	return []FeeRule{
-		{ID: "farmer-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: 10.0, MinFee: 0, PerContractFee: 0},
-		{ID: "hedger-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "hedger", InstrumentPattern: "*", RateBPS: 15.0, MinFee: 0, PerContractFee: 0},
-		{ID: "speculator-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "speculator", InstrumentPattern: "*", RateBPS: 25.0, MinFee: 0, PerContractFee: 0},
-		{ID: "mm-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "market_maker", InstrumentPattern: "*", RateBPS: 5.0, MinFee: 0, PerContractFee: 0},
-		{ID: "clearing-all", ScheduleID: "default", FeeType: "clearing", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 5.0, MinFee: 0, PerContractFee: 0},
-		{ID: "with-min", ScheduleID: "default", FeeType: "data", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 1.0, MinFee: 10.0, PerContractFee: 0},
-		{ID: "with-max", ScheduleID: "default", FeeType: "membership", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 100.0, MaxFee: &maxFee, MinFee: 0, PerContractFee: 0},
+		{ID: "farmer-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: d("10")},
+		{ID: "hedger-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "hedger", InstrumentPattern: "*", RateBPS: d("15")},
+		{ID: "speculator-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "speculator", InstrumentPattern: "*", RateBPS: d("25")},
+		{ID: "mm-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "market_maker", InstrumentPattern: "*", RateBPS: d("5")},
+		{ID: "clearing-all", ScheduleID: "default", FeeType: "clearing", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("5")},
+		{ID: "with-min", ScheduleID: "default", FeeType: "data", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("1"), MinFee: d("10")},
+		{ID: "with-max", ScheduleID: "default", FeeType: "membership", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("100"), MaxFee: &maxFee},
 	}
 }
 
@@ -35,36 +38,36 @@ func TestCalculateFee_FarmerTrading(t *testing.T) {
 	rules := defaultRules()
 	// 10 bps = 0.10% = 0.001 multiplier
 	// tradeValue = 1,000,000 MNT -> fee = 1,000,000 * 10/10000 = 1000
-	result := CalculateFee(1_000_000, 1, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
+	result := CalculateFee(d("1000000"), 1, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
 
 	if result.FeeType != "trading" {
 		t.Errorf("FeeType = %q, want trading", result.FeeType)
 	}
-	if result.RateBPS != 10.0 {
-		t.Errorf("RateBPS = %v, want 10.0", result.RateBPS)
+	if !result.RateBPS.Equal(d("10")) {
+		t.Errorf("RateBPS = %v, want 10", result.RateBPS)
 	}
-	if result.TotalFee != 1000.0 {
-		t.Errorf("TotalFee = %v, want 1000.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1000")) {
+		t.Errorf("TotalFee = %v, want 1000", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_SpeculatorTrading(t *testing.T) {
 	rules := defaultRules()
 	// 25 bps on 500,000 = 500,000 * 25/10000 = 1250
-	result := CalculateFee(500_000, 1, "speculator", "WHT-HRW-2026M07-UB", "trading", rules)
+	result := CalculateFee(d("500000"), 1, "speculator", "WHT-HRW-2026M07-UB", "trading", rules)
 
-	if result.TotalFee != 1250.0 {
-		t.Errorf("TotalFee = %v, want 1250.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1250")) {
+		t.Errorf("TotalFee = %v, want 1250", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_MarketMakerDiscount(t *testing.T) {
 	rules := defaultRules()
 	// 5 bps on 1,000,000 = 500
-	result := CalculateFee(1_000_000, 1, "market_maker", "CSH-RAW-2026M09-UB", "trading", rules)
+	result := CalculateFee(d("1000000"), 1, "market_maker", "CSH-RAW-2026M09-UB", "trading", rules)
 
-	if result.TotalFee != 500.0 {
-		t.Errorf("TotalFee = %v, want 500.0 (market maker discount)", result.TotalFee)
+	if !result.TotalFee.Equal(d("500")) {
+		t.Errorf("TotalFee = %v, want 500 (market maker discount)", result.TotalFee)
 	}
 }
 
@@ -72,23 +75,23 @@ func TestCalculateFee_ClearingWildcardTier(t *testing.T) {
 	rules := defaultRules()
 	// Clearing rule has wildcard tier, so any participant matches
 	// 5 bps on 200,000 = 100
-	result := CalculateFee(200_000, 1, "farmer", "WHT-HRW-2026M07-UB", "clearing", rules)
+	result := CalculateFee(d("200000"), 1, "farmer", "WHT-HRW-2026M07-UB", "clearing", rules)
 
 	if result.FeeType != "clearing" {
 		t.Errorf("FeeType = %q, want clearing", result.FeeType)
 	}
-	if result.TotalFee != 100.0 {
-		t.Errorf("TotalFee = %v, want 100.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("100")) {
+		t.Errorf("TotalFee = %v, want 100", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_MinFeeApplied(t *testing.T) {
 	rules := defaultRules()
 	// data fee: 1 bps on 500 = 0.05, but min is 10
-	result := CalculateFee(500, 1, "farmer", "WHT-HRW-2026M07-UB", "data", rules)
+	result := CalculateFee(d("500"), 1, "farmer", "WHT-HRW-2026M07-UB", "data", rules)
 
-	if result.TotalFee != 10.0 {
-		t.Errorf("TotalFee = %v, want 10.0 (min fee applied)", result.TotalFee)
+	if !result.TotalFee.Equal(d("10")) {
+		t.Errorf("TotalFee = %v, want 10 (min fee applied)", result.TotalFee)
 	}
 	if !result.MinApplied {
 		t.Error("MinApplied should be true")
@@ -98,10 +101,10 @@ func TestCalculateFee_MinFeeApplied(t *testing.T) {
 func TestCalculateFee_MaxFeeCapped(t *testing.T) {
 	rules := defaultRules()
 	// membership: 100 bps on 10,000,000 = 10,000 but max is 5000
-	result := CalculateFee(10_000_000, 1, "speculator", "WHT-HRW-2026M07-UB", "membership", rules)
+	result := CalculateFee(d("10000000"), 1, "speculator", "WHT-HRW-2026M07-UB", "membership", rules)
 
-	if result.TotalFee != 5000.0 {
-		t.Errorf("TotalFee = %v, want 5000.0 (max fee capped)", result.TotalFee)
+	if !result.TotalFee.Equal(d("5000")) {
+		t.Errorf("TotalFee = %v, want 5000 (max fee capped)", result.TotalFee)
 	}
 	if !result.MaxApplied {
 		t.Error("MaxApplied should be true")
@@ -110,52 +113,52 @@ func TestCalculateFee_MaxFeeCapped(t *testing.T) {
 
 func TestCalculateFee_PerContractFee(t *testing.T) {
 	rules := []FeeRule{
-		{ID: "per-contract", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 10.0, PerContractFee: 50.0},
+		{ID: "per-contract", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("10"), PerContractFee: d("50")},
 	}
 	// 10 bps on 1,000,000 = 1000, plus 5 contracts * 50 = 250, total = 1250
-	result := CalculateFee(1_000_000, 5, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
+	result := CalculateFee(d("1000000"), 5, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
 
-	if result.RateAmount != 1000.0 {
-		t.Errorf("RateAmount = %v, want 1000.0", result.RateAmount)
+	if !result.RateAmount.Equal(d("1000")) {
+		t.Errorf("RateAmount = %v, want 1000", result.RateAmount)
 	}
-	if result.PerContractAmt != 250.0 {
-		t.Errorf("PerContractAmt = %v, want 250.0", result.PerContractAmt)
+	if !result.PerContractAmt.Equal(d("250")) {
+		t.Errorf("PerContractAmt = %v, want 250", result.PerContractAmt)
 	}
-	if result.TotalFee != 1250.0 {
-		t.Errorf("TotalFee = %v, want 1250.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1250")) {
+		t.Errorf("TotalFee = %v, want 1250", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_NoMatchingRule(t *testing.T) {
 	rules := defaultRules()
 	// No rule for fee_type "exchange"
-	result := CalculateFee(1_000_000, 1, "farmer", "WHT-HRW-2026M07-UB", "exchange", rules)
+	result := CalculateFee(d("1000000"), 1, "farmer", "WHT-HRW-2026M07-UB", "exchange", rules)
 
-	if result.TotalFee != 0 {
+	if !result.TotalFee.IsZero() {
 		t.Errorf("TotalFee = %v, want 0 (no matching rule)", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_ZeroTradeValue(t *testing.T) {
 	rules := defaultRules()
-	result := CalculateFee(0, 1, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
+	result := CalculateFee(decimal.Zero(), 1, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
 
-	if result.TotalFee != 0 {
+	if !result.TotalFee.IsZero() {
 		t.Errorf("TotalFee = %v, want 0", result.TotalFee)
 	}
 }
 
 func TestCalculateFee_EmptyRules(t *testing.T) {
-	result := CalculateFee(1_000_000, 1, "farmer", "WHT-HRW-2026M07-UB", "trading", nil)
+	result := CalculateFee(d("1000000"), 1, "farmer", "WHT-HRW-2026M07-UB", "trading", nil)
 
-	if result.TotalFee != 0 {
+	if !result.TotalFee.IsZero() {
 		t.Errorf("TotalFee = %v, want 0 (empty rules)", result.TotalFee)
 	}
 }
 
 func TestCalculateAllFees(t *testing.T) {
 	rules := defaultRules()
-	results := CalculateAllFees(1_000_000, 1, "farmer", "WHT-HRW-2026M07-UB", rules)
+	results := CalculateAllFees(d("1000000"), 1, "farmer", "WHT-HRW-2026M07-UB", rules)
 
 	// Should have trading (farmer), clearing (*), data (*), membership (*)
 	if len(results) < 3 {
@@ -203,8 +206,8 @@ func TestMatchInstrumentPattern_Exact(t *testing.T) {
 
 func TestFindMatchingRule_ExactTierOverWildcard(t *testing.T) {
 	rules := []FeeRule{
-		{ID: "wild", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 99.0},
-		{ID: "exact", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: 10.0},
+		{ID: "wild", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("99")},
+		{ID: "exact", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: d("10")},
 	}
 
 	rule := findMatchingRule(rules, "trading", "farmer", "WHT-HRW-2026M07-UB")
@@ -218,8 +221,8 @@ func TestFindMatchingRule_ExactTierOverWildcard(t *testing.T) {
 
 func TestFindMatchingRule_ExactInstrumentOverWildcard(t *testing.T) {
 	rules := []FeeRule{
-		{ID: "wild-inst", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: 10.0},
-		{ID: "exact-inst", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "WHT-HRW-2026M07-UB", RateBPS: 5.0},
+		{ID: "wild-inst", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: d("10")},
+		{ID: "exact-inst", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "WHT-HRW-2026M07-UB", RateBPS: d("5")},
 	}
 
 	rule := findMatchingRule(rules, "trading", "farmer", "WHT-HRW-2026M07-UB")
@@ -233,7 +236,7 @@ func TestFindMatchingRule_ExactInstrumentOverWildcard(t *testing.T) {
 
 func TestFindMatchingRule_NoMatch(t *testing.T) {
 	rules := []FeeRule{
-		{ID: "trading-only", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: 10.0},
+		{ID: "trading-only", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: d("10")},
 	}
 
 	rule := findMatchingRule(rules, "clearing", "farmer", "WHT-HRW-2026M07-UB")
@@ -244,8 +247,8 @@ func TestFindMatchingRule_NoMatch(t *testing.T) {
 
 func TestFindMatchingRule_PrefixInstrumentPattern(t *testing.T) {
 	rules := []FeeRule{
-		{ID: "wildcard", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 25.0},
-		{ID: "wheat-specific", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "WHT-*", RateBPS: 15.0},
+		{ID: "wildcard", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("25")},
+		{ID: "wheat-specific", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "WHT-*", RateBPS: d("15")},
 	}
 
 	rule := findMatchingRule(rules, "trading", "farmer", "WHT-HRW-2026M07-UB")
@@ -257,25 +260,19 @@ func TestFindMatchingRule_PrefixInstrumentPattern(t *testing.T) {
 	}
 }
 
-// --- Rounding ---
+// --- Rounding / fixed-point precision ---
 
-func TestRoundTo4(t *testing.T) {
-	tests := []struct {
-		input    float64
-		expected float64
-	}{
-		{100.123456, 100.1235},
-		{0.00005, 0.0001},
-		{0.00004, 0},
-		{1234.5678, 1234.5678},
-		{0, 0},
+// TestCalculateFee_FractionalBasisPoints proves the multiply-before-divide
+// ordering preserves a fractional basis-point rate that the previous
+// rate/10000-first float path (and a naive decimal port) would have lost to the
+// 4-dp scale. 2.5 bps on 1,000,000 = 250 exactly.
+func TestCalculateFee_FractionalBasisPoints(t *testing.T) {
+	rules := []FeeRule{
+		{ID: "frac", FeeType: "trading", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("2.5")},
 	}
-
-	for _, tc := range tests {
-		got := roundTo4(tc.input)
-		if math.Abs(got-tc.expected) > 1e-10 {
-			t.Errorf("roundTo4(%v) = %v, want %v", tc.input, got, tc.expected)
-		}
+	result := CalculateFee(d("1000000"), 1, "farmer", "WHT-HRW-2026M07-UB", "trading", rules)
+	if !result.TotalFee.Equal(d("250")) {
+		t.Errorf("TotalFee = %v, want 250 (2.5 bps preserved)", result.TotalFee)
 	}
 }
 
@@ -412,7 +409,7 @@ func (m *mockFeeStore) UpdateRule(_ context.Context, id string, updates FeeRuleU
 			if rules[i].ID == id {
 				rule := rules[i]
 				if updates.RateBPS != nil {
-					rule.RateBPS = *updates.RateBPS
+					rule.RateBPS = decFromFloat(*updates.RateBPS)
 				}
 				return &rule, nil
 			}
@@ -440,16 +437,16 @@ func sampleSchedules() []FeeSchedule {
 func sampleFeeRules() map[string][]FeeRule {
 	return map[string][]FeeRule{
 		"default": {
-			{ID: "farmer-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: 10.0},
-			{ID: "clearing-all", ScheduleID: "default", FeeType: "clearing", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: 5.0},
+			{ID: "farmer-trading", ScheduleID: "default", FeeType: "trading", ParticipantTier: "farmer", InstrumentPattern: "*", RateBPS: d("10")},
+			{ID: "clearing-all", ScheduleID: "default", FeeType: "clearing", ParticipantTier: "*", InstrumentPattern: "*", RateBPS: d("5")},
 		},
 	}
 }
 
 func sampleTransactions() []FeeTransaction {
 	return []FeeTransaction{
-		{ID: "fee-1", TradeID: "trade-1", ParticipantID: "user-1", FeeType: "trading", Amount: 100.0, Currency: "MNT", CreatedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)},
-		{ID: "fee-2", TradeID: "trade-2", ParticipantID: "user-1", FeeType: "clearing", Amount: 50.0, Currency: "MNT", CreatedAt: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)},
+		{ID: "fee-1", TradeID: "trade-1", ParticipantID: "user-1", FeeType: "trading", Amount: d("100"), Currency: "MNT", CreatedAt: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "fee-2", TradeID: "trade-2", ParticipantID: "user-1", FeeType: "clearing", Amount: d("50"), Currency: "MNT", CreatedAt: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)},
 	}
 }
 
@@ -848,10 +845,10 @@ func TestWriteError_Format(t *testing.T) {
 func TestCalculateFee_HedgerTrading(t *testing.T) {
 	rules := defaultRules()
 	// 15 bps on 1,000,000 = 1,000,000 * 15/10000 = 1500
-	result := CalculateFee(1_000_000, 1, "hedger", "WHT-HRW-2026M07-UB", "trading", rules)
+	result := CalculateFee(d("1000000"), 1, "hedger", "WHT-HRW-2026M07-UB", "trading", rules)
 
-	if result.TotalFee != 1500.0 {
-		t.Errorf("TotalFee = %v, want 1500.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1500")) {
+		t.Errorf("TotalFee = %v, want 1500", result.TotalFee)
 	}
 }
 
@@ -860,10 +857,10 @@ func TestCalculateFee_HedgerTrading(t *testing.T) {
 func TestCalculateFee_MinFeeNotApplied(t *testing.T) {
 	rules := defaultRules()
 	// data fee: 1 bps on 10,000,000 = 1000, min is 10 -> min NOT applied
-	result := CalculateFee(10_000_000, 1, "farmer", "WHT-HRW-2026M07-UB", "data", rules)
+	result := CalculateFee(d("10000000"), 1, "farmer", "WHT-HRW-2026M07-UB", "data", rules)
 
-	if result.TotalFee != 1000.0 {
-		t.Errorf("TotalFee = %v, want 1000.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1000")) {
+		t.Errorf("TotalFee = %v, want 1000", result.TotalFee)
 	}
 	if result.MinApplied {
 		t.Error("MinApplied should be false when fee exceeds min")
@@ -875,10 +872,10 @@ func TestCalculateFee_MinFeeNotApplied(t *testing.T) {
 func TestCalculateFee_MaxFeeNotApplied(t *testing.T) {
 	rules := defaultRules()
 	// membership: 100 bps on 100,000 = 1000, max is 5000 -> max NOT applied
-	result := CalculateFee(100_000, 1, "speculator", "WHT-HRW-2026M07-UB", "membership", rules)
+	result := CalculateFee(d("100000"), 1, "speculator", "WHT-HRW-2026M07-UB", "membership", rules)
 
-	if result.TotalFee != 1000.0 {
-		t.Errorf("TotalFee = %v, want 1000.0", result.TotalFee)
+	if !result.TotalFee.Equal(d("1000")) {
+		t.Errorf("TotalFee = %v, want 1000", result.TotalFee)
 	}
 	if result.MaxApplied {
 		t.Error("MaxApplied should be false when fee is below max")
