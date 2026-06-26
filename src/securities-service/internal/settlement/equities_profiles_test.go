@@ -105,7 +105,7 @@ func TestProfileForCycleOrDefault(t *testing.T) {
 
 func TestBuildClearingInstruction(t *testing.T) {
 	td := time.Date(2026, time.June, 18, 0, 0, 0, 0, time.UTC) // Thursday
-	trade := types.SecurityTrade{ID: "TR-1", InstrumentID: "MSE-APU", Quantity: 100, Price: 12.5}
+	trade := types.SecurityTrade{ID: "TR-1", InstrumentID: "MSE-APU", Quantity: 100, Price: decLit(12.5)}
 	ci := settlement.BuildClearingInstruction(trade, settlement.ProfileT2, td, nil)
 
 	if ci.TradeID != "TR-1" || ci.InstrumentID != "MSE-APU" {
@@ -121,8 +121,8 @@ func TestBuildClearingInstruction(t *testing.T) {
 	if ci.SettlementDate != "2026-06-22" {
 		t.Errorf("settlement date = %s, want 2026-06-22", ci.SettlementDate)
 	}
-	if ci.NetAmount != 1250.0 {
-		t.Errorf("net amount = %.2f, want 1250.00", ci.NetAmount)
+	if ci.NetAmount != decLit(1250.0) {
+		t.Errorf("net amount = %.2f, want 1250.00", ci.NetAmount.Float64())
 	}
 }
 

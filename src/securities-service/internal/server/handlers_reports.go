@@ -84,7 +84,7 @@ func (s *Server) buildDailySummary(date string) (map[string]interface{}, error) 
 
 	tradeCount := 0
 	totalVolume := 0
-	totalValue := 0.0
+	var totalValue types.Decimal
 
 	for _, inst := range instruments {
 		trades, err := s.tradeStore.ListByInstrument(inst.ID)
@@ -96,7 +96,7 @@ func (s *Server) buildDailySummary(date string) (map[string]interface{}, error) 
 			if len(t.TradeDate) >= 10 && t.TradeDate[:10] == date {
 				tradeCount++
 				totalVolume += t.Quantity
-				totalValue += float64(t.Quantity) * t.Price
+				totalValue = totalValue.Add(t.Price.MulInt64(int64(t.Quantity)))
 			}
 		}
 	}

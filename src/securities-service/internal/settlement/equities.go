@@ -159,14 +159,14 @@ func ProfileForCycleOrDefault(cycle string) SettlementProfile {
 // pins the settlement profile and the resulting settlement date for a trade so
 // that downstream clearing/settlement is fully deterministic and auditable.
 type ClearingInstruction struct {
-	TradeID        string  `json:"trade_id"`
-	InstrumentID   string  `json:"instrument_id"`
-	Profile        string  `json:"profile"`         // e.g. "T+2"
-	TradeDate      string  `json:"trade_date"`      // ISO
-	SettlementDate string  `json:"settlement_date"` // ISO, profile-derived
-	Quantity       int     `json:"quantity"`
-	Price          float64 `json:"price"`
-	NetAmount      float64 `json:"net_amount"` // Price * Quantity
+	TradeID        string        `json:"trade_id"`
+	InstrumentID   string        `json:"instrument_id"`
+	Profile        string        `json:"profile"`         // e.g. "T+2"
+	TradeDate      string        `json:"trade_date"`      // ISO
+	SettlementDate string        `json:"settlement_date"` // ISO, profile-derived
+	Quantity       int           `json:"quantity"`
+	Price          types.Decimal `json:"price"`
+	NetAmount      types.Decimal `json:"net_amount"` // Price * Quantity
 }
 
 // BuildClearingInstruction derives the clearing instruction for a trade under
@@ -183,7 +183,7 @@ func BuildClearingInstruction(trade types.SecurityTrade, profile SettlementProfi
 		SettlementDate: profile.SettlementDateWithHolidays(tradeDate, holidays),
 		Quantity:       trade.Quantity,
 		Price:          trade.Price,
-		NetAmount:      trade.Price * float64(trade.Quantity),
+		NetAmount:      trade.Price.MulInt64(int64(trade.Quantity)),
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -76,7 +77,7 @@ func (e *SettlementEngine) CreateObligationsFromTrades(trades []types.SecurityTr
 			SellerParticipantID: sellOrder.ParticipantID,
 			Quantity:            trade.Quantity,
 			Price:               trade.Price,
-			NetAmount:           trade.Price * float64(trade.Quantity),
+			NetAmount:           trade.Price.MulInt64(int64(trade.Quantity)),
 			SettlementDate:      trade.SettlementDate,
 			Status:              types.SettlePending,
 			CreatedAt:           now,
@@ -141,7 +142,7 @@ func (e *SettlementEngine) ProcessSettlementCycle(date string) (*types.Settlemen
 			}
 			accrued := calculateAccruedInterest(bond, settlementDate, ob.Quantity)
 			ob.AccruedInterest = accrued
-			ob.NetAmount += accrued
+			ob.NetAmount = ob.NetAmount.Add(accrued)
 			_ = e.settlementStore.Update(ob)
 		}
 	}
@@ -191,31 +192,36 @@ func (e *SettlementEngine) ProcessSettlementCycle(date string) (*types.Settlemen
 
 // calculateAccruedInterest computes accrued interest for a bond obligation based on
 // the bond's day count convention. For MVP, assumes 30 days since the last coupon date.
-func calculateAccruedInterest(bond *types.Bond, settlementDate time.Time, quantity int) float64 {
+//
+// CouponRate is a genuine ratio (e.g. 0.05 for 5%) and stays float64; ParValue is the
+// shared decimal money type. accrued = parValue * couponRate * days * quantity / basis.
+// CouponRate is converted to a Decimal at the boundary; days, quantity and basis are
+// exact integers. We multiply through and divide by the basis LAST so the result keeps
+// full fixed-point precision and rounds half-even only at the final money scale.
+func calculateAccruedInterest(bond *types.Bond, settlementDate time.Time, quantity int) types.Decimal {
 	const defaultDaysSinceLastCoupon = 30
 
 	couponRate := bond.CouponRate // e.g. 0.05 for 5%
 	parValue := bond.ParValue
-	days := float64(defaultDaysSinceLastCoupon)
-
-	var accrued float64
+	var basis int64
 	switch bond.DayCountConvention {
-	case types.DayCountACT365:
-		// ACT/365: accrued = days * (couponRate/100) * parValue / 365
-		// Note: if couponRate is already fractional (e.g. 0.05), we don't divide by 100.
-		// The type doc says "e.g. 0.05 for 5%", so couponRate is already a fraction.
-		accrued = days * couponRate * parValue / 365.0
-	case types.DayCountACT360:
-		// ACT/360: accrued = days * couponRate * parValue / 360
-		accrued = days * couponRate * parValue / 360.0
-	case types.DayCount30360:
-		// 30/360: for MVP with 30 default days, months=1, remaining=0
-		// accrued = (months*30 + remaining_days) * couponRate * parValue / 360
-		accrued = days * couponRate * parValue / 360.0
+	case types.DayCountACT360, types.DayCount30360:
+		// ACT/360 and 30/360 use a 360-day basis. For MVP with 30 default days,
+		// 30/360 yields months=1, remaining=0.
+		basis = 360
 	default:
-		// Default to ACT/365 if convention is unknown.
-		accrued = days * couponRate * parValue / 365.0
+		// ACT/365 and any unknown convention default to a 365-day basis.
+		// CouponRate is already a fraction (e.g. 0.05), so we do not divide by 100.
+		basis = 365
 	}
 
-	return accrued * float64(quantity)
+	couponFactor, err := decimal.NewFromFloat(couponRate)
+	if err != nil {
+		return types.Decimal{}
+	}
+
+	return parValue.MulDecimal(couponFactor).
+		MulInt64(defaultDaysSinceLastCoupon).
+		MulInt64(int64(quantity)).
+		DivInt64(basis)
 }

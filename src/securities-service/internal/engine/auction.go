@@ -79,7 +79,7 @@ func (a *AuctionEngine) RunAuction(instrumentID, tenantID string) ([]types.Secur
 		}
 		result := &types.AuctionResult{
 			InstrumentID:        instrumentID,
-			ClearingPrice:       0,
+			ClearingPrice:       types.Decimal{},
 			MatchedVolume:       0,
 			UnmatchedBuyVolume:  totalBuyVol,
 			UnmatchedSellVolume: totalSellVol,
@@ -90,48 +90,49 @@ func (a *AuctionEngine) RunAuction(instrumentID, tenantID string) ([]types.Secur
 
 	// 3. Sort buys descending by price, sells ascending by price.
 	sort.Slice(buys, func(i, j int) bool {
-		if buys[i].Price != buys[j].Price {
-			return buys[i].Price > buys[j].Price
+		if !buys[i].Price.Equal(buys[j].Price) {
+			return buys[i].Price.GreaterThan(buys[j].Price)
 		}
 		return buys[i].CreatedAt < buys[j].CreatedAt
 	})
 	sort.Slice(sells, func(i, j int) bool {
-		if sells[i].Price != sells[j].Price {
-			return sells[i].Price < sells[j].Price
+		if !sells[i].Price.Equal(sells[j].Price) {
+			return sells[i].Price.LessThan(sells[j].Price)
 		}
 		return sells[i].CreatedAt < sells[j].CreatedAt
 	})
 
-	// 4. Build price ladder — collect all unique prices.
-	priceSet := make(map[float64]bool)
+	// 4. Build price ladder — collect all unique prices. Decimal is a comparable
+	// struct so it can key a map and be sorted by its exact fixed-point value.
+	priceSet := make(map[types.Decimal]bool)
 	for _, b := range buys {
 		priceSet[b.Price] = true
 	}
 	for _, s := range sells {
 		priceSet[s.Price] = true
 	}
-	prices := make([]float64, 0, len(priceSet))
+	prices := make([]types.Decimal, 0, len(priceSet))
 	for p := range priceSet {
 		prices = append(prices, p)
 	}
-	sort.Float64s(prices)
+	sort.Slice(prices, func(i, j int) bool { return prices[i].LessThan(prices[j]) })
 
 	// 5. For each candidate price, compute cumulative buy/sell quantities and matchable volume.
-	bestPrice := 0.0
+	var bestPrice types.Decimal
 	bestVolume := 0
 
 	for _, candidate := range prices {
 		// cumBuyQty = sum of remaining qty for buy orders with price >= candidate
 		cumBuyQty := 0
 		for _, b := range buys {
-			if b.Price >= candidate {
+			if b.Price.GreaterThanOrEqual(candidate) {
 				cumBuyQty += b.Quantity - b.FilledQuantity
 			}
 		}
 		// cumSellQty = sum of remaining qty for sell orders with price <= candidate
 		cumSellQty := 0
 		for _, s := range sells {
-			if s.Price <= candidate {
+			if s.Price.LessThanOrEqual(candidate) {
 				cumSellQty += s.Quantity - s.FilledQuantity
 			}
 		}
@@ -142,7 +143,7 @@ func (a *AuctionEngine) RunAuction(instrumentID, tenantID string) ([]types.Secur
 		}
 
 		// 6. ClearingPrice = price with max matchable volume (tie: highest price).
-		if matchable > bestVolume || (matchable == bestVolume && candidate > bestPrice) {
+		if matchable > bestVolume || (matchable == bestVolume && candidate.GreaterThan(bestPrice)) {
 			bestVolume = matchable
 			bestPrice = candidate
 		}
@@ -160,7 +161,7 @@ func (a *AuctionEngine) RunAuction(instrumentID, tenantID string) ([]types.Secur
 		}
 		result := &types.AuctionResult{
 			InstrumentID:        instrumentID,
-			ClearingPrice:       0,
+			ClearingPrice:       types.Decimal{},
 			MatchedVolume:       0,
 			UnmatchedBuyVolume:  totalBuyVol,
 			UnmatchedSellVolume: totalSellVol,
@@ -173,13 +174,13 @@ func (a *AuctionEngine) RunAuction(instrumentID, tenantID string) ([]types.Secur
 	// Filter eligible orders: buys with price >= clearingPrice, sells with price <= clearingPrice.
 	var eligibleBuys []*types.SecurityOrder
 	for i := range buys {
-		if buys[i].Price >= bestPrice {
+		if buys[i].Price.GreaterThanOrEqual(bestPrice) {
 			eligibleBuys = append(eligibleBuys, &buys[i])
 		}
 	}
 	var eligibleSells []*types.SecurityOrder
 	for i := range sells {
-		if sells[i].Price <= bestPrice {
+		if sells[i].Price.LessThanOrEqual(bestPrice) {
 			eligibleSells = append(eligibleSells, &sells[i])
 		}
 	}
@@ -343,10 +344,13 @@ func (a *AuctionEngine) updatePositions(trade types.SecurityTrade) error {
 	oldAvgCost := buyPos.AvgCost
 	buyPos.Quantity += trade.Quantity
 	if buyPos.Quantity > 0 {
-		buyPos.AvgCost = ((float64(oldQty) * oldAvgCost) + (float64(trade.Quantity) * trade.Price)) / float64(buyPos.Quantity)
+		// AvgCost = (oldQty*oldAvgCost + tradeQty*tradePrice) / newQty
+		buyPos.AvgCost = oldAvgCost.MulInt64(int64(oldQty)).
+			Add(trade.Price.MulInt64(int64(trade.Quantity))).
+			DivInt64(int64(buyPos.Quantity))
 	}
-	buyPos.MarketValue = float64(buyPos.Quantity) * trade.Price
-	buyPos.UnrealizedPnl = float64(buyPos.Quantity) * (trade.Price - buyPos.AvgCost)
+	buyPos.MarketValue = trade.Price.MulInt64(int64(buyPos.Quantity))
+	buyPos.UnrealizedPnl = trade.Price.Sub(buyPos.AvgCost).MulInt64(int64(buyPos.Quantity))
 	buyPos.UpdatedAt = now
 	if err := a.positionStore.Update(buyPos); err != nil {
 		return fmt.Errorf("failed to update buyer position: %w", err)
@@ -358,11 +362,11 @@ func (a *AuctionEngine) updatePositions(trade types.SecurityTrade) error {
 		return fmt.Errorf("failed to get seller position: %w", err)
 	}
 	sellPos.Quantity -= trade.Quantity
-	sellPos.MarketValue = float64(sellPos.Quantity) * trade.Price
+	sellPos.MarketValue = trade.Price.MulInt64(int64(sellPos.Quantity))
 	if sellPos.Quantity != 0 {
-		sellPos.UnrealizedPnl = float64(sellPos.Quantity) * (trade.Price - sellPos.AvgCost)
+		sellPos.UnrealizedPnl = trade.Price.Sub(sellPos.AvgCost).MulInt64(int64(sellPos.Quantity))
 	} else {
-		sellPos.UnrealizedPnl = 0
+		sellPos.UnrealizedPnl = types.Decimal{}
 	}
 	sellPos.UpdatedAt = now
 	if err := a.positionStore.Update(sellPos); err != nil {

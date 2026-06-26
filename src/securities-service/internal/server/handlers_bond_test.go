@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -230,25 +231,25 @@ func approxEqual(a, b, epsilon float64) bool {
 // TestAccruedInterest_ACT360 verifies: 90 * 0.05 * 1000 / 360 = 12.50
 func TestAccruedInterest_ACT360(t *testing.T) {
 	couponRate := 0.05
-	parValue := 1000.0
+	parValue := decimal.DecimalFromInt(1000)
 	lastCoupon := time.Date(2026, 1, 24, 0, 0, 0, 0, time.UTC)
 	settlement := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC) // exactly 90 days later
 
 	got := calcAccruedInterest(couponRate, parValue, types.DayCountACT360, lastCoupon, settlement)
 	want := 12.50
 
-	if !approxEqual(got, want, 0.005) {
-		t.Errorf("ACT/360 accrued interest: want %.4f, got %.4f", want, got)
+	if !approxEqual(got.Float64(), want, 0.005) {
+		t.Errorf("ACT/360 accrued interest: want %.4f, got %.4f", want, got.Float64())
 	}
-	if roundTo2DP(got) != 12.50 {
-		t.Errorf("ACT/360 rounded to 2dp: want 12.50, got %.2f", roundTo2DP(got))
+	if roundTo2DP(got.Float64()) != 12.50 {
+		t.Errorf("ACT/360 rounded to 2dp: want 12.50, got %.2f", roundTo2DP(got.Float64()))
 	}
 }
 
 // TestAccruedInterest_ACT365 verifies: 90 * 0.05 * 1000 / 365 = 12.33 (rounded)
 func TestAccruedInterest_ACT365(t *testing.T) {
 	couponRate := 0.05
-	parValue := 1000.0
+	parValue := decimal.DecimalFromInt(1000)
 	lastCoupon := time.Date(2026, 1, 24, 0, 0, 0, 0, time.UTC)
 	settlement := time.Date(2026, 4, 24, 0, 0, 0, 0, time.UTC) // 90 days
 
@@ -256,11 +257,11 @@ func TestAccruedInterest_ACT365(t *testing.T) {
 	// 0.05 * 1000 * 90/365 = 12.328767...
 	wantRaw := 0.05 * 1000 * 90.0 / 365.0
 
-	if !approxEqual(got, wantRaw, 0.0001) {
-		t.Errorf("ACT/365 accrued interest: want %.6f, got %.6f", wantRaw, got)
+	if !approxEqual(got.Float64(), wantRaw, 0.0001) {
+		t.Errorf("ACT/365 accrued interest: want %.6f, got %.6f", wantRaw, got.Float64())
 	}
-	if roundTo2DP(got) != 12.33 {
-		t.Errorf("ACT/365 rounded to 2dp: want 12.33, got %.2f", roundTo2DP(got))
+	if roundTo2DP(got.Float64()) != 12.33 {
+		t.Errorf("ACT/365 rounded to 2dp: want 12.33, got %.2f", roundTo2DP(got.Float64()))
 	}
 }
 
@@ -269,7 +270,7 @@ func TestAccruedInterest_ACT365(t *testing.T) {
 // accrued = 0.05 * 1000 * 0.25 = 12.50
 func TestAccruedInterest_30_360(t *testing.T) {
 	couponRate := 0.05
-	parValue := 1000.0
+	parValue := decimal.DecimalFromInt(1000)
 	// Use dates that give exactly 90 standardised 30/360 days.
 	// Jan 1 to Apr 1 = 3 months * 30 = 90 days in 30/360.
 	lastCoupon := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -278,11 +279,11 @@ func TestAccruedInterest_30_360(t *testing.T) {
 	got := calcAccruedInterest(couponRate, parValue, types.DayCount30360, lastCoupon, settlement)
 	want := 12.50 // 0.05 * 1000 * 90/360
 
-	if !approxEqual(got, want, 0.005) {
-		t.Errorf("30/360 accrued interest: want %.4f, got %.4f", want, got)
+	if !approxEqual(got.Float64(), want, 0.005) {
+		t.Errorf("30/360 accrued interest: want %.4f, got %.4f", want, got.Float64())
 	}
-	if roundTo2DP(got) != 12.50 {
-		t.Errorf("30/360 rounded to 2dp: want 12.50, got %.2f", roundTo2DP(got))
+	if roundTo2DP(got.Float64()) != 12.50 {
+		t.Errorf("30/360 rounded to 2dp: want 12.50, got %.2f", roundTo2DP(got.Float64()))
 	}
 }
 
@@ -298,7 +299,7 @@ func TestAccruedInterest_ViaHTTP(t *testing.T) {
 		MaturityDate:       "2031-04-24",
 		CouponRate:         0.05,
 		CouponFrequency:    "ANNUAL",
-		ParValue:           1000.0,
+		ParValue:           decimal.DecimalFromInt(1000),
 		DayCountConvention: types.DayCountACT360,
 		TradingStatus:      types.TradingStatusActive,
 		CreatedAt:          "2026-04-24T00:00:00Z",
@@ -330,7 +331,7 @@ func TestAccruedInterest_MissingParams(t *testing.T) {
 	ts, bStore := newBondTestServer(t)
 
 	seedBond(t, bStore, &types.Bond{
-		ID: "BOND-AI-2", ISIN: "MN2222222222", Issuer: "X", ParValue: 1000,
+		ID: "BOND-AI-2", ISIN: "MN2222222222", Issuer: "X", ParValue: decimal.DecimalFromInt(1000),
 		DayCountConvention: types.DayCountACT365, TradingStatus: types.TradingStatusActive,
 		CreatedAt: "2026-04-24T00:00:00Z", UpdatedAt: "2026-04-24T00:00:00Z",
 	})
@@ -377,9 +378,9 @@ func TestBondEndpoints_NotConfigured(t *testing.T) {
 		store.NewInMemoryParticipantStore(),
 		nil, nil, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil,
-		nil,  // investigationStore
-		nil,  // replayStore
-		nil,  // bondStore = nil
+		nil,                // investigationStore
+		nil,                // replayStore
+		nil,                // bondStore = nil
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
 		nil, nil, me, nil, nil, nil, nil, nil, nil, cfg,

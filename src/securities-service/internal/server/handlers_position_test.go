@@ -38,7 +38,7 @@ func newPositionTestServer(t *testing.T) (*httptest.Server, *store.InMemoryPosit
 		nil, nil,
 		nil, nil, nil,
 		nil, nil, nil, // nodeStore
-		nil, // locateStore, rfqStore, giveUpStore
+		nil,           // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
@@ -98,27 +98,27 @@ func TestListPositions_WithData(t *testing.T) {
 			ParticipantID: "P1",
 			InstrumentID:  "INST-1",
 			Quantity:      500,
-			AvgCost:       10.50,
-			MarketValue:   5250.0,
-			UnrealizedPnl: 250.0,
+			AvgCost:       decLit(10.50),
+			MarketValue:   decLit(5250.0),
+			UnrealizedPnl: decLit(250.0),
 		},
 		{
 			ID:            "P2:INST-1",
 			ParticipantID: "P2",
 			InstrumentID:  "INST-1",
 			Quantity:      200,
-			AvgCost:       11.00,
-			MarketValue:   2200.0,
-			UnrealizedPnl: -100.0,
+			AvgCost:       decLit(11.00),
+			MarketValue:   decLit(2200.0),
+			UnrealizedPnl: decLit(-100.0),
 		},
 		{
 			ID:            "P1:INST-2",
 			ParticipantID: "P1",
 			InstrumentID:  "INST-2",
 			Quantity:      1000,
-			AvgCost:       5.00,
-			MarketValue:   5000.0,
-			UnrealizedPnl: 0.0,
+			AvgCost:       decLit(5.00),
+			MarketValue:   decLit(5000.0),
+			UnrealizedPnl: decLit(0.0),
 		},
 	}
 	for i := range positions {
@@ -201,7 +201,7 @@ func TestListPositions_NilStore_Returns503(t *testing.T) {
 		nil, nil,
 		nil, nil, nil,
 		nil, nil, nil, // nodeStore
-		nil, // locateStore, rfqStore, giveUpStore
+		nil,           // locateStore, rfqStore, giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore

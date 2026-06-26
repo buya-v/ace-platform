@@ -71,24 +71,24 @@ const (
 
 // Instrument holds reference data for a listed security.
 type Instrument struct {
-	ID                string        `json:"id"`
-	ISIN              string        `json:"isin"`
-	CUSIP             string        `json:"cusip"`
-	SEDOL             string        `json:"sedol"`
-	Ticker            string        `json:"ticker"`
-	Name              string        `json:"name"`
-	AssetClass        AssetClass    `json:"asset_class"`
-	SecurityType      string        `json:"security_type,omitempty"`
-	ExchangeCode      string        `json:"exchange_code"`
-	LotSize           int           `json:"lot_size"`
-	TickSize          float64       `json:"tick_size"`
-	Currency          string        `json:"currency"`
-	ListingDate       string        `json:"listing_date"`
-	TradingStatus     TradingStatus `json:"trading_status"`
-	OutstandingShares int64         `json:"outstanding_shares"`
-	SegmentID         string        `json:"segment_id,omitempty"`
-	TradingCycleID    string        `json:"trading_cycle_id,omitempty"` // T1: links instrument to a TradingCycle
-	STPMode           STPMode       `json:"stp_mode,omitempty"`
+	ID                  string        `json:"id"`
+	ISIN                string        `json:"isin"`
+	CUSIP               string        `json:"cusip"`
+	SEDOL               string        `json:"sedol"`
+	Ticker              string        `json:"ticker"`
+	Name                string        `json:"name"`
+	AssetClass          AssetClass    `json:"asset_class"`
+	SecurityType        string        `json:"security_type,omitempty"`
+	ExchangeCode        string        `json:"exchange_code"`
+	LotSize             int           `json:"lot_size"`
+	TickSize            float64       `json:"tick_size"`
+	Currency            string        `json:"currency"`
+	ListingDate         string        `json:"listing_date"`
+	TradingStatus       TradingStatus `json:"trading_status"`
+	OutstandingShares   int64         `json:"outstanding_shares"`
+	SegmentID           string        `json:"segment_id,omitempty"`
+	TradingCycleID      string        `json:"trading_cycle_id,omitempty"` // T1: links instrument to a TradingCycle
+	STPMode             STPMode       `json:"stp_mode,omitempty"`
 	DeletionStatus      string        `json:"deletion_status,omitempty"`
 	DeletionDate        string        `json:"deletion_date,omitempty"`
 	ShortSellRestricted bool          `json:"short_sell_restricted,omitempty"`
@@ -112,7 +112,7 @@ type SecurityOrder struct {
 	ID              string      `json:"id"`
 	InstrumentID    string      `json:"instrument_id"`
 	ParticipantID   string      `json:"participant_id"`
-	FirmID          string      `json:"firm_id,omitempty"`          // T1: originating firm
+	FirmID          string      `json:"firm_id,omitempty"`         // T1: originating firm
 	ClientOrderID   string      `json:"client_order_id,omitempty"` // T1: client-assigned order id
 	Side            OrderSide   `json:"side"`
 	OrderType       OrderType   `json:"order_type"`
@@ -214,10 +214,10 @@ type SettlementResult struct {
 type CorporateActionType string
 
 const (
-	CA_DIVIDEND    CorporateActionType = "CA_DIVIDEND"
-	CA_STOCK_SPLIT CorporateActionType = "CA_STOCK_SPLIT"
+	CA_DIVIDEND     CorporateActionType = "CA_DIVIDEND"
+	CA_STOCK_SPLIT  CorporateActionType = "CA_STOCK_SPLIT"
 	CA_RIGHTS_ISSUE CorporateActionType = "CA_RIGHTS_ISSUE"
-	CA_MERGER      CorporateActionType = "CA_MERGER"
+	CA_MERGER       CorporateActionType = "CA_MERGER"
 )
 
 // CorporateActionStatus represents the lifecycle state of a corporate action.
@@ -288,12 +288,12 @@ const (
 
 // AuctionResult summarises the outcome of a call auction.
 type AuctionResult struct {
-	InstrumentID      string  `json:"instrument_id"`
-	ClearingPrice     float64 `json:"clearing_price"`
-	MatchedVolume     int     `json:"matched_volume"`
-	UnmatchedBuyVolume  int   `json:"unmatched_buy_volume"`
-	UnmatchedSellVolume int   `json:"unmatched_sell_volume"`
-	TradeCount        int     `json:"trade_count"`
+	InstrumentID        string  `json:"instrument_id"`
+	ClearingPrice       Decimal `json:"clearing_price"`
+	MatchedVolume       int     `json:"matched_volume"`
+	UnmatchedBuyVolume  int     `json:"unmatched_buy_volume"`
+	UnmatchedSellVolume int     `json:"unmatched_sell_volume"`
+	TradeCount          int     `json:"trade_count"`
 }
 
 // ── Firms ────────────────────────────────────────────────────────────────────
@@ -327,10 +327,10 @@ const (
 
 // Permission constants for exchange participant capabilities.
 const (
-	PermTradeEquity    = "TRADE_EQUITY"
-	PermTradeBond      = "TRADE_BOND"
-	PermTradeETF       = "TRADE_ETF"
-	PermMarketMaker    = "MARKET_MAKER"
+	PermTradeEquity     = "TRADE_EQUITY"
+	PermTradeBond       = "TRADE_BOND"
+	PermTradeETF        = "TRADE_ETF"
+	PermMarketMaker     = "MARKET_MAKER"
 	PermSponsoredAccess = "SPONSORED_ACCESS"
 )
 
@@ -354,9 +354,9 @@ type ExchangeParticipant struct {
 type DayState string
 
 const (
-	DayClosed   DayState = "DAY_CLOSED"
-	DayPreOpen  DayState = "DAY_PRE_OPEN"
-	DayTrading  DayState = "DAY_TRADING"
+	DayClosed    DayState = "DAY_CLOSED"
+	DayPreOpen   DayState = "DAY_PRE_OPEN"
+	DayTrading   DayState = "DAY_TRADING"
 	DayPostClose DayState = "DAY_POST_CLOSE"
 )
 
@@ -468,7 +468,7 @@ const (
 type TradeCorrection struct {
 	ID                string  `json:"id"`
 	TradeID           string  `json:"trade_id"`
-	Action            string  `json:"action"`             // BUST | CORRECT | REINSTATE
+	Action            string  `json:"action"` // BUST | CORRECT | REINSTATE
 	Reason            string  `json:"reason"`
 	OriginalPrice     float64 `json:"original_price"`
 	OriginalQuantity  int     `json:"original_quantity"`
@@ -542,17 +542,17 @@ type AuditFilters struct {
 
 // PendingChange represents a maker/checker workflow record for a proposed entity change.
 type PendingChange struct {
-	ID             string                 `json:"id"`
-	EntityType     string                 `json:"entity_type"`
-	EntityID       string                 `json:"entity_id"`
-	ChangeType     string                 `json:"change_type"` // CREATE | UPDATE | DELETE
-	Payload        map[string]interface{} `json:"payload"`
-	SubmittedBy    string                 `json:"submitted_by"`
-	Status         string                 `json:"status"` // PENDING_APPROVAL | APPROVED | REJECTED
-	ReviewedBy     string                 `json:"reviewed_by,omitempty"`
-	ReviewComment  string                 `json:"review_comment,omitempty"`
-	SubmittedAt    string                 `json:"submitted_at"`
-	ReviewedAt     string                 `json:"reviewed_at,omitempty"`
+	ID            string                 `json:"id"`
+	EntityType    string                 `json:"entity_type"`
+	EntityID      string                 `json:"entity_id"`
+	ChangeType    string                 `json:"change_type"` // CREATE | UPDATE | DELETE
+	Payload       map[string]interface{} `json:"payload"`
+	SubmittedBy   string                 `json:"submitted_by"`
+	Status        string                 `json:"status"` // PENDING_APPROVAL | APPROVED | REJECTED
+	ReviewedBy    string                 `json:"reviewed_by,omitempty"`
+	ReviewComment string                 `json:"review_comment,omitempty"`
+	SubmittedAt   string                 `json:"submitted_at"`
+	ReviewedAt    string                 `json:"reviewed_at,omitempty"`
 }
 
 // ReferencePrice represents the official reference price for an instrument,
@@ -571,9 +571,9 @@ type ReferencePrice struct {
 type AlertStatus string
 
 const (
-	AlertStatusOpen         AlertStatus = "OPEN"
+	AlertStatusOpen          AlertStatus = "OPEN"
 	AlertStatusInvestigating AlertStatus = "INVESTIGATING"
-	AlertStatusResolved     AlertStatus = "RESOLVED"
+	AlertStatusResolved      AlertStatus = "RESOLVED"
 )
 
 // AlertType represents the category of a surveillance alert.
@@ -621,9 +621,9 @@ type SurveillanceThreshold struct {
 type GroupType string
 
 const (
-	GroupTypeManual   GroupType = "MANUAL"
-	GroupTypeSector   GroupType = "SECTOR"
-	GroupTypeIndex    GroupType = "INDEX"
+	GroupTypeManual GroupType = "MANUAL"
+	GroupTypeSector GroupType = "SECTOR"
+	GroupTypeIndex  GroupType = "INDEX"
 )
 
 // InstrumentGroup represents a named collection of instruments (e.g., an index or sector basket).
@@ -767,8 +767,8 @@ const (
 type Investigation struct {
 	ID           string              `json:"id"`
 	AlertID      string              `json:"alert_id,omitempty"` // surveillance alert that triggered this investigation
-	Subject      string              `json:"subject"`             // brief description of what is being investigated
-	InstrumentID string              `json:"instrument_id"`       // instrument under investigation (may be empty)
+	Subject      string              `json:"subject"`            // brief description of what is being investigated
+	InstrumentID string              `json:"instrument_id"`      // instrument under investigation (may be empty)
 	Status       InvestigationStatus `json:"status"`
 	AssignedTo   string              `json:"assigned_to,omitempty"`
 	Findings     string              `json:"findings,omitempty"`
@@ -781,12 +781,12 @@ type Investigation struct {
 
 // ReplaySession represents a recorded market replay session.
 type ReplaySession struct {
-	ID          string `json:"id"`
+	ID           string `json:"id"`
 	InstrumentID string `json:"instrument_id"`
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	Description string `json:"description,omitempty"`
-	CreatedAt   string `json:"created_at"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Description  string `json:"description,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 // ReplayEvent represents a single event within a replay session.
@@ -816,7 +816,7 @@ type Bond struct {
 	Name               string             `json:"name"`
 	Issuer             string             `json:"issuer"`
 	MaturityDate       string             `json:"maturity_date"`
-	CouponRate         float64            `json:"coupon_rate"`   // annual rate, e.g. 0.05 for 5%
+	CouponRate         float64            `json:"coupon_rate"`      // annual rate, e.g. 0.05 for 5%
 	CouponFrequency    string             `json:"coupon_frequency"` // ANNUAL | SEMI_ANNUAL | QUARTERLY
 	ParValue           Decimal            `json:"par_value"`
 	DayCountConvention DayCountConvention `json:"day_count_convention"`
@@ -831,11 +831,11 @@ type Bond struct {
 type StrategyType string
 
 const (
-	StrategyTypeSpread     StrategyType = "SPREAD"
-	StrategyTypeStraddle   StrategyType = "STRADDLE"
-	StrategyTypeStrangle   StrategyType = "STRANGLE"
-	StrategyTypeButterfly  StrategyType = "BUTTERFLY"
-	StrategyTypeCustom     StrategyType = "CUSTOM"
+	StrategyTypeSpread    StrategyType = "SPREAD"
+	StrategyTypeStraddle  StrategyType = "STRADDLE"
+	StrategyTypeStrangle  StrategyType = "STRANGLE"
+	StrategyTypeButterfly StrategyType = "BUTTERFLY"
+	StrategyTypeCustom    StrategyType = "CUSTOM"
 )
 
 // StrategyStatus represents the lifecycle state of a trading strategy.
@@ -850,7 +850,7 @@ const (
 // StrategyLeg defines one leg of a multi-leg trading strategy.
 type StrategyLeg struct {
 	InstrumentID string    `json:"instrument_id"`
-	Side         OrderSide `json:"side"`   // BUY or SELL
+	Side         OrderSide `json:"side"`      // BUY or SELL
 	RatioQty     int       `json:"ratio_qty"` // relative quantity ratio (e.g. 1, 2)
 }
 
@@ -917,18 +917,18 @@ const (
 
 // CSDTransfer represents a securities transfer instruction between custody accounts.
 type CSDTransfer struct {
-	ID              string            `json:"id"`
-	FromAccountID   string            `json:"from_account_id"`
-	ToAccountID     string            `json:"to_account_id"`
-	InstrumentID    string            `json:"instrument_id"`
-	Quantity        int               `json:"quantity"`
-	TransferType    CSDTransferType   `json:"transfer_type"`
-	SettlementAmount Decimal          `json:"settlement_amount,omitempty"` // only for DVP
-	Status          CSDTransferStatus `json:"status"`
-	FailReason      string            `json:"fail_reason,omitempty"`
-	TenantID        string            `json:"tenant_id"`
-	CreatedAt       string            `json:"created_at"`
-	UpdatedAt       string            `json:"updated_at"`
+	ID               string            `json:"id"`
+	FromAccountID    string            `json:"from_account_id"`
+	ToAccountID      string            `json:"to_account_id"`
+	InstrumentID     string            `json:"instrument_id"`
+	Quantity         int               `json:"quantity"`
+	TransferType     CSDTransferType   `json:"transfer_type"`
+	SettlementAmount Decimal           `json:"settlement_amount,omitempty"` // only for DVP
+	Status           CSDTransferStatus `json:"status"`
+	FailReason       string            `json:"fail_reason,omitempty"`
+	TenantID         string            `json:"tenant_id"`
+	CreatedAt        string            `json:"created_at"`
+	UpdatedAt        string            `json:"updated_at"`
 }
 
 // ── Node Hierarchy ────────────────────────────────────────────────────────────
@@ -1002,14 +1002,14 @@ const (
 	PermOrderView       = "ORDER_VIEW"
 
 	// Trade management
-	PermTradeBust     = "TRADE_BUST"
-	PermTradeCorrect  = "TRADE_CORRECT"
+	PermTradeBust      = "TRADE_BUST"
+	PermTradeCorrect   = "TRADE_CORRECT"
 	PermTradeReinstate = "TRADE_REINSTATE"
 	PermTradeView      = "TRADE_VIEW"
 
 	// Market / session control
-	PermMarketStartDay   = "MARKET_START_DAY"
-	PermMarketEndDay     = "MARKET_END_DAY"
+	PermMarketStartDay     = "MARKET_START_DAY"
+	PermMarketEndDay       = "MARKET_END_DAY"
 	PermMarketStartTrading = "MARKET_START_TRADING"
 	PermMarketEndTrading   = "MARKET_END_TRADING"
 	PermMarketHalt         = "MARKET_HALT"
@@ -1030,8 +1030,8 @@ const (
 	PermFirmView           = "FIRM_VIEW"
 
 	// Surveillance
-	PermSurveillanceView    = "SURVEILLANCE_VIEW"
-	PermSurveillanceResolve = "SURVEILLANCE_RESOLVE"
+	PermSurveillanceView        = "SURVEILLANCE_VIEW"
+	PermSurveillanceResolve     = "SURVEILLANCE_RESOLVE"
 	PermSurveillanceInvestigate = "SURVEILLANCE_INVESTIGATE"
 
 	// Admin
@@ -1060,7 +1060,7 @@ type Role struct {
 // SessionExtension records an operator-initiated extend or shorten of a trading session.
 type SessionExtension struct {
 	InstrumentID    string `json:"instrument_id"`
-	Action          string `json:"action"`           // EXTEND | SHORTEN
+	Action          string `json:"action"` // EXTEND | SHORTEN
 	DurationMinutes int    `json:"duration_minutes"`
 	Reason          string `json:"reason"`
 	CreatedAt       string `json:"created_at"`
@@ -1071,7 +1071,7 @@ type SessionExtension struct {
 // AuctionConfig holds auction-phase parameters for a trading parameter set.
 type AuctionConfig struct {
 	RandomEndSeconds          int    `json:"random_end_seconds"`
-	SurplusHandling           string `json:"surplus_handling"`            // PRO_RATA | TIME_PRIORITY
+	SurplusHandling           string `json:"surplus_handling"` // PRO_RATA | TIME_PRIORITY
 	MinAuctionDurationSeconds int    `json:"min_auction_duration_seconds"`
 }
 
@@ -1115,14 +1115,14 @@ type TradingCycle struct {
 
 // PostTradeParams holds the clearing and settlement configuration for an instrument.
 type PostTradeParams struct {
-	ID               string  `json:"id"`
-	InstrumentID     string  `json:"instrument_id"`
-	SettlementCycle  string  `json:"settlement_cycle"`   // e.g. "T+2"
-	ClearingFirmID   string  `json:"clearing_firm_id"`
-	FeeScheduleID    string  `json:"fee_schedule_id"`
-	PenaltyRatePct   float64 `json:"penalty_rate_pct"`
-	CreatedAt        string  `json:"created_at"`
-	UpdatedAt        string  `json:"updated_at"`
+	ID              string  `json:"id"`
+	InstrumentID    string  `json:"instrument_id"`
+	SettlementCycle string  `json:"settlement_cycle"` // e.g. "T+2"
+	ClearingFirmID  string  `json:"clearing_firm_id"`
+	FeeScheduleID   string  `json:"fee_schedule_id"`
+	PenaltyRatePct  float64 `json:"penalty_rate_pct"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 // ── Part C — Config Tables ────────────────────────────────────────────────────
@@ -1131,12 +1131,12 @@ type PostTradeParams struct {
 type ConfigTableType string
 
 const (
-	ConfigTableTypeFeeSchedule   ConfigTableType = "FEE_SCHEDULE"
-	ConfigTableTypeTaxRate       ConfigTableType = "TAX_RATE"
-	ConfigTableTypeHoliday       ConfigTableType = "HOLIDAY"
-	ConfigTableTypeMarginMatrix  ConfigTableType = "MARGIN_MATRIX"
-	ConfigTableTypeThrottle      ConfigTableType = "THROTTLE"
-	ConfigTableTypeCustom        ConfigTableType = "CUSTOM"
+	ConfigTableTypeFeeSchedule  ConfigTableType = "FEE_SCHEDULE"
+	ConfigTableTypeTaxRate      ConfigTableType = "TAX_RATE"
+	ConfigTableTypeHoliday      ConfigTableType = "HOLIDAY"
+	ConfigTableTypeMarginMatrix ConfigTableType = "MARGIN_MATRIX"
+	ConfigTableTypeThrottle     ConfigTableType = "THROTTLE"
+	ConfigTableTypeCustom       ConfigTableType = "CUSTOM"
 )
 
 // ConfigTable stores an operator-managed tabular configuration structure.
@@ -1174,14 +1174,14 @@ type Client struct {
 
 // Index represents a market index calculated from a weighted basket of instruments.
 type Index struct {
-	ID                 string             `json:"id"`
-	Name               string             `json:"name"`
-	InstrumentWeights  map[string]float64 `json:"instrument_weights"`
-	BaseValue          float64            `json:"base_value"`
-	CurrentValue       float64            `json:"current_value"`
-	ChangePercent      float64            `json:"change_percent"`
-	LastCalculatedAt   string             `json:"last_calculated_at"`
-	CreatedAt          string             `json:"created_at"`
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	InstrumentWeights map[string]float64 `json:"instrument_weights"`
+	BaseValue         float64            `json:"base_value"`
+	CurrentValue      float64            `json:"current_value"`
+	ChangePercent     float64            `json:"change_percent"`
+	LastCalculatedAt  string             `json:"last_calculated_at"`
+	CreatedAt         string             `json:"created_at"`
 }
 
 // ── Sprint 8 — Part B: Entity Permissions ────────────────────────────────────

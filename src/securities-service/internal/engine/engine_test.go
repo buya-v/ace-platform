@@ -84,7 +84,7 @@ func limitOrder(id, instID, participantID string, side types.OrderSide, qty int,
 		Side:          side,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      qty,
-		Price:         price,
+		Price:         decLit(price),
 		Status:        types.OrderStatusPending,
 		TimeInForce:   types.TimeInForceGTC,
 		CreatedAt:     createdAt,
@@ -101,7 +101,7 @@ func marketOrder(id, instID, participantID string, side types.OrderSide, qty int
 		Side:          side,
 		OrderType:     types.OrderTypeMarket,
 		Quantity:      qty,
-		Price:         0,
+		Price:         decLit(0),
 		Status:        types.OrderStatusPending,
 		TimeInForce:   types.TimeInForceGTC,
 		CreatedAt:     createdAt,
@@ -146,7 +146,7 @@ func TestMatchOrder_LimitBuySellExactCross(t *testing.T) {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
 	tr := trades[0]
-	if tr.Price != 50.00 {
+	if tr.Price != decLit(50.00) {
 		t.Errorf("trade price: want 50.00, got %v", tr.Price)
 	}
 	if tr.Quantity != 100 {
@@ -194,7 +194,7 @@ func TestMatchOrder_LimitBuyAboveSell(t *testing.T) {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
 	// Trade executes at resting (sell) price, not the aggressor's (buy) price.
-	if trades[0].Price != 50.00 {
+	if trades[0].Price != decLit(50.00) {
 		t.Errorf("trade price: want 50.00 (resting price), got %v", trades[0].Price)
 	}
 	if trades[0].Quantity != 100 {
@@ -285,14 +285,14 @@ func TestMatchOrder_MultipleFills(t *testing.T) {
 	}
 
 	// First trade against sell1 (lower price = better ask).
-	if trades[0].Price != 50.00 {
+	if trades[0].Price != decLit(50.00) {
 		t.Errorf("trade[0] price: want 50.00, got %v", trades[0].Price)
 	}
 	if trades[0].Quantity != 30 {
 		t.Errorf("trade[0] qty: want 30, got %d", trades[0].Quantity)
 	}
 	// Second trade against sell2.
-	if trades[1].Price != 51.00 {
+	if trades[1].Price != decLit(51.00) {
 		t.Errorf("trade[1] price: want 51.00, got %v", trades[1].Price)
 	}
 	if trades[1].Quantity != 20 {
@@ -332,7 +332,7 @@ func TestMatchOrder_MarketBuy(t *testing.T) {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
 	// Market order trades at the resting (sell) price.
-	if trades[0].Price != 50.00 {
+	if trades[0].Price != decLit(50.00) {
 		t.Errorf("trade price: want 50.00, got %v", trades[0].Price)
 	}
 	if trades[0].Quantity != 50 {
@@ -415,8 +415,8 @@ func TestMatchOrder_AvgCostCalculation(t *testing.T) {
 		t.Errorf("buyer qty: want 200, got %d", pos.Quantity)
 	}
 	const wantAvg = 55.00
-	if math.Abs(pos.AvgCost-wantAvg) > 0.001 {
-		t.Errorf("avg_cost: want %.2f, got %.4f", wantAvg, pos.AvgCost)
+	if math.Abs(pos.AvgCost.Float64()-wantAvg) > 0.001 {
+		t.Errorf("avg_cost: want %.2f, got %.4f", wantAvg, pos.AvgCost.Float64())
 	}
 }
 
@@ -490,7 +490,7 @@ func TestMatchOrder_IncomingSellMatchesBuy(t *testing.T) {
 	if len(trades) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
-	if trades[0].Price != 75.00 {
+	if trades[0].Price != decLit(75.00) {
 		t.Errorf("price: want 75.00, got %v", trades[0].Price)
 	}
 	if trades[0].BuyOrderID != "buy-1" {
@@ -556,7 +556,7 @@ func TestMatchOrder_MarketSell(t *testing.T) {
 		t.Fatalf("expected 1 trade, got %d", len(trades))
 	}
 	// Trade at resting buy price.
-	if trades[0].Price != 60.00 {
+	if trades[0].Price != decLit(60.00) {
 		t.Errorf("price: want 60.00, got %v", trades[0].Price)
 	}
 	if trades[0].Quantity != 40 {
@@ -572,7 +572,7 @@ func TestMatchOrder_PartiallyFilledRestingOrder(t *testing.T) {
 	sell := &types.SecurityOrder{
 		ID: "sell-partial", InstrumentID: testInstID, ParticipantID: "seller",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 100, FilledQuantity: 40, Price: 50.00,
+		Quantity: 100, FilledQuantity: 40, Price: decLit(50.00),
 		Status:      types.OrderStatusPartiallyFilled,
 		TimeInForce: types.TimeInForceGTC, CreatedAt: ts(0), UpdatedAt: ts(0),
 	}
@@ -844,7 +844,7 @@ func icebergOrder(id, instID, participantID string, side types.OrderSide,
 		Side:            side,
 		OrderType:       types.OrderTypeLimit,
 		Quantity:        total,
-		Price:           price,
+		Price:           decLit(price),
 		VisibleQuantity: visible,
 		HiddenQuantity:  hidden,
 		Status:          types.OrderStatusPending,
@@ -1015,7 +1015,7 @@ func TestSTP_DifferentParticipants(t *testing.T) {
 	if len(trades) != 1 {
 		t.Fatalf("different participants with STP_CANCEL_BOTH: want 1 trade, got %d", len(trades))
 	}
-	if trades[0].Price != 75.0 {
+	if trades[0].Price != decLit(75.0) {
 		t.Errorf("trade price: want 75.0, got %v", trades[0].Price)
 	}
 	if trades[0].Quantity != 100 {

@@ -79,14 +79,14 @@ func (e *MatchingEngine) checkSurveillance(trade *types.SecurityTrade) {
 		case types.AlertTypeLargeTrade:
 			triggered = float64(trade.Quantity) >= th.Value
 		case types.AlertTypePriceSpike:
-			triggered = trade.Price >= th.Value
+			triggered = trade.Price.Float64() >= th.Value
 		case types.AlertTypeMarketManipulation:
 			// Also trigger via reference price check below — alias handled there.
 		}
 		if triggered {
 			e.raiseAlert(trade.InstrumentID, th.AlertType, trade.ID, now,
 				fmt.Sprintf("threshold breached: %s >= %.2f (trade qty=%d price=%.2f)",
-					th.AlertType, th.Value, trade.Quantity, trade.Price))
+					th.AlertType, th.Value, trade.Quantity, trade.Price.Float64()))
 		}
 	}
 
@@ -229,10 +229,11 @@ func (e *MatchingEngine) checkMarketManipulation(trade *types.SecurityTrade, now
 	for _, th := range thresholds {
 		if th.AlertType == types.AlertTypeMarketManipulation && th.Value > 0 {
 			refPrice := th.Value
-			if trade.Price > refPrice*1.05 || trade.Price < refPrice*0.95 {
+			tradePrice := trade.Price.Float64()
+			if tradePrice > refPrice*1.05 || tradePrice < refPrice*0.95 {
 				e.raiseAlert(trade.InstrumentID, types.AlertTypeMarketManipulation, trade.ID, now,
 					fmt.Sprintf("market manipulation suspected: trade price %.2f deviates >5%% from reference %.2f",
-						trade.Price, refPrice))
+						tradePrice, refPrice))
 				return
 			}
 		}
@@ -324,7 +325,7 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 
 	// 1b. Circuit breaker validation for LIMIT orders.
 	if order.OrderType == types.OrderTypeLimit && e.circuitBreakerEngine != nil {
-		allowed, event, cbErr := e.circuitBreakerEngine.ValidatePrice(order.InstrumentID, order.Price)
+		allowed, event, cbErr := e.circuitBreakerEngine.ValidatePrice(order.InstrumentID, order.Price.Float64())
 		if cbErr != nil {
 			return nil, fmt.Errorf("circuit breaker check failed: %w", cbErr)
 		}
@@ -375,13 +376,13 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 	sort.Slice(candidates, func(i, j int) bool {
 		if order.Side == types.OrderSideBuy {
 			// Incoming BUY: sort sells ascending by price (best ask first).
-			if candidates[i].Price != candidates[j].Price {
-				return candidates[i].Price < candidates[j].Price
+			if !candidates[i].Price.Equal(candidates[j].Price) {
+				return candidates[i].Price.LessThan(candidates[j].Price)
 			}
 		} else {
 			// Incoming SELL: sort buys descending by price (best bid first).
-			if candidates[i].Price != candidates[j].Price {
-				return candidates[i].Price > candidates[j].Price
+			if !candidates[i].Price.Equal(candidates[j].Price) {
+				return candidates[i].Price.GreaterThan(candidates[j].Price)
 			}
 		}
 		// Time priority: earlier orders first.
@@ -522,7 +523,7 @@ func (e *MatchingEngine) MatchOrder(tenantID string, order *types.SecurityOrder)
 
 		// Update circuit breaker last traded price after each trade.
 		if e.circuitBreakerEngine != nil {
-			_ = e.circuitBreakerEngine.OnTrade(order.InstrumentID, trade.Price)
+			_ = e.circuitBreakerEngine.OnTrade(order.InstrumentID, trade.Price.Float64())
 		}
 
 		// Run surveillance checks after each trade.
@@ -647,10 +648,10 @@ func pricesCross(incoming, resting *types.SecurityOrder) bool {
 
 	if incoming.Side == types.OrderSideBuy {
 		// Incoming BUY crosses if incoming.Price >= resting.Price.
-		return incoming.Price >= resting.Price
+		return incoming.Price.GreaterThanOrEqual(resting.Price)
 	}
 	// Incoming SELL crosses if incoming.Price <= resting.Price.
-	return incoming.Price <= resting.Price
+	return incoming.Price.LessThanOrEqual(resting.Price)
 }
 
 // updatePositions adjusts buyer and seller positions after a trade.
@@ -675,10 +676,12 @@ func (e *MatchingEngine) updatePositions(incoming, resting *types.SecurityOrder,
 	oldAvgCost := buyPos.AvgCost
 	buyPos.Quantity += trade.Quantity
 	if buyPos.Quantity > 0 {
-		buyPos.AvgCost = ((float64(oldQty) * oldAvgCost) + (float64(trade.Quantity) * trade.Price)) / float64(buyPos.Quantity)
+		// Weighted-average cost: (oldQty*oldAvgCost + tradeQty*tradePrice) / newQty.
+		totalCost := oldAvgCost.MulInt64(int64(oldQty)).Add(trade.Price.MulInt64(int64(trade.Quantity)))
+		buyPos.AvgCost = totalCost.DivInt64(int64(buyPos.Quantity))
 	}
-	buyPos.MarketValue = float64(buyPos.Quantity) * trade.Price
-	buyPos.UnrealizedPnl = float64(buyPos.Quantity) * (trade.Price - buyPos.AvgCost)
+	buyPos.MarketValue = trade.Price.MulInt64(int64(buyPos.Quantity))
+	buyPos.UnrealizedPnl = trade.Price.Sub(buyPos.AvgCost).MulInt64(int64(buyPos.Quantity))
 	buyPos.UpdatedAt = now
 	if err := e.positionStore.Update(buyPos); err != nil {
 		return fmt.Errorf("failed to update buyer position: %w", err)
@@ -691,11 +694,11 @@ func (e *MatchingEngine) updatePositions(incoming, resting *types.SecurityOrder,
 	}
 	sellPos.Quantity -= trade.Quantity
 	// AvgCost remains unchanged for selling.
-	sellPos.MarketValue = float64(sellPos.Quantity) * trade.Price
+	sellPos.MarketValue = trade.Price.MulInt64(int64(sellPos.Quantity))
 	if sellPos.Quantity != 0 {
-		sellPos.UnrealizedPnl = float64(sellPos.Quantity) * (trade.Price - sellPos.AvgCost)
+		sellPos.UnrealizedPnl = trade.Price.Sub(sellPos.AvgCost).MulInt64(int64(sellPos.Quantity))
 	} else {
-		sellPos.UnrealizedPnl = 0
+		sellPos.UnrealizedPnl = types.Decimal{}
 	}
 	sellPos.UpdatedAt = now
 	if err := e.positionStore.Update(sellPos); err != nil {

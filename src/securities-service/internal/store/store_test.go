@@ -27,15 +27,15 @@ func newInstrument(id, ticker string, ac types.AssetClass, ts types.TradingStatu
 
 func newOrder(id, instrumentID string, side types.OrderSide, status types.OrderStatus) *types.SecurityOrder {
 	return &types.SecurityOrder{
-		ID:           id,
-		InstrumentID: instrumentID,
+		ID:            id,
+		InstrumentID:  instrumentID,
 		ParticipantID: "P1",
-		Side:         side,
-		OrderType:    types.OrderTypeLimit,
-		Quantity:     100,
-		Price:        10.00,
-		Status:       status,
-		TimeInForce:  types.TimeInForceGTC,
+		Side:          side,
+		OrderType:     types.OrderTypeLimit,
+		Quantity:      100,
+		Price:         decLit(10.00),
+		Status:        status,
+		TimeInForce:   types.TimeInForceGTC,
 	}
 }
 
@@ -501,7 +501,7 @@ func newTrade(id, instrumentID string) *types.SecurityTrade {
 		BuyOrderID:     "buy-" + id,
 		SellOrderID:    "sell-" + id,
 		InstrumentID:   instrumentID,
-		Price:          50.00,
+		Price:          decLit(50.00),
 		Quantity:       100,
 		TradeDate:      "2026-01-01",
 		SettlementDate: "2026-01-03",
@@ -524,7 +524,7 @@ func TestTradeStore_Create(t *testing.T) {
 	if got.ID != "trade-1" {
 		t.Errorf("ID: want trade-1, got %s", got.ID)
 	}
-	if got.Price != 50.00 {
+	if got.Price != decLit(50.00) {
 		t.Errorf("Price: want 50.00, got %v", got.Price)
 	}
 	if got.Quantity != 100 {
@@ -626,7 +626,7 @@ func TestPositionStore_GetOrCreate(t *testing.T) {
 		if pos.Quantity != 0 {
 			t.Errorf("initial Quantity: want 0, got %d", pos.Quantity)
 		}
-		if pos.AvgCost != 0 {
+		if pos.AvgCost != decLit(0) {
 			t.Errorf("initial AvgCost: want 0, got %v", pos.AvgCost)
 		}
 	})
@@ -635,7 +635,7 @@ func TestPositionStore_GetOrCreate(t *testing.T) {
 		// Update the position created above.
 		pos, _ := s.GetOrCreate("P1", "inst-A")
 		pos.Quantity = 100
-		pos.AvgCost = 50.00
+		pos.AvgCost = decLit(50.00)
 		s.Update(pos)
 
 		pos2, err := s.GetOrCreate("P1", "inst-A")
@@ -645,7 +645,7 @@ func TestPositionStore_GetOrCreate(t *testing.T) {
 		if pos2.Quantity != 100 {
 			t.Errorf("want 100 (from update), got %d", pos2.Quantity)
 		}
-		if pos2.AvgCost != 50.00 {
+		if pos2.AvgCost != decLit(50.00) {
 			t.Errorf("want AvgCost 50.00, got %v", pos2.AvgCost)
 		}
 	})
@@ -659,7 +659,7 @@ func TestPositionStore_Update(t *testing.T) {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
 	pos.Quantity = 200
-	pos.AvgCost = 75.50
+	pos.AvgCost = decLit(75.50)
 	if err := s.Update(pos); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -671,7 +671,7 @@ func TestPositionStore_Update(t *testing.T) {
 	if updated.Quantity != 200 {
 		t.Errorf("Quantity: want 200, got %d", updated.Quantity)
 	}
-	if updated.AvgCost != 75.50 {
+	if updated.AvgCost != decLit(75.50) {
 		t.Errorf("AvgCost: want 75.50, got %v", updated.AvgCost)
 	}
 }
@@ -2098,7 +2098,7 @@ func TestTickTableStore_DeepCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	got.Tiers[0].TickSize = 999.0    // Mutate returned copy.
+	got.Tiers[0].TickSize = 999.0 // Mutate returned copy.
 	got.Tiers = append(got.Tiers, types.TickTier{MinPrice: 500, MaxPrice: 1000, TickSize: 1.0})
 
 	// Fetch again — the stored record must be unchanged.
@@ -3965,7 +3965,7 @@ func newBond(id, isin, issuer string, couponRate float64, convention types.DayCo
 		MaturityDate:       "2031-04-24",
 		CouponRate:         couponRate,
 		CouponFrequency:    "ANNUAL",
-		ParValue:           1000.0,
+		ParValue:           decLit(1000.0),
 		DayCountConvention: convention,
 		TradingStatus:      types.TradingStatusActive,
 		CreatedAt:          "2026-04-24T00:00:00Z",
@@ -4357,17 +4357,17 @@ func TestCSDTransferStore_Create_Complete_Fail(t *testing.T) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	transfer := &types.CSDTransfer{
-		ID:            "TXN-1",
-		FromAccountID: "ACCT-1",
-		ToAccountID:   "ACCT-2",
-		InstrumentID:  "INST-A",
-		Quantity:      100,
-		TransferType:  types.CSDTransferDVP,
-		SettlementAmount: 5000.0,
-		Status:        types.CSDTransferPending,
-		TenantID:      "ace-commodities",
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:               "TXN-1",
+		FromAccountID:    "ACCT-1",
+		ToAccountID:      "ACCT-2",
+		InstrumentID:     "INST-A",
+		Quantity:         100,
+		TransferType:     types.CSDTransferDVP,
+		SettlementAmount: decLit(5000.0),
+		Status:           types.CSDTransferPending,
+		TenantID:         "ace-commodities",
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	// Create succeeds.
@@ -4910,17 +4910,17 @@ func TestRoleStore_Delete(t *testing.T) {
 
 func newParamSet(id, instrumentID string) *types.TradingParameterSet {
 	return &types.TradingParameterSet{
-		ID:                 id,
-		InstrumentID:       instrumentID,
-		Name:               "Default Params for " + instrumentID,
-		AllowedOrderTypes:  []string{"LIMIT", "MARKET"},
-		AllowedTimeInForce: []string{"GTC", "DAY"},
-		MinOrderSize:       10,
-		MaxOrderSize:       10000,
-		MaxOrderValue:      500000.0,
+		ID:                  id,
+		InstrumentID:        instrumentID,
+		Name:                "Default Params for " + instrumentID,
+		AllowedOrderTypes:   []string{"LIMIT", "MARKET"},
+		AllowedTimeInForce:  []string{"GTC", "DAY"},
+		MinOrderSize:        10,
+		MaxOrderSize:        10000,
+		MaxOrderValue:       500000.0,
 		ShortSellingAllowed: false,
-		CreatedAt:          "2024-01-01T00:00:00Z",
-		UpdatedAt:          "2024-01-01T00:00:00Z",
+		CreatedAt:           "2024-01-01T00:00:00Z",
+		UpdatedAt:           "2024-01-01T00:00:00Z",
 	}
 }
 
@@ -5339,15 +5339,15 @@ func TestHistoryStore_ArchiveOrder_ListOrders(t *testing.T) {
 	// Archive 3 orders with timestamps spread across 3 seconds.
 	for i := 0; i < 3; i++ {
 		o := types.SecurityOrder{
-			ID:           fmt.Sprintf("hist-ord-%d", i),
-			InstrumentID: "INST-1",
+			ID:            fmt.Sprintf("hist-ord-%d", i),
+			InstrumentID:  "INST-1",
 			ParticipantID: "P1",
-			Side:         types.OrderSideBuy,
-			OrderType:    types.OrderTypeLimit,
-			Quantity:     100,
-			Price:        10.0,
-			Status:       types.OrderStatusFilled,
-			ArchivedAt:   base.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
+			Side:          types.OrderSideBuy,
+			OrderType:     types.OrderTypeLimit,
+			Quantity:      100,
+			Price:         decLit(10.0),
+			Status:        types.OrderStatusFilled,
+			ArchivedAt:    base.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
 		}
 		if err := s.ArchiveOrder(o); err != nil {
 			t.Fatalf("ArchiveOrder[%d]: %v", i, err)
@@ -5435,7 +5435,7 @@ func TestHistoryStore_ArchiveTrade_ListTrades(t *testing.T) {
 			InstrumentID: "INST-2",
 			BuyOrderID:   "buy-1",
 			SellOrderID:  "sell-1",
-			Price:        20.0,
+			Price:        decLit(20.0),
 			Quantity:     50,
 			Status:       types.TradeStatusSettled,
 			ArchivedAt:   base.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
