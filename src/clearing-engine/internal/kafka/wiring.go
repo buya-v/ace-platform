@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"testing"
 )
 
 // Clearing-engine Kafka wiring:
@@ -21,13 +22,29 @@ const ServiceName = "clearing-engine"
 // If KAFKA_BROKERS is set and non-empty, returns a real KafkaProducer.
 // Otherwise returns a ChannelProducer for local/test use.
 func NewProducerFromEnv() Producer {
-	brokers := os.Getenv("KAFKA_BROKERS")
-	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+	if kafkaBrokersConfigured() {
 		cfg := ConfigFromEnv()
 		log.Printf("[%s] using real Kafka producer, brokers=%v", ServiceName, cfg.Brokers)
 		return NewKafkaProducer(cfg)
 	}
-	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based producer", ServiceName)
+	if !testing.Testing() {
+		log.Fatalf("[%s] KAFKA_BROKERS is required but not set; refusing to fall back to the in-process channel producer in a multi-process deployment — cross-service events would be silently dropped. Set KAFKA_BROKERS, or build the in-process adapter explicitly via newInProcessProducer in unit tests.", ServiceName)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set; using in-process channel producer (TEST MODE ONLY)", ServiceName)
+	return newInProcessProducer()
+}
+
+// kafkaBrokersConfigured reports whether the KAFKA_BROKERS environment variable
+// is set to a non-empty (non-whitespace) value.
+func kafkaBrokersConfigured() bool {
+	return strings.TrimSpace(os.Getenv("KAFKA_BROKERS")) != ""
+}
+
+// newInProcessProducer builds the in-process channel-based producer used ONLY by
+// unit tests. Production code reaches it only via NewProducerFromEnv under
+// testing.Testing(); the in-process adapter must never be used in a
+// multi-process deployment, where Go channels do not cross process boundaries.
+func newInProcessProducer() *ChannelProducer {
 	p := NewChannelProducer(DefaultProducerConfig())
 	p.RegisterTopic(TopicClearingNovated, 1000)
 	return p
@@ -51,19 +68,19 @@ type ClearingNovatedPayload struct {
 
 // TradeExecutedPayload mirrors the matching-engine's published payload.
 type TradeExecutedPayload struct {
-	TradeID              string `json:"trade_id"`
-	InstrumentID         string `json:"instrument_id"`
-	BuyOrderID           string `json:"buy_order_id"`
-	SellOrderID          string `json:"sell_order_id"`
-	BuyerParticipantID   string `json:"buyer_participant_id"`
-	SellerParticipantID  string `json:"seller_participant_id"`
-	Price                string `json:"price"`
-	Quantity             uint64 `json:"quantity"`
-	TradeValue           string `json:"trade_value"`
-	AggressorSide        string `json:"aggressor_side"`
-	TradeType            string `json:"trade_type"`
-	SequenceNumber       uint64 `json:"sequence_number"`
-	ExecutedAt           string `json:"executed_at"`
+	TradeID             string `json:"trade_id"`
+	InstrumentID        string `json:"instrument_id"`
+	BuyOrderID          string `json:"buy_order_id"`
+	SellOrderID         string `json:"sell_order_id"`
+	BuyerParticipantID  string `json:"buyer_participant_id"`
+	SellerParticipantID string `json:"seller_participant_id"`
+	Price               string `json:"price"`
+	Quantity            uint64 `json:"quantity"`
+	TradeValue          string `json:"trade_value"`
+	AggressorSide       string `json:"aggressor_side"`
+	TradeType           string `json:"trade_type"`
+	SequenceNumber      uint64 `json:"sequence_number"`
+	ExecutedAt          string `json:"executed_at"`
 }
 
 // PublishClearingNovated publishes a clearing novation event.
@@ -98,16 +115,26 @@ func SetupConsumer(cfg ConsumerConfig, dlqProducer Producer) *ChannelConsumer {
 // NewConsumerFromEnv creates a Consumer based on environment configuration.
 // If KAFKA_BROKERS is set, returns a real KafkaConsumer. Otherwise ChannelConsumer.
 func NewConsumerFromEnv(dlqProducer Producer) Consumer {
-	brokers := os.Getenv("KAFKA_BROKERS")
 	groupID := os.Getenv("KAFKA_GROUP_ID")
 	if groupID == "" {
 		groupID = ServiceName
 	}
-	if brokers != "" && len(strings.TrimSpace(brokers)) > 0 {
+	if kafkaBrokersConfigured() {
 		cfg := ConsumerConfigFromEnv(groupID)
 		log.Printf("[%s] using real Kafka consumer, brokers=%v, group=%s", ServiceName, cfg.Brokers, cfg.GroupID)
 		return NewKafkaConsumer(cfg, dlqProducer)
 	}
-	log.Printf("[%s] KAFKA_BROKERS not set, using channel-based consumer", ServiceName)
+	if !testing.Testing() {
+		log.Fatalf("[%s] KAFKA_BROKERS is required but not set; refusing to fall back to the in-process channel consumer in a multi-process deployment — cross-service events would never be received. Set KAFKA_BROKERS, or build the in-process adapter explicitly via newInProcessConsumer in unit tests.", ServiceName)
+	}
+	log.Printf("[%s] KAFKA_BROKERS not set; using in-process channel consumer (TEST MODE ONLY)", ServiceName)
+	return newInProcessConsumer(groupID, dlqProducer)
+}
+
+// newInProcessConsumer builds the in-process channel-based consumer used ONLY by
+// unit tests. Production code reaches it only via NewConsumerFromEnv under
+// testing.Testing(); the in-process adapter must never be used in a
+// multi-process deployment, where Go channels do not cross process boundaries.
+func newInProcessConsumer(groupID string, dlqProducer Producer) *ChannelConsumer {
 	return NewChannelConsumer(DefaultConsumerConfig(groupID), dlqProducer)
 }
