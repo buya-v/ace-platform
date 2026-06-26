@@ -96,8 +96,8 @@ services:
 
   matching-engine:
     build:
-      context: ./src/matching-engine
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: matching-engine/Dockerfile
     container_name: garudax-matching-engine
     depends_on:
       postgres:
@@ -120,8 +120,8 @@ services:
 
   clearing-engine:
     build:
-      context: ./src/clearing-engine
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: clearing-engine/Dockerfile
     container_name: garudax-clearing-engine
     depends_on:
       postgres:
@@ -146,8 +146,8 @@ services:
 
   margin-engine:
     build:
-      context: ./src/margin-engine
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: margin-engine/Dockerfile
     container_name: garudax-margin-engine
     depends_on:
       postgres:
@@ -172,8 +172,8 @@ services:
 
   settlement-engine:
     build:
-      context: ./src/settlement-engine
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: settlement-engine/Dockerfile
     container_name: garudax-settlement-engine
     depends_on:
       postgres:
@@ -230,8 +230,8 @@ services:
 
   compliance-service:
     build:
-      context: ./src/compliance-service
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: compliance-service/Dockerfile
     container_name: garudax-compliance-service
     depends_on:
       postgres:
@@ -253,8 +253,8 @@ services:
 
   market-data-service:
     build:
-      context: ./src/market-data-service
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: market-data-service/Dockerfile
     container_name: garudax-market-data-service
     depends_on:
       postgres:
@@ -277,8 +277,8 @@ services:
 
   warehouse-service:
     build:
-      context: ./src/warehouse-service
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: warehouse-service/Dockerfile
     container_name: garudax-warehouse-service
     depends_on:
       postgres:
@@ -300,8 +300,8 @@ services:
 
   securities-service:
     build:
-      context: ./src/securities-service
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: securities-service/Dockerfile
     container_name: garudax-securities-service
     depends_on:
       postgres:
@@ -363,8 +363,8 @@ services:
 
   fix-gateway:
     build:
-      context: ./src/fix-gateway
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: fix-gateway/Dockerfile
     container_name: garudax-fix-gateway
     depends_on:
       postgres:
@@ -395,8 +395,8 @@ services:
 
   gateway:
     build:
-      context: ./src/gateway
-      dockerfile: Dockerfile
+      context: ./src
+      dockerfile: gateway/Dockerfile
     container_name: garudax-gateway
     depends_on:
       auth-service:

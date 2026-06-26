@@ -1,0 +1,14 @@
+# Applies when the Docker build context is ./src (the shared-module-consuming Go
+# services — see docker-compose.yml). Keeps the context small even though it now
+# spans the whole src tree: only go.mod/go.sum + Go source are needed to build a
+# service plus the ../shared replace targets.
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/.vite
+**/.next
+**/playwright-report
+**/test-results
+**/.git
+**/*.log
