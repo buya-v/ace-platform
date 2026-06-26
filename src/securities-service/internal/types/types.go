@@ -1,6 +1,13 @@
 // Package types defines all domain types for the securities-service.
 package types
 
+import "github.com/garudax-platform/decimal"
+
+// Decimal is the platform's shared fixed-point money type. Re-exported here so
+// domain structs can reference money fields as types.Decimal without every
+// caller importing the shared module directly.
+type Decimal = decimal.Decimal
+
 // AssetClass represents the broad category of a financial instrument.
 type AssetClass string
 
@@ -96,7 +103,7 @@ type BondDetails struct {
 	MaturityDate       string  `json:"maturity_date"`
 	CouponRate         float64 `json:"coupon_rate"`
 	CouponFrequency    string  `json:"coupon_frequency"`
-	ParValue           float64 `json:"par_value"`
+	ParValue           Decimal `json:"par_value"`
 	DayCountConvention string  `json:"day_count_convention"`
 }
 
@@ -110,12 +117,12 @@ type SecurityOrder struct {
 	Side            OrderSide   `json:"side"`
 	OrderType       OrderType   `json:"order_type"`
 	Quantity        int         `json:"quantity"`
-	Price           float64     `json:"price"`
-	StopPrice       float64     `json:"stop_price"`
+	Price           Decimal     `json:"price"`
+	StopPrice       Decimal     `json:"stop_price"`
 	TimeInForce     TimeInForce `json:"time_in_force"`
 	Status          OrderStatus `json:"status"`
 	FilledQuantity  int         `json:"filled_quantity"`
-	AvgFillPrice    float64     `json:"avg_fill_price"`
+	AvgFillPrice    Decimal     `json:"avg_fill_price"`
 	VisibleQuantity int         `json:"visible_quantity,omitempty"` // Iceberg: visible (displayed) quantity
 	HiddenQuantity  int         `json:"hidden_quantity,omitempty"`  // Iceberg: hidden (reserve) quantity
 	LocateID        string      `json:"locate_id,omitempty"`        // P4a: required for SHORT_SELL orders
@@ -142,7 +149,7 @@ type SecurityTrade struct {
 	BuyOrderID     string      `json:"buy_order_id"`
 	SellOrderID    string      `json:"sell_order_id"`
 	InstrumentID   string      `json:"instrument_id"`
-	Price          float64     `json:"price"`
+	Price          Decimal     `json:"price"`
 	Quantity       int         `json:"quantity"`
 	TradeDate      string      `json:"trade_date"`
 	SettlementDate string      `json:"settlement_date"`
@@ -157,9 +164,9 @@ type Position struct {
 	ParticipantID string  `json:"participant_id"`
 	InstrumentID  string  `json:"instrument_id"`
 	Quantity      int     `json:"quantity"`
-	AvgCost       float64 `json:"avg_cost"`
-	MarketValue   float64 `json:"market_value"`
-	UnrealizedPnl float64 `json:"unrealized_pnl"`
+	AvgCost       Decimal `json:"avg_cost"`
+	MarketValue   Decimal `json:"market_value"`
+	UnrealizedPnl Decimal `json:"unrealized_pnl"`
 	UpdatedAt     string  `json:"updated_at"`
 }
 
@@ -184,9 +191,9 @@ type SettlementObligation struct {
 	BuyerParticipantID  string           `json:"buyer_participant_id"`
 	SellerParticipantID string           `json:"seller_participant_id"`
 	Quantity            int              `json:"quantity"`
-	Price               float64          `json:"price"`
-	NetAmount           float64          `json:"net_amount"`
-	AccruedInterest     float64          `json:"accrued_interest,omitempty"`
+	Price               Decimal          `json:"price"`
+	NetAmount           Decimal          `json:"net_amount"`
+	AccruedInterest     Decimal          `json:"accrued_interest,omitempty"`
 	SettlementDate      string           `json:"settlement_date"`
 	Status              SettlementStatus `json:"status"`
 	CreatedAt           string           `json:"created_at"`
@@ -811,7 +818,7 @@ type Bond struct {
 	MaturityDate       string             `json:"maturity_date"`
 	CouponRate         float64            `json:"coupon_rate"`   // annual rate, e.g. 0.05 for 5%
 	CouponFrequency    string             `json:"coupon_frequency"` // ANNUAL | SEMI_ANNUAL | QUARTERLY
-	ParValue           float64            `json:"par_value"`
+	ParValue           Decimal            `json:"par_value"`
 	DayCountConvention DayCountConvention `json:"day_count_convention"`
 	TradingStatus      TradingStatus      `json:"trading_status"`
 	CreatedAt          string             `json:"created_at"`
@@ -916,7 +923,7 @@ type CSDTransfer struct {
 	InstrumentID    string            `json:"instrument_id"`
 	Quantity        int               `json:"quantity"`
 	TransferType    CSDTransferType   `json:"transfer_type"`
-	SettlementAmount float64          `json:"settlement_amount,omitempty"` // only for DVP
+	SettlementAmount Decimal          `json:"settlement_amount,omitempty"` // only for DVP
 	Status          CSDTransferStatus `json:"status"`
 	FailReason      string            `json:"fail_reason,omitempty"`
 	TenantID        string            `json:"tenant_id"`
