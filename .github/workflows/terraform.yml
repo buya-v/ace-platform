@@ -1,15 +1,17 @@
 name: Terraform Plan / Apply
 
+# PARTIALLY GUARDED:
+#   * Read-only jobs (terraform-validate = "Validate", terraform-plan) run on
+#     `pull_request` — they mutate NO cloud state (init -backend=false / plan
+#     only) and "Validate" is a required status check (see
+#     .github/branch-protection.json), so it MUST report on every PR.
+#   * Mutating jobs (terraform-apply-*) are guarded to manual `workflow_dispatch`
+#     ONLY and each additionally requires GitHub environment approval. They never
+#     auto-run on push/merge — this is a build+test+validate gate, not a deploy.
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - "infrastructure/terraform/**"
-      - ".github/workflows/terraform.yml"
-  push:
-    branches: [main]
-    paths:
-      - "infrastructure/terraform/**"
+    branches: [main, develop]
+  workflow_dispatch:
 
 env:
   TF_VERSION: "1.7.0"
@@ -128,7 +130,8 @@ jobs:
   terraform-apply-dev:
     name: Apply — dev
     needs: terraform-validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # MUTATING: manual dispatch only + `environment: dev` approval gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: dev
     steps:
@@ -156,7 +159,8 @@ jobs:
   terraform-apply-staging:
     name: Apply — staging
     needs: terraform-apply-dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # MUTATING: manual dispatch only + `environment: staging` approval gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -184,7 +188,8 @@ jobs:
   terraform-apply-prod:
     name: Apply — prod
     needs: terraform-apply-staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # MUTATING: manual dispatch only + `environment: prod` approval gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: prod
     steps:

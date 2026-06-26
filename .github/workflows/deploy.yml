@@ -1,10 +1,11 @@
 name: Deploy to EKS
 
+# GUARDED: cluster deploy is not part of the CI build+test gate. The automatic
+# workflow_run trigger (deploy-on-image-build) is disabled; this runs only on
+# manual dispatch, and each deploy/promotion job additionally requires GitHub
+# environment approval. Re-enable the workflow_run trigger in a dedicated deploy
+# task when ready.
 on:
-  workflow_run:
-    workflows: ["Docker Build & Push"]
-    types: [completed]
-    branches: [main, develop]
   workflow_dispatch:
     inputs:
       environment:
@@ -137,80 +138,11 @@ jobs:
             echo "::warning::Unhealthy pods detected: ${UNHEALTHY}"
           fi
 
-  promote-staging:
-    name: Promote to staging
-    needs: [determine-target, deploy]
-    if: |
-      needs.determine-target.outputs.environment == 'dev' &&
-      github.event.workflow_run.head_branch == 'main'
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig for staging
-        run: |
-          aws eks update-kubeconfig \
-            --name ${{ env.EKS_CLUSTER_PREFIX }}-staging \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Deploy to staging
-        env:
-          TAG: ${{ needs.determine-target.outputs.image_tag }}
-        run: |
-          for dir in deploy/k8s/base/*/; do
-            svc=$(basename "$dir")
-            kubectl set image deployment/${svc} \
-              ${svc}=${ECR_REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG} \
-              -n garudax-platform || echo "Deployment ${svc} not found, skipping"
-            kubectl rollout status deployment/${svc} \
-              -n garudax-platform \
-              --timeout=300s || true
-          done
-
-  promote-prod:
-    name: Promote to prod
-    needs: [determine-target, promote-staging]
-    if: |
-      needs.determine-target.outputs.environment == 'dev' &&
-      github.event.workflow_run.head_branch == 'main'
-    runs-on: ubuntu-latest
-    environment: prod
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig for prod
-        run: |
-          aws eks update-kubeconfig \
-            --name ${{ env.EKS_CLUSTER_PREFIX }}-prod \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Deploy to prod
-        env:
-          TAG: ${{ needs.determine-target.outputs.image_tag }}
-        run: |
-          for dir in deploy/k8s/base/*/; do
-            svc=$(basename "$dir")
-            kubectl set image deployment/${svc} \
-              ${svc}=${ECR_REGISTRY}/${IMAGE_PREFIX}/${svc}:${TAG} \
-              -n garudax-platform || echo "Deployment ${svc} not found, skipping"
-            kubectl rollout status deployment/${svc} \
-              -n garudax-platform \
-              --timeout=600s || {
-                echo "::error::Prod rollout failed for ${svc}, rolling back"
-                kubectl rollout undo deployment/${svc} -n garudax-platform
-                exit 1
-              }
-          done
+  # NOTE: the previous `promote-staging` / `promote-prod` jobs were removed.
+  # They gated on `github.event.workflow_run.head_branch == 'main'`, a context
+  # that can never be set now that this workflow is `workflow_dispatch`-only —
+  # so they were permanently unreachable (dead) jobs. To deploy a non-dev
+  # environment, dispatch this workflow directly with `environment: staging` or
+  # `environment: prod` (the `deploy` job + its `environment:` approval gate
+  # handle every target). Re-introduce an automated promotion chain in a
+  # dedicated deploy task when the cloud pipeline is intentionally re-enabled.

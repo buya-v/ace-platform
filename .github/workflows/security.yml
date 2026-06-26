@@ -13,6 +13,11 @@ concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Match the CI gate: most modules declare `go 1.25.0`.
+  GO_VERSION: "1.25"
+  GOTOOLCHAIN: auto
+
 permissions:
   contents: read
   security-events: write
@@ -35,7 +40,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Autobuild
@@ -96,21 +101,20 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          # Scan each service that has a go.mod
+          # Scan every Go module (incl. nested shared/pkg/* modules).
           EXIT_CODE=0
-          for dir in src/*/; do
-            if [ -f "$dir/go.mod" ]; then
-              echo "::group::Scanning $(basename $dir)"
-              govulncheck ./... -C "$dir" || EXIT_CODE=1
-              echo "::endgroup::"
-            fi
-          done
+          while IFS= read -r modfile; do
+            dir=$(dirname "$modfile")
+            echo "::group::Scanning ${dir}"
+            govulncheck ./... -C "$dir" || EXIT_CODE=1
+            echo "::endgroup::"
+          done < <(find src -name go.mod | sort)
           exit $EXIT_CODE
 
   secret-scan:

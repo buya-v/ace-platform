@@ -1,0 +1,207 @@
+name: CI — Build, Test, Lint
+
+# Build + unit-test gate for every Go module in the repo.
+#
+# This is a BUILD + TEST gate only — NOT a deploy. The cloud-deploy / image-push
+# / infra workflows (deploy.yml, docker-build.yml, terraform.yml) are guarded to
+# manual `workflow_dispatch` only and never run on PR/merge. Merges to `main` are
+# gated on the `CI Gate` job (configure branch protection to require it — see
+# .github/branch-protection.json and handoff/R014.md).
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  # Allows the full-stack e2e job to be triggered manually.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Engines declare `go 1.25.0`; shared declares `go 1.24.0`; the zero-dep
+  # primitives declare `go 1.22`. Install the highest required version and let
+  # GOTOOLCHAIN resolve per-module directives.
+  GO_VERSION: "1.25"
+  GOTOOLCHAIN: auto
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Discover Go modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find every gated Go module
+        id: find
+        run: |
+          # Every module under src/ (incl. nested shared/pkg/* modules) plus the
+          # standalone reconciliation test module. The e2e (graceful-skip) and
+          # load suites need a running stack and are excluded from the gate —
+          # e2e runs only in the manual full-stack job below.
+          MODULES=$(find src tests/reconciliation -name go.mod \
+            | sed 's#/go.mod##' \
+            | sort \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Discovered modules: ${MODULES}"
+          echo "modules=${MODULES}" >> "$GITHUB_OUTPUT"
+
+  lint:
+    name: Lint — ${{ matrix.module }}
+    needs: discover
+    runs-on: ubuntu-latest
+    # Lint is informational and does not gate merges (build + test do). It
+    # surfaces `go vet` / gofmt issues without blocking.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: gofmt
+        working-directory: ${{ matrix.module }}
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "::warning::Unformatted files in ${{ matrix.module }}:"
+            echo "$UNFORMATTED"
+          fi
+
+      - name: go vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+
+  build:
+    name: Build — ${{ matrix.module }}
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # Modules are zero-dependency (often no go.sum), so module caching is
+          # disabled to avoid cache-key resolution failures.
+          cache: false
+
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: CGO_ENABLED=0 go build ./...
+
+  test:
+    name: Test — ${{ matrix.module }}
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Test (race + coverage)
+        working-directory: ${{ matrix.module }}
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Report coverage (non-gating)
+        working-directory: ${{ matrix.module }}
+        if: always()
+        run: |
+          if [ -f coverage.out ]; then
+            TOTAL=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+            echo "::notice title=Coverage::${{ matrix.module }} total coverage: ${TOTAL:-n/a}"
+          fi
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    # Read-only HCL validation (fmt + init -backend=false + validate). No cloud
+    # credentials, no state mutation. Gates the CI Gate so malformed infra HCL
+    # fails the merge (per the T003/T054 cross-resource-bug learnings). The real
+    # `plan` runs in terraform.yml; here we only catch syntax/reference errors.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Terraform fmt check
+        working-directory: infrastructure/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        working-directory: infrastructure/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: infrastructure/terraform
+        run: terraform validate
+
+  e2e-fullstack:
+    name: E2E (full-stack, manual)
+    # The e2e suite gracefully skips when the gateway is unreachable, so it is
+    # informational by design and only runs on manual dispatch. To exercise it
+    # for real, stand up the Docker Compose stack and set GATEWAY_URL.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Run e2e suite (skips without a live stack)
+        working-directory: tests/e2e
+        run: go test ./...
+
+  ci-gate:
+    name: CI Gate
+    # Single required status check. Configure branch protection on `main` to
+    # require this job. It fails if any build, test, or terraform-validate leg
+    # failed. Lint and e2e are intentionally excluded — this is a
+    # build + test + validate gate.
+    if: always()
+    needs: [build, test, terraform-validate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify build, test & terraform-validate results
+        run: |
+          BUILD="${{ needs.build.result }}"
+          TEST="${{ needs.test.result }}"
+          TFVALIDATE="${{ needs.terraform-validate.result }}"
+          echo "build result:              ${BUILD}"
+          echo "test result:               ${TEST}"
+          echo "terraform-validate result: ${TFVALIDATE}"
+          if [ "${BUILD}" != "success" ] || [ "${TEST}" != "success" ] || [ "${TFVALIDATE}" != "success" ]; then
+            echo "::error::CI gate failed — see the build/test matrix legs and terraform-validate"
+            exit 1
+          fi
+          echo "All Go modules built and tested successfully; infra HCL validated."
