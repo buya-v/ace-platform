@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/margin-engine/internal/types"
 )
 
@@ -123,8 +124,16 @@ func (s *WarehouseCollateralSource) GetCollateral(participantID string) types.De
 func (s *WarehouseCollateralSource) calculateReceiptCollateral(receipts []pledgedReceipt) types.Decimal {
 	total := types.DecimalZero()
 
-	// haircut as Decimal: e.g. 0.80 -> 8000 raw (scaled by 10000)
-	haircutDecimal := types.DecimalFromRaw(int64(s.haircut * 10000))
+	// haircut as Decimal: e.g. 0.80 -> 0.8000. Convert through the shared
+	// decimal's half-even NewFromFloat rather than int64(haircut*10000), which
+	// truncates toward zero (R006 money-path audit). haircut is bounded (0,1] by
+	// WithHaircut/DefaultHaircut, so NewFromFloat cannot fail on a finite value;
+	// fall back to a zero haircut (no collateral credit) if it ever does.
+	haircutDecimal, err := decimal.NewFromFloat(s.haircut)
+	if err != nil {
+		log.Printf("collateral: invalid haircut %v: %v", s.haircut, err)
+		return types.DecimalZero()
+	}
 
 	for _, r := range receipts {
 		qty, err := types.ParseDecimal(r.Quantity)
