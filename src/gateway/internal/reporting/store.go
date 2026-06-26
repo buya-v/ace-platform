@@ -5,9 +5,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/garudax-platform/decimal"
 )
 
+// decFromFloat converts a float64 scanned from a NUMERIC DB column into the
+// shared fixed-point Decimal, rounding half-to-even to 4 dp. NewFromFloat only
+// errors on NaN/Inf, which NUMERIC(18,4) columns never carry, so the zero
+// fallback is safe here. The reporting money columns are already DECIMAL(18,4)
+// (exact), so a value round-trips Decimal -> Float64 -> NUMERIC(18,4) ->
+// Float64 -> Decimal without loss for all realistic settlement amounts.
+func decFromFloat(f float64) decimal.Decimal {
+	d, _ := decimal.NewFromFloat(f)
+	return d
+}
+
 // DailyStatement represents a participant's end-of-day settlement statement.
+// NetAmount is money and uses the shared fixed-point Decimal type (R023).
 type DailyStatement struct {
 	ID            string          `json:"id"`
 	ParticipantID string          `json:"participant_id"`
@@ -16,33 +30,37 @@ type DailyStatement struct {
 	Margin        json.RawMessage `json:"margin"`
 	PnL           json.RawMessage `json:"pnl"`
 	Fees          json.RawMessage `json:"fees"`
-	NetAmount     float64         `json:"net_amount"`
+	NetAmount     decimal.Decimal `json:"net_amount"`
 	GeneratedAt   time.Time       `json:"generated_at"`
 }
 
 // MarketSummary represents end-of-day market statistics for an instrument.
+// OHLC and settlement prices are money (Decimal); volume and open interest are
+// contract counts (float64).
 type MarketSummary struct {
-	ID              string    `json:"id"`
-	InstrumentID    string    `json:"instrument_id"`
-	ReportDate      string    `json:"report_date"`
-	OpenPrice       float64   `json:"open_price"`
-	HighPrice       float64   `json:"high_price"`
-	LowPrice        float64   `json:"low_price"`
-	ClosePrice      float64   `json:"close_price"`
-	Volume          float64   `json:"volume"`
-	OpenInterest    float64   `json:"open_interest"`
-	SettlementPrice float64   `json:"settlement_price"`
-	GeneratedAt     time.Time `json:"generated_at"`
+	ID              string          `json:"id"`
+	InstrumentID    string          `json:"instrument_id"`
+	ReportDate      string          `json:"report_date"`
+	OpenPrice       decimal.Decimal `json:"open_price"`
+	HighPrice       decimal.Decimal `json:"high_price"`
+	LowPrice        decimal.Decimal `json:"low_price"`
+	ClosePrice      decimal.Decimal `json:"close_price"`
+	Volume          float64         `json:"volume"`
+	OpenInterest    float64         `json:"open_interest"`
+	SettlementPrice decimal.Decimal `json:"settlement_price"`
+	GeneratedAt     time.Time       `json:"generated_at"`
 }
 
-// LargeTraderPosition records a participant's reportable position in an instrument.
+// LargeTraderPosition records a participant's reportable position in an
+// instrument. Net/gross positions are contract counts and the percent of open
+// interest is a ratio — none are money, so they remain float64.
 type LargeTraderPosition struct {
-	ID               string  `json:"id"`
-	ParticipantID    string  `json:"participant_id"`
-	InstrumentID     string  `json:"instrument_id"`
-	ReportDate       string  `json:"report_date"`
-	NetPosition      float64 `json:"net_position"`
-	GrossPosition    float64 `json:"gross_position"`
+	ID                string  `json:"id"`
+	ParticipantID     string  `json:"participant_id"`
+	InstrumentID      string  `json:"instrument_id"`
+	ReportDate        string  `json:"report_date"`
+	NetPosition       float64 `json:"net_position"`
+	GrossPosition     float64 `json:"gross_position"`
 	PctOfOpenInterest float64 `json:"pct_of_open_interest"`
 }
 
@@ -87,13 +105,14 @@ func (s *PgStore) SaveDailyStatement(ctx context.Context, stmt DailyStatement) e
 		DO UPDATE SET positions = $4, margin = $5, pnl = $6, fees = $7,
 		              net_amount = $8, generated_at = NOW()
 	`, stmt.ID, stmt.ParticipantID, stmt.ReportDate,
-		stmt.Positions, stmt.Margin, stmt.PnL, stmt.Fees, stmt.NetAmount)
+		stmt.Positions, stmt.Margin, stmt.PnL, stmt.Fees, stmt.NetAmount.Float64())
 	return err
 }
 
 // GetDailyStatement retrieves a participant's statement for a given date.
 func (s *PgStore) GetDailyStatement(ctx context.Context, participantID, date string) (*DailyStatement, error) {
 	var stmt DailyStatement
+	var netAmount float64
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, participant_id, report_date, positions, margin, pnl, fees, net_amount, generated_at
 		FROM reporting.daily_statements
@@ -101,7 +120,7 @@ func (s *PgStore) GetDailyStatement(ctx context.Context, participantID, date str
 	`, participantID, date).Scan(
 		&stmt.ID, &stmt.ParticipantID, &stmt.ReportDate,
 		&stmt.Positions, &stmt.Margin, &stmt.PnL, &stmt.Fees,
-		&stmt.NetAmount, &stmt.GeneratedAt,
+		&netAmount, &stmt.GeneratedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -109,6 +128,7 @@ func (s *PgStore) GetDailyStatement(ctx context.Context, participantID, date str
 		}
 		return nil, err
 	}
+	stmt.NetAmount = decFromFloat(netAmount)
 	return &stmt, nil
 }
 
@@ -124,8 +144,8 @@ func (s *PgStore) SaveMarketSummary(ctx context.Context, ms MarketSummary) error
 		              close_price = $7, volume = $8, open_interest = $9,
 		              settlement_price = $10, generated_at = NOW()
 	`, ms.ID, ms.InstrumentID, ms.ReportDate,
-		ms.OpenPrice, ms.HighPrice, ms.LowPrice, ms.ClosePrice,
-		ms.Volume, ms.OpenInterest, ms.SettlementPrice)
+		ms.OpenPrice.Float64(), ms.HighPrice.Float64(), ms.LowPrice.Float64(), ms.ClosePrice.Float64(),
+		ms.Volume, ms.OpenInterest, ms.SettlementPrice.Float64())
 	return err
 }
 
@@ -146,13 +166,19 @@ func (s *PgStore) ListMarketSummaries(ctx context.Context, date string) ([]Marke
 	var summaries []MarketSummary
 	for rows.Next() {
 		var ms MarketSummary
+		var openP, highP, lowP, closeP, settleP float64
 		if err := rows.Scan(
 			&ms.ID, &ms.InstrumentID, &ms.ReportDate,
-			&ms.OpenPrice, &ms.HighPrice, &ms.LowPrice, &ms.ClosePrice,
-			&ms.Volume, &ms.OpenInterest, &ms.SettlementPrice, &ms.GeneratedAt,
+			&openP, &highP, &lowP, &closeP,
+			&ms.Volume, &ms.OpenInterest, &settleP, &ms.GeneratedAt,
 		); err != nil {
 			return nil, err
 		}
+		ms.OpenPrice = decFromFloat(openP)
+		ms.HighPrice = decFromFloat(highP)
+		ms.LowPrice = decFromFloat(lowP)
+		ms.ClosePrice = decFromFloat(closeP)
+		ms.SettlementPrice = decFromFloat(settleP)
 		summaries = append(summaries, ms)
 	}
 	return summaries, rows.Err()

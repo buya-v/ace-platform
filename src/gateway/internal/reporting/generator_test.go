@@ -9,26 +9,31 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/gateway/internal/auth"
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/router"
 )
 
+// dec is a test helper that parses a money literal into the shared Decimal type
+// (half-even rounded to 4 dp).
+func dec(s string) decimal.Decimal { return decimal.MustParse(s) }
+
 // --- Generator Tests ---
 
 func TestGenerateSettlementStatement_BasicLongPosition(t *testing.T) {
 	positions := []PositionInput{
-		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 100, AvgPrice: 250.0, MarkPrice: 260.0},
+		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 100, AvgPrice: dec("250"), MarkPrice: dec("260")},
 	}
 	margin := MarginInput{
-		InitialMargin:     5000,
-		MaintenanceMargin: 3000,
-		MarginUsed:        4000,
-		ExcessMargin:      1000,
+		InitialMargin:     dec("5000"),
+		MaintenanceMargin: dec("3000"),
+		MarginUsed:        dec("4000"),
+		ExcessMargin:      dec("1000"),
 	}
 	fees := FeeInput{
-		TradingFees:  100,
-		ClearingFees: 50,
+		TradingFees:  dec("100"),
+		ClearingFees: dec("50"),
 	}
 
 	stmt := GenerateSettlementStatement("stmt-1", "P001", "2026-03-31", positions, margin, fees)
@@ -46,7 +51,7 @@ func TestGenerateSettlementStatement_BasicLongPosition(t *testing.T) {
 	// Long position: unrealized = (260 - 250) * 100 = 1000
 	// Total fees: 100 + 50 = 150
 	// Net amount: 1000 - 150 = 850
-	if stmt.NetAmount != 850.0 {
+	if !stmt.NetAmount.Equal(dec("850")) {
 		t.Errorf("NetAmount = %v, want 850.0", stmt.NetAmount)
 	}
 
@@ -62,28 +67,28 @@ func TestGenerateSettlementStatement_BasicLongPosition(t *testing.T) {
 
 func TestGenerateSettlementStatement_ShortPosition(t *testing.T) {
 	positions := []PositionInput{
-		{InstrumentID: "CRN-2026M09", Side: "short", Quantity: 50, AvgPrice: 300.0, MarkPrice: 280.0},
+		{InstrumentID: "CRN-2026M09", Side: "short", Quantity: 50, AvgPrice: dec("300"), MarkPrice: dec("280")},
 	}
 	margin := MarginInput{}
-	fees := FeeInput{TradingFees: 25}
+	fees := FeeInput{TradingFees: dec("25")}
 
 	stmt := GenerateSettlementStatement("stmt-2", "P002", "2026-03-31", positions, margin, fees)
 
 	// Short position: unrealized = (300 - 280) * 50 = 1000
 	// Fees: 25
 	// Net: 1000 - 25 = 975
-	if stmt.NetAmount != 975.0 {
+	if !stmt.NetAmount.Equal(dec("975")) {
 		t.Errorf("NetAmount = %v, want 975.0", stmt.NetAmount)
 	}
 }
 
 func TestGenerateSettlementStatement_MultiplePositions(t *testing.T) {
 	positions := []PositionInput{
-		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 100, AvgPrice: 250.0, MarkPrice: 260.0},
-		{InstrumentID: "CRN-2026M09", Side: "short", Quantity: 50, AvgPrice: 300.0, MarkPrice: 310.0},
+		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 100, AvgPrice: dec("250"), MarkPrice: dec("260")},
+		{InstrumentID: "CRN-2026M09", Side: "short", Quantity: 50, AvgPrice: dec("300"), MarkPrice: dec("310")},
 	}
-	margin := MarginInput{InitialMargin: 10000}
-	fees := FeeInput{TradingFees: 200, ClearingFees: 100}
+	margin := MarginInput{InitialMargin: dec("10000")}
+	fees := FeeInput{TradingFees: dec("200"), ClearingFees: dec("100")}
 
 	stmt := GenerateSettlementStatement("stmt-3", "P003", "2026-03-31", positions, margin, fees)
 
@@ -92,27 +97,27 @@ func TestGenerateSettlementStatement_MultiplePositions(t *testing.T) {
 	// Total unrealized: 500
 	// Total fees: 300
 	// Net: 200
-	if stmt.NetAmount != 200.0 {
+	if !stmt.NetAmount.Equal(dec("200")) {
 		t.Errorf("NetAmount = %v, want 200.0", stmt.NetAmount)
 	}
 }
 
 func TestGenerateSettlementStatement_NoPositions(t *testing.T) {
-	stmt := GenerateSettlementStatement("stmt-4", "P004", "2026-03-31", nil, MarginInput{}, FeeInput{TradingFees: 10})
+	stmt := GenerateSettlementStatement("stmt-4", "P004", "2026-03-31", nil, MarginInput{}, FeeInput{TradingFees: dec("10")})
 
 	// No positions, 10 in fees
 	// Net = 0 - 10 = -10
-	if stmt.NetAmount != -10.0 {
+	if !stmt.NetAmount.Equal(dec("-10")) {
 		t.Errorf("NetAmount = %v, want -10.0", stmt.NetAmount)
 	}
 }
 
 func TestGenerateSettlementStatement_AllFeeTypes(t *testing.T) {
 	fees := FeeInput{
-		TradingFees:  100.1234,
-		ClearingFees: 50.5678,
-		DataFees:     25.0001,
-		OtherFees:    10.9999,
+		TradingFees:  dec("100.1234"),
+		ClearingFees: dec("50.5678"),
+		DataFees:     dec("25.0001"),
+		OtherFees:    dec("10.9999"),
 	}
 
 	stmt := GenerateSettlementStatement("stmt-5", "P005", "2026-03-31", nil, MarginInput{}, fees)
@@ -120,8 +125,9 @@ func TestGenerateSettlementStatement_AllFeeTypes(t *testing.T) {
 	var feesJSON map[string]interface{}
 	json.Unmarshal(stmt.Fees, &feesJSON)
 
+	// total_fees marshals as a bare JSON number (Decimal); read it back as float64.
 	totalFees := feesJSON["total_fees"].(float64)
-	expected := roundTo4(100.1234 + 50.5678 + 25.0001 + 10.9999)
+	expected := dec("100.1234").Add(dec("50.5678")).Add(dec("25.0001")).Add(dec("10.9999")).Float64()
 	if totalFees != expected {
 		t.Errorf("total_fees = %v, want %v", totalFees, expected)
 	}
@@ -129,7 +135,7 @@ func TestGenerateSettlementStatement_AllFeeTypes(t *testing.T) {
 
 func TestGenerateSettlementStatement_PositionsJSONValid(t *testing.T) {
 	positions := []PositionInput{
-		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 10, AvgPrice: 100.0, MarkPrice: 105.0},
+		{InstrumentID: "WHT-HRW-2026M07", Side: "long", Quantity: 10, AvgPrice: dec("100"), MarkPrice: dec("105")},
 	}
 	stmt := GenerateSettlementStatement("stmt-6", "P006", "2026-03-31", positions, MarginInput{}, FeeInput{})
 
@@ -147,10 +153,10 @@ func TestGenerateSettlementStatement_PositionsJSONValid(t *testing.T) {
 
 func TestGenerateSettlementStatement_MarginJSONValid(t *testing.T) {
 	margin := MarginInput{
-		InitialMargin:     5000,
-		MaintenanceMargin: 3000,
-		MarginUsed:        4000,
-		ExcessMargin:      1000,
+		InitialMargin:     dec("5000"),
+		MaintenanceMargin: dec("3000"),
+		MarginUsed:        dec("4000"),
+		ExcessMargin:      dec("1000"),
 	}
 	stmt := GenerateSettlementStatement("stmt-7", "P007", "2026-03-31", nil, margin, FeeInput{})
 
@@ -158,10 +164,10 @@ func TestGenerateSettlementStatement_MarginJSONValid(t *testing.T) {
 	if err := json.Unmarshal(stmt.Margin, &parsed); err != nil {
 		t.Fatalf("Failed to unmarshal Margin JSON: %v", err)
 	}
-	if parsed.InitialMargin != 5000 {
+	if !parsed.InitialMargin.Equal(dec("5000")) {
 		t.Errorf("InitialMargin = %v, want 5000", parsed.InitialMargin)
 	}
-	if parsed.ExcessMargin != 1000 {
+	if !parsed.ExcessMargin.Equal(dec("1000")) {
 		t.Errorf("ExcessMargin = %v, want 1000", parsed.ExcessMargin)
 	}
 }
@@ -170,13 +176,13 @@ func TestGenerateSettlementStatement_MarginJSONValid(t *testing.T) {
 
 func TestGenerateMarketSummary_BasicTrades(t *testing.T) {
 	trades := []TradeInput{
-		{Price: 100.0, Quantity: 10},
-		{Price: 105.0, Quantity: 20},
-		{Price: 98.0, Quantity: 15},
-		{Price: 102.0, Quantity: 5},
+		{Price: dec("100"), Quantity: 10},
+		{Price: dec("105"), Quantity: 20},
+		{Price: dec("98"), Quantity: 15},
+		{Price: dec("102"), Quantity: 5},
 	}
 
-	ms := GenerateMarketSummary("ms-1", "WHT-HRW-2026M07", "2026-03-31", trades, 101.5, 5000.0)
+	ms := GenerateMarketSummary("ms-1", "WHT-HRW-2026M07", "2026-03-31", trades, dec("101.5"), 5000.0)
 
 	if ms.ID != "ms-1" {
 		t.Errorf("ID = %q, want ms-1", ms.ID)
@@ -184,22 +190,22 @@ func TestGenerateMarketSummary_BasicTrades(t *testing.T) {
 	if ms.InstrumentID != "WHT-HRW-2026M07" {
 		t.Errorf("InstrumentID = %q, want WHT-HRW-2026M07", ms.InstrumentID)
 	}
-	if ms.OpenPrice != 100.0 {
+	if !ms.OpenPrice.Equal(dec("100")) {
 		t.Errorf("OpenPrice = %v, want 100.0", ms.OpenPrice)
 	}
-	if ms.ClosePrice != 102.0 {
+	if !ms.ClosePrice.Equal(dec("102")) {
 		t.Errorf("ClosePrice = %v, want 102.0", ms.ClosePrice)
 	}
-	if ms.HighPrice != 105.0 {
+	if !ms.HighPrice.Equal(dec("105")) {
 		t.Errorf("HighPrice = %v, want 105.0", ms.HighPrice)
 	}
-	if ms.LowPrice != 98.0 {
+	if !ms.LowPrice.Equal(dec("98")) {
 		t.Errorf("LowPrice = %v, want 98.0", ms.LowPrice)
 	}
 	if ms.Volume != 50.0 {
 		t.Errorf("Volume = %v, want 50.0", ms.Volume)
 	}
-	if ms.SettlementPrice != 101.5 {
+	if !ms.SettlementPrice.Equal(dec("101.5")) {
 		t.Errorf("SettlementPrice = %v, want 101.5", ms.SettlementPrice)
 	}
 	if ms.OpenInterest != 5000.0 {
@@ -208,39 +214,39 @@ func TestGenerateMarketSummary_BasicTrades(t *testing.T) {
 }
 
 func TestGenerateMarketSummary_NoTrades(t *testing.T) {
-	ms := GenerateMarketSummary("ms-2", "CRN-2026M09", "2026-03-31", nil, 200.0, 3000.0)
+	ms := GenerateMarketSummary("ms-2", "CRN-2026M09", "2026-03-31", nil, dec("200"), 3000.0)
 
-	if ms.OpenPrice != 0 {
+	if !ms.OpenPrice.IsZero() {
 		t.Errorf("OpenPrice = %v, want 0", ms.OpenPrice)
 	}
-	if ms.ClosePrice != 0 {
+	if !ms.ClosePrice.IsZero() {
 		t.Errorf("ClosePrice = %v, want 0", ms.ClosePrice)
 	}
-	if ms.HighPrice != 0 {
+	if !ms.HighPrice.IsZero() {
 		t.Errorf("HighPrice = %v, want 0", ms.HighPrice)
 	}
-	if ms.LowPrice != 0 {
+	if !ms.LowPrice.IsZero() {
 		t.Errorf("LowPrice = %v, want 0", ms.LowPrice)
 	}
 	if ms.Volume != 0 {
 		t.Errorf("Volume = %v, want 0", ms.Volume)
 	}
-	if ms.SettlementPrice != 200.0 {
+	if !ms.SettlementPrice.Equal(dec("200")) {
 		t.Errorf("SettlementPrice = %v, want 200.0", ms.SettlementPrice)
 	}
 }
 
 func TestGenerateMarketSummary_SingleTrade(t *testing.T) {
 	trades := []TradeInput{
-		{Price: 150.0, Quantity: 1},
+		{Price: dec("150"), Quantity: 1},
 	}
 
-	ms := GenerateMarketSummary("ms-3", "SOY-2026M12", "2026-03-31", trades, 150.0, 1000.0)
+	ms := GenerateMarketSummary("ms-3", "SOY-2026M12", "2026-03-31", trades, dec("150"), 1000.0)
 
-	if ms.OpenPrice != 150.0 || ms.ClosePrice != 150.0 {
+	if !ms.OpenPrice.Equal(dec("150")) || !ms.ClosePrice.Equal(dec("150")) {
 		t.Errorf("Open/Close = %v/%v, want 150.0/150.0", ms.OpenPrice, ms.ClosePrice)
 	}
-	if ms.HighPrice != 150.0 || ms.LowPrice != 150.0 {
+	if !ms.HighPrice.Equal(dec("150")) || !ms.LowPrice.Equal(dec("150")) {
 		t.Errorf("High/Low = %v/%v, want 150.0/150.0", ms.HighPrice, ms.LowPrice)
 	}
 	if ms.Volume != 1.0 {
@@ -249,16 +255,22 @@ func TestGenerateMarketSummary_SingleTrade(t *testing.T) {
 }
 
 func TestGenerateMarketSummary_DecimalPrecision(t *testing.T) {
+	// Prices carry full 4-dp precision through the Decimal type without drift.
+	price := dec("100.1234")
+	settle := dec("99.9999")
 	trades := []TradeInput{
-		{Price: 100.12345, Quantity: 10.5678},
+		{Price: price, Quantity: 10.5678},
 	}
 
-	ms := GenerateMarketSummary("ms-4", "WHT", "2026-03-31", trades, 99.99995, 500.123)
+	ms := GenerateMarketSummary("ms-4", "WHT", "2026-03-31", trades, settle, 500.123)
 
-	// Should round to 4 decimal places
-	if ms.OpenPrice != roundTo4(100.12345) {
-		t.Errorf("OpenPrice = %v, want %v", ms.OpenPrice, roundTo4(100.12345))
+	if !ms.OpenPrice.Equal(price) {
+		t.Errorf("OpenPrice = %v, want %v", ms.OpenPrice, price)
 	}
+	if !ms.SettlementPrice.Equal(settle) {
+		t.Errorf("SettlementPrice = %v, want %v", ms.SettlementPrice, settle)
+	}
+	// Volume is a contract count (float64) and is rounded to 4 dp.
 	if ms.Volume != roundTo4(10.5678) {
 		t.Errorf("Volume = %v, want %v", ms.Volume, roundTo4(10.5678))
 	}
@@ -408,6 +420,78 @@ func TestGenerateLargeTraderReport_IDFormat(t *testing.T) {
 	}
 }
 
+// TestGenerateSettlementStatement_FractionalPrecision verifies that P&L is
+// aggregated in exact fixed-point arithmetic: (mark - avg) * qty rounds
+// half-to-even to 4 dp with no float drift.
+func TestGenerateSettlementStatement_FractionalPrecision(t *testing.T) {
+	positions := []PositionInput{
+		// (10.3333 - 10.0000) * 3 = 0.9999
+		{InstrumentID: "WHT", Side: "long", Quantity: 3, AvgPrice: dec("10.0000"), MarkPrice: dec("10.3333")},
+	}
+	fees := FeeInput{TradingFees: dec("0.1234"), ClearingFees: dec("0.0001")}
+
+	stmt := GenerateSettlementStatement("stmt-frac", "P001", "2026-03-31", positions, MarginInput{}, fees)
+
+	// unrealized = 0.9999 ; total fees = 0.1235 ; net = 0.8764
+	if !stmt.NetAmount.Equal(dec("0.8764")) {
+		t.Errorf("NetAmount = %v, want 0.8764", stmt.NetAmount)
+	}
+}
+
+// TestGenerateSettlementStatement_WireShape verifies that Decimal money fields
+// marshal as bare JSON numbers, preserving the existing HTTP wire contract.
+func TestGenerateSettlementStatement_WireShape(t *testing.T) {
+	positions := []PositionInput{
+		{InstrumentID: "WHT", Side: "long", Quantity: 100, AvgPrice: dec("250"), MarkPrice: dec("260.25")},
+	}
+	stmt := GenerateSettlementStatement("stmt-wire", "P001", "2026-03-31", positions, MarginInput{}, FeeInput{TradingFees: dec("15.5")})
+
+	raw, err := json.Marshal(stmt)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// net_amount must be a bare number, e.g. "net_amount":1009.5 — not a string or object.
+	var generic map[string]interface{}
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	na, ok := generic["net_amount"].(float64)
+	if !ok {
+		t.Fatalf("net_amount is not a JSON number: %T (%s)", generic["net_amount"], raw)
+	}
+	// (260.25 - 250) * 100 - 15.5 = 1025 - 15.5 = 1009.5
+	if na != 1009.5 {
+		t.Errorf("net_amount = %v, want 1009.5", na)
+	}
+}
+
+// TestMarketSummary_WireShape verifies OHLC prices marshal as bare JSON numbers.
+func TestMarketSummary_WireShape(t *testing.T) {
+	ms := GenerateMarketSummary("ms-wire", "WHT", "2026-03-31",
+		[]TradeInput{{Price: dec("100.25"), Quantity: 10}}, dec("100.5"), 1234.0)
+
+	raw, err := json.Marshal(ms)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var generic map[string]interface{}
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if op, ok := generic["open_price"].(float64); !ok || op != 100.25 {
+		t.Errorf("open_price = %v (%T), want 100.25 number", generic["open_price"], generic["open_price"])
+	}
+	if sp, ok := generic["settlement_price"].(float64); !ok || sp != 100.5 {
+		t.Errorf("settlement_price = %v, want 100.5", generic["settlement_price"])
+	}
+	if vol, ok := generic["volume"].(float64); !ok || vol != 10.0 {
+		t.Errorf("volume = %v, want 10", generic["volume"])
+	}
+	if oi, ok := generic["open_interest"].(float64); !ok || oi != 1234.0 {
+		t.Errorf("open_interest = %v, want 1234", generic["open_interest"])
+	}
+}
+
 // --- Date Validation Tests ---
 
 func TestIsValidDate(t *testing.T) {
@@ -461,10 +545,10 @@ func TestRoundTo4(t *testing.T) {
 
 // mockStore is a test double for the Store interface.
 type mockStore struct {
-	getDailyStatementFn      func(ctx context.Context, pid, date string) (*DailyStatement, error)
-	listMarketSummariesFn    func(ctx context.Context, date string) ([]MarketSummary, error)
-	listLargeTradersFn       func(ctx context.Context, date string) ([]LargeTraderPosition, error)
-	listTradesFn             func(ctx context.Context, pid, from, to string) ([]json.RawMessage, error)
+	getDailyStatementFn   func(ctx context.Context, pid, date string) (*DailyStatement, error)
+	listMarketSummariesFn func(ctx context.Context, date string) ([]MarketSummary, error)
+	listLargeTradersFn    func(ctx context.Context, date string) ([]LargeTraderPosition, error)
+	listTradesFn          func(ctx context.Context, pid, from, to string) ([]json.RawMessage, error)
 }
 
 func (m *mockStore) SaveDailyStatement(ctx context.Context, stmt DailyStatement) error { return nil }
@@ -514,7 +598,7 @@ func TestHandler_GetSettlementStatement_Success(t *testing.T) {
 				ID:            "stmt-1",
 				ParticipantID: pid,
 				ReportDate:    date,
-				NetAmount:     1000.0,
+				NetAmount:     dec("1000"),
 				Positions:     json.RawMessage(`[]`),
 				Margin:        json.RawMessage(`{}`),
 				PnL:           json.RawMessage(`{}`),
@@ -760,7 +844,7 @@ func TestHandler_GetMarketSummary_Success(t *testing.T) {
 	store := &mockStore{
 		listMarketSummariesFn: func(ctx context.Context, date string) ([]MarketSummary, error) {
 			return []MarketSummary{
-				{ID: "ms-1", InstrumentID: "WHT-2026M07", ReportDate: date, OpenPrice: 100, HighPrice: 110, LowPrice: 95, ClosePrice: 105, Volume: 500},
+				{ID: "ms-1", InstrumentID: "WHT-2026M07", ReportDate: date, OpenPrice: dec("100"), HighPrice: dec("110"), LowPrice: dec("95"), ClosePrice: dec("105"), Volume: 500},
 			}, nil
 		},
 	}
@@ -969,7 +1053,7 @@ func TestHandler_GetSettlementStatement_FallbackToSub(t *testing.T) {
 				ID:            "stmt-1",
 				ParticipantID: pid,
 				ReportDate:    date,
-				NetAmount:     0,
+				NetAmount:     decimal.Zero(),
 				Positions:     json.RawMessage(`[]`),
 				Margin:        json.RawMessage(`{}`),
 				PnL:           json.RawMessage(`{}`),
