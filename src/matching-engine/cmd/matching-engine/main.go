@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/garudax-platform/matching-engine/internal/engine"
+	"github.com/garudax-platform/matching-engine/internal/eventbus"
 	"github.com/garudax-platform/matching-engine/internal/observability"
 	"github.com/garudax-platform/matching-engine/internal/server"
 	"github.com/garudax-platform/matching-engine/internal/store"
@@ -37,7 +38,21 @@ func main() {
 	eng := engine.NewEngine(idGen)
 	tradeStore := store.NewInMemoryTradeStore()
 
-	// Set up trade handler for structured logging of business events
+	// Cross-service Kafka publisher (R024): when KAFKA_BROKERS is configured,
+	// every matched trade is published to {tenant}.trades.executed for the
+	// clearing engine to consume. When brokers are not configured (unit/dev),
+	// Kafka wiring is skipped and the engine runs gRPC-only.
+	var publisher *eventbus.Publisher
+	if eventbus.Enabled() {
+		publisher = eventbus.NewPublisher(logger)
+		logger.Info("kafka_publisher_enabled", slog.String("topic", "trades.executed"))
+		defer func() { _ = publisher.Close() }()
+	} else {
+		logger.Info("kafka_publisher_disabled", slog.String("reason", "KAFKA_BROKERS not set"))
+	}
+
+	// Set up trade handler for structured logging of business events and,
+	// when enabled, cross-service publication.
 	eng.SetTradeHandler(func(trade types.Trade) {
 		logger.Info("trade_matched",
 			slog.String("trade_id", trade.TradeID),
@@ -46,6 +61,9 @@ func main() {
 			slog.String("price", trade.Price.String()),
 			slog.String("aggressor_side", trade.AggressorSide.String()),
 		)
+		if publisher != nil {
+			publisher.PublishTrade(trade)
+		}
 	})
 
 	eng.SetExecReportHandler(func(report types.ExecutionReport) {

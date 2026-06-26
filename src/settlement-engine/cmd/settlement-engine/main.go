@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/garudax-platform/settlement-engine/internal/engine"
+	"github.com/garudax-platform/settlement-engine/internal/eventbus"
 	"github.com/garudax-platform/settlement-engine/internal/payment"
 	"github.com/garudax-platform/settlement-engine/internal/server"
 	"github.com/garudax-platform/settlement-engine/internal/store"
@@ -62,11 +64,35 @@ func main() {
 
 	eng := engine.NewEngine(priceStore, idGen, gateway)
 
+	// Cross-service Kafka wiring (R024): consume {tenant}.clearing.novated from
+	// the clearing engine, run a settlement cycle, and publish
+	// {tenant}.settlement.completed — the terminal event of the trading chain.
+	// Created before the cycle handler so the handler composes logging with
+	// cross-service publication. Skipped when KAFKA_BROKERS is unset.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var rt *eventbus.Runtime
+	if eventbus.Enabled() {
+		rt = eventbus.New(eng)
+		defer func() { _ = rt.Close() }()
+		go func() {
+			if err := rt.Start(ctx); err != nil {
+				log.Printf("settlement-engine event bus stopped: %v", err)
+			}
+		}()
+		log.Println("Kafka cross-service consumer enabled (clearing.novated -> settlement.completed)")
+	} else {
+		log.Println("Kafka cross-service consumer disabled (KAFKA_BROKERS not set)")
+	}
+
 	eng.SetCycleHandler(func(cycle types.SettlementCycle) {
 		log.Printf("SETTLEMENT: cycle=%s date=%s status=%s pay_in=%s pay_out=%s instructions=%d",
 			cycle.CycleID, cycle.SettleDate.Format("2006-01-02"),
 			cycle.Status.String(), cycle.TotalPayIn.String(),
 			cycle.TotalPayOut.String(), len(cycle.Instructions))
+		if rt != nil {
+			rt.PublishCycle(cycle)
+		}
 	})
 
 	srv := server.NewServer(eng, cfg)
