@@ -15,6 +15,12 @@ import (
 // tenant.TenantFromContext / tenant.MustTenant anywhere in the platform.
 type TenantID = tenant.TenantID
 
+// TenantHeaderName is the canonical HTTP header that carries the tenant
+// identifier, re-exported from the shared tenant module. Handlers forward the
+// resolved tenant to backends under this header so downstream services read the
+// same value the gateway validated.
+const TenantHeaderName = tenant.HeaderName
+
 // tenantHealthPaths are the paths that bypass tenant enforcement.
 // Exact match only — no prefix match — to prevent accidental bypass.
 var tenantHealthPaths = map[string]bool{
@@ -24,27 +30,17 @@ var tenantHealthPaths = map[string]bool{
 }
 
 // tenantBypassPrefixes are path prefixes that bypass tenant enforcement.
-// These are platform-level APIs that operate above tenant scope.
+// These are GENUINELY platform-level APIs that operate above tenant scope: the
+// platform control plane (tenant lifecycle) and authentication (platform-level,
+// the user has not yet selected a tenant when logging in). Every other route —
+// orders, clearing, margin, settlement, warehouse, participants, compliance,
+// market-data, securities, admin — is tenant-scoped and MUST carry the
+// X-GarudaX-Tenant header per the platform invariant ("Tenant ID is never
+// optional"). Do not re-add business-path prefixes here.
 var tenantBypassPrefixes = []string{
 	"/platform/",
 	"/api/v1/platform/",
 	"/api/v1/auth/",
-	"/api/v1/admin/",
-	"/api/v1/instruments/",
-	"/api/v1/market-data/",
-	"/api/v1/orders",
-	"/api/v1/clearing/",
-	"/api/v1/margin",
-	"/api/v1/settlement/",
-	"/api/v1/warehouse/",
-	"/api/v1/participants",
-	"/api/v1/screening/",
-	"/api/v1/risk-scores/",
-	"/api/v1/compliance/",
-	"/api/v1/ws/",
-	"/api/v1/securities/demo/",
-	"/api/v1/tickets",
-	"/api/v1/bot/",
 }
 
 // tenantErrorBody is the JSON error shape for tenant errors.
@@ -66,22 +62,34 @@ func writeTenantError(w http.ResponseWriter, status int, code, message string) {
 }
 
 // TenantMiddleware returns an HTTP middleware that enforces the X-GarudaX-Tenant
-// header on every request except health/metrics bypass paths.
+// header on every tenant-scoped request.
 //
 // validTenants is converted to a map[string]bool at construction time for O(1)
 // per-request lookup. The middleware:
 //   - Bypasses /healthz, /readyz, /metrics (exact path match only)
+//   - Bypasses platform-level prefixes (/platform/, /api/v1/platform/, /api/v1/auth/)
+//   - Returns 404 NOT_FOUND for paths matching no registered route (when a
+//     RouteChecker is supplied), so unknown endpoints are not leaked as 401
 //   - Returns 401 TENANT_REQUIRED when the header is absent
 //   - Returns 403 UNKNOWN_TENANT when the tenant is not in the whitelist
 //   - Stores the validated TenantID in the request context
 //
+// An optional RouteChecker may be supplied; when present it is consulted before
+// tenant enforcement so requests to nonexistent paths receive 404 (matching the
+// behaviour of the Auth middleware, which sits behind this one).
+//
 // Must be placed BEFORE the Auth middleware so tenant context is available to
 // all downstream handlers.
-func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
+func TenantMiddleware(validTenants []string, routeChecker ...RouteChecker) func(http.Handler) http.Handler {
 	// Build O(1) lookup map once at construction time.
 	tenantMap := make(map[string]bool, len(validTenants))
 	for _, t := range validTenants {
 		tenantMap[t] = true
+	}
+
+	var rc RouteChecker
+	if len(routeChecker) > 0 {
+		rc = routeChecker[0]
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -106,6 +114,17 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 					next.ServeHTTP(w, r)
 					return
 				}
+			}
+
+			// Unknown paths (no registered route) get 404 before tenant
+			// enforcement so a nonexistent endpoint is not reported as a tenant
+			// error. This mirrors the Auth middleware's pre-routing 404 guard.
+			if rc != nil && !rc.RouteExists(r.URL.Path) {
+				writeTenantError(w, http.StatusNotFound,
+					"NOT_FOUND",
+					"Endpoint not found",
+				)
+				return
 			}
 
 			header := r.Header.Get(tenant.HeaderName)

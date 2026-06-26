@@ -15,10 +15,15 @@ type BackendClient interface {
 
 // BackendRequest represents a translated request to send to a backend service.
 type BackendRequest struct {
-	Service    string            // e.g. "matching-engine"
-	Method     string            // e.g. "OrderService/SubmitOrder"
-	Body       json.RawMessage   // JSON body (for translation to protobuf)
-	Metadata   map[string]string // gRPC-like metadata (user ID, request ID, roles)
+	Service string          // e.g. "matching-engine"
+	Method  string          // e.g. "OrderService/SubmitOrder"
+	Body    json.RawMessage // JSON body (for translation to protobuf)
+	// Metadata carries gRPC-like metadata forwarded to the backend as request
+	// headers (x-user-id, x-request-id, x-roles, ...). For tenant-scoped routes
+	// the gateway also injects the resolved tenant under the canonical
+	// X-GarudaX-Tenant header (see handler.forward / SubmitOrder), so downstream
+	// services receive the same tenant the gateway validated.
+	Metadata   map[string]string
 	PathParams map[string]string // extracted path parameters
 	Query      map[string]string // query parameters
 }

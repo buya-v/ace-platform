@@ -80,6 +80,103 @@ func TestTenantMiddleware_HealthBypass(t *testing.T) {
 	}
 }
 
+// fakeRouteChecker reports a fixed set of known paths for the tenant
+// middleware's pre-enforcement 404 guard.
+type fakeRouteChecker struct {
+	known map[string]bool
+}
+
+func (f fakeRouteChecker) RouteExists(path string) bool { return f.known[path] }
+
+func TestTenantMiddleware_PlatformBypass(t *testing.T) {
+	// Genuine platform-level prefixes must pass WITHOUT a tenant header.
+	bypassPaths := []string{
+		"/platform/v1/tenants",
+		"/api/v1/platform/v1/tenants",
+		"/api/v1/auth/login",
+	}
+	for _, path := range bypassPaths {
+		mw := TenantMiddleware([]string{"ace-commodities"})
+		called := false
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		req := httptest.NewRequest("POST", path, nil) // no X-GarudaX-Tenant header
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK || !called {
+			t.Errorf("path %s: expected bypass (200, handler called), got %d called=%v",
+				path, rr.Code, called)
+		}
+	}
+}
+
+func TestTenantMiddleware_TradingRoutesEnforced(t *testing.T) {
+	// Previously-exempt business prefixes must now require the tenant header.
+	enforcedPaths := []string{
+		"/api/v1/orders",
+		"/api/v1/clearing/positions",
+		"/api/v1/margin",
+		"/api/v1/settlement/cycles",
+		"/api/v1/warehouse/inventory",
+		"/api/v1/participants",
+		"/api/v1/compliance/alerts",
+		"/api/v1/market-data/candles",
+		"/api/v1/securities/instruments",
+		"/api/v1/admin/health",
+	}
+	for _, path := range enforcedPaths {
+		mw := TenantMiddleware([]string{"ace-commodities"})
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Errorf("path %s: handler should not be called without a tenant header", path)
+		}))
+		req := httptest.NewRequest("GET", path, nil) // no tenant header
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("path %s: expected 401 TENANT_REQUIRED, got %d", path, rr.Code)
+		}
+	}
+}
+
+func TestTenantMiddleware_UnknownRouteReturns404(t *testing.T) {
+	rc := fakeRouteChecker{known: map[string]bool{"/api/v1/orders": true}}
+	mw := TenantMiddleware([]string{"ace-commodities"}, rc)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for an unknown path")
+	}))
+
+	// Unknown path, no tenant header: should 404 (not 401) so unknown endpoints
+	// are not leaked as tenant errors.
+	req := httptest.NewRequest("GET", "/api/v1/nonexistent", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown path, got %d", rr.Code)
+	}
+}
+
+func TestTenantMiddleware_KnownRouteStillEnforcedWithChecker(t *testing.T) {
+	rc := fakeRouteChecker{known: map[string]bool{"/api/v1/orders": true}}
+	mw := TenantMiddleware([]string{"ace-commodities"}, rc)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called without a tenant header")
+	}))
+
+	// Known route, no tenant header: still 401 (route exists, header required).
+	req := httptest.NewRequest("GET", "/api/v1/orders", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for known route without tenant, got %d", rr.Code)
+	}
+}
+
 func TestTenantFromContext_RoundTrip(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	ctx := req.Context()
