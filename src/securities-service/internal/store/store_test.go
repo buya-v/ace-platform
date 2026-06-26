@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -916,14 +917,14 @@ func TestCorporateActionStore_UpdateStatus(t *testing.T) {
 // EntitlementStore tests
 // ============================================================
 
-func newEntitlement(id, caID, participantID, instrID string, qty int, value float64) *types.Entitlement {
+func newEntitlement(id, caID, participantID, instrID string, qty int, value int64) *types.Entitlement {
 	return &types.Entitlement{
 		ID:                id,
 		CorporateActionID: caID,
 		ParticipantID:     participantID,
 		InstrumentID:      instrID,
 		Quantity:          qty,
-		EntitlementValue:  value,
+		EntitlementValue:  decimal.DecimalFromInt(value),
 		Status:            types.EntitlementStatusPending,
 		CreatedAt:         "2026-04-24T00:00:00Z",
 	}
@@ -1023,7 +1024,7 @@ func TestEntitlementStore_ListByParticipant(t *testing.T) {
 		if result[0].Quantity != 200 {
 			t.Errorf("expected quantity 200, got %d", result[0].Quantity)
 		}
-		if result[0].EntitlementValue != 1000.0 {
+		if !result[0].EntitlementValue.Equal(decimal.DecimalFromInt(1000)) {
 			t.Errorf("expected value 1000.0, got %v", result[0].EntitlementValue)
 		}
 	})

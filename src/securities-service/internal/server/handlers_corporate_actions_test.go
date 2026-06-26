@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/securities-service/internal/engine"
 	"github.com/garudax-platform/securities-service/internal/middleware"
 	"github.com/garudax-platform/securities-service/internal/store"
@@ -419,20 +420,20 @@ func TestProcessDividend(t *testing.T) {
 		t.Fatalf("expected 2 entitlements in store, got %d", len(entitlements))
 	}
 
-	totalValue := 0.0
+	totalValue := decimal.Zero()
 	for _, e := range entitlements {
-		expectedValue := float64(e.Quantity) * 5.0
-		if e.EntitlementValue != expectedValue {
-			t.Errorf("participant %s: expected value %.2f (qty=%d * 5.0), got %.2f",
+		expectedValue := decimal.DecimalFromInt(int64(e.Quantity)).MulInt64(5)
+		if !e.EntitlementValue.Equal(expectedValue) {
+			t.Errorf("participant %s: expected value %v (qty=%d * 5.0), got %v",
 				e.ParticipantID, expectedValue, e.Quantity, e.EntitlementValue)
 		}
-		totalValue += e.EntitlementValue
+		totalValue = totalValue.Add(e.EntitlementValue)
 	}
 	// participant-alpha: 100 * 5.0 = 500
 	// participant-beta:  200 * 5.0 = 1000
 	// total: 1500
-	if totalValue != 1500.0 {
-		t.Errorf("expected total entitlement value 1500.0, got %.2f", totalValue)
+	if !totalValue.Equal(decimal.DecimalFromInt(1500)) {
+		t.Errorf("expected total entitlement value 1500.0, got %v", totalValue)
 	}
 }
 

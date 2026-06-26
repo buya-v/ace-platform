@@ -261,7 +261,7 @@ type Entitlement struct {
 	ParticipantID     string            `json:"participant_id"`
 	InstrumentID      string            `json:"instrument_id"`
 	Quantity          int               `json:"quantity"`
-	EntitlementValue  float64           `json:"entitlement_value"`
+	EntitlementValue  Decimal           `json:"entitlement_value"`
 	Status            EntitlementStatus `json:"status"`
 	CreatedAt         string            `json:"created_at"`
 }

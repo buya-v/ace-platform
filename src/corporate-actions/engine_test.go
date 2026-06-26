@@ -3,6 +3,8 @@ package corporateactions
 import (
 	"errors"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
 
 const (
@@ -11,6 +13,10 @@ const (
 	instr       = "MSE:APU"
 	otherInstr  = "MSE:GOV"
 )
+
+// dec builds a Decimal money fixture from a decimal string literal. It panics on
+// malformed input, which is acceptable in tests.
+func dec(s string) Decimal { return decimal.MustParse(s) }
 
 func dividendAction() CorporateAction {
 	return CorporateAction{
@@ -139,17 +145,17 @@ func TestTerminalStatesAreFinal(t *testing.T) {
 
 func TestCalculateDividend_Basic(t *testing.T) {
 	holders := []Position{pos("p1", 100), pos("p2", 250)}
-	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: 1.50}, holders)
+	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: dec("1.50")}, holders)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(ents) != 2 {
 		t.Fatalf("got %d entitlements, want 2", len(ents))
 	}
-	if ents[0].Value != 150.00 {
+	if !ents[0].Value.Equal(dec("150.00")) {
 		t.Errorf("p1 value=%v want 150.00", ents[0].Value)
 	}
-	if ents[1].Value != 375.00 {
+	if !ents[1].Value.Equal(dec("375.00")) {
 		t.Errorf("p2 value=%v want 375.00", ents[1].Value)
 	}
 	for _, e := range ents {
@@ -162,14 +168,15 @@ func TestCalculateDividend_Basic(t *testing.T) {
 	}
 }
 
-func TestCalculateDividend_Rounding(t *testing.T) {
-	// 333 shares * 0.125 = 41.625 -> rounds to 41.63 (half away from zero).
-	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: 0.125}, []Position{pos("p1", 333)})
+func TestCalculateDividend_Precision(t *testing.T) {
+	// 333 shares * 0.1250 = 41.6250, exact in the 4dp Decimal domain (no lossy
+	// 2dp rounding — the old float round2 collapsed this to 41.63).
+	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: dec("0.1250")}, []Position{pos("p1", 333)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ents[0].Value != 41.63 {
-		t.Fatalf("value=%v want 41.63", ents[0].Value)
+	if !ents[0].Value.Equal(dec("41.6250")) {
+		t.Fatalf("value=%v want 41.6250", ents[0].Value)
 	}
 }
 
@@ -181,7 +188,7 @@ func TestCalculateDividend_SkipsIneligible(t *testing.T) {
 		pos("zero", 0),
 		pos("negative", -50),
 	}
-	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: 2}, holders)
+	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: dec("2")}, holders)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -194,11 +201,11 @@ func TestCalculateDividend_SkipsIneligible(t *testing.T) {
 }
 
 func TestCalculateDividend_ZeroDividendAllowed(t *testing.T) {
-	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: 0}, []Position{pos("p1", 100)})
+	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: dec("0")}, []Position{pos("p1", 100)})
 	if err != nil {
 		t.Fatalf("zero dividend should be allowed: %v", err)
 	}
-	if ents[0].Value != 0 {
+	if !ents[0].Value.IsZero() {
 		t.Fatalf("value=%v want 0", ents[0].Value)
 	}
 }
@@ -210,10 +217,10 @@ func TestCalculateDividend_Errors(t *testing.T) {
 		terms DividendTerms
 		want  error
 	}{
-		{"negative dividend", dividendAction(), DividendTerms{AmountPerShare: -1}, ErrNegativeDividend},
-		{"wrong action type", splitAction(), DividendTerms{AmountPerShare: 1}, ErrWrongActionType},
-		{"missing tenant", func() CorporateAction { c := dividendAction(); c.TenantID = ""; return c }(), DividendTerms{AmountPerShare: 1}, ErrMissingTenant},
-		{"missing instrument", func() CorporateAction { c := dividendAction(); c.InstrumentID = ""; return c }(), DividendTerms{AmountPerShare: 1}, ErrMissingInstrument},
+		{"negative dividend", dividendAction(), DividendTerms{AmountPerShare: dec("-1")}, ErrNegativeDividend},
+		{"wrong action type", splitAction(), DividendTerms{AmountPerShare: dec("1")}, ErrWrongActionType},
+		{"missing tenant", func() CorporateAction { c := dividendAction(); c.TenantID = ""; return c }(), DividendTerms{AmountPerShare: dec("1")}, ErrMissingTenant},
+		{"missing instrument", func() CorporateAction { c := dividendAction(); c.InstrumentID = ""; return c }(), DividendTerms{AmountPerShare: dec("1")}, ErrMissingInstrument},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -226,7 +233,7 @@ func TestCalculateDividend_Errors(t *testing.T) {
 }
 
 func TestCalculateDividend_NeverNil(t *testing.T) {
-	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: 1}, nil)
+	ents, err := CalculateDividend(dividendAction(), DividendTerms{AmountPerShare: dec("1")}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,14 +255,14 @@ func TestSplitAdjustedQuantity(t *testing.T) {
 		qty      int64
 		terms    SplitTerms
 		wantQty  int64
-		wantFrac float64
+		wantFrac Decimal
 	}{
-		{"2-for-1 forward", 100, SplitTerms{NewShares: 2, OldShares: 1}, 200, 0},
-		{"3-for-1 forward", 50, SplitTerms{NewShares: 3, OldShares: 1}, 150, 0},
-		{"1-for-10 reverse", 100, SplitTerms{NewShares: 1, OldShares: 10}, 10, 0},
-		{"1-for-10 reverse with remainder", 105, SplitTerms{NewShares: 1, OldShares: 10}, 10, 0.5},
-		{"3-for-2 fractional", 101, SplitTerms{NewShares: 3, OldShares: 2}, 151, 0.5},
-		{"zero holding", 0, SplitTerms{NewShares: 2, OldShares: 1}, 0, 0},
+		{"2-for-1 forward", 100, SplitTerms{NewShares: 2, OldShares: 1}, 200, dec("0")},
+		{"3-for-1 forward", 50, SplitTerms{NewShares: 3, OldShares: 1}, 150, dec("0")},
+		{"1-for-10 reverse", 100, SplitTerms{NewShares: 1, OldShares: 10}, 10, dec("0")},
+		{"1-for-10 reverse with remainder", 105, SplitTerms{NewShares: 1, OldShares: 10}, 10, dec("0.5")},
+		{"3-for-2 fractional", 101, SplitTerms{NewShares: 3, OldShares: 2}, 151, dec("0.5")},
+		{"zero holding", 0, SplitTerms{NewShares: 2, OldShares: 1}, 0, dec("0")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -266,7 +273,7 @@ func TestSplitAdjustedQuantity(t *testing.T) {
 			if gotQty != c.wantQty {
 				t.Errorf("qty=%d want %d", gotQty, c.wantQty)
 			}
-			if gotFrac != c.wantFrac {
+			if !gotFrac.Equal(c.wantFrac) {
 				t.Errorf("frac=%v want %v", gotFrac, c.wantFrac)
 			}
 		})
@@ -288,13 +295,13 @@ func TestSplitAdjustedQuantity_InvalidRatio(t *testing.T) {
 func TestSplitAdjustedPrice(t *testing.T) {
 	cases := []struct {
 		name  string
-		price float64
+		price Decimal
 		terms SplitTerms
-		want  float64
+		want  Decimal
 	}{
-		{"2-for-1 halves price", 100, SplitTerms{NewShares: 2, OldShares: 1}, 50},
-		{"1-for-10 reverse tenx price", 5, SplitTerms{NewShares: 1, OldShares: 10}, 50},
-		{"3-for-2 price", 30, SplitTerms{NewShares: 3, OldShares: 2}, 20},
+		{"2-for-1 halves price", dec("100"), SplitTerms{NewShares: 2, OldShares: 1}, dec("50")},
+		{"1-for-10 reverse tenx price", dec("5"), SplitTerms{NewShares: 1, OldShares: 10}, dec("50")},
+		{"3-for-2 price", dec("30"), SplitTerms{NewShares: 3, OldShares: 2}, dec("20")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -302,7 +309,7 @@ func TestSplitAdjustedPrice(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if got != c.want {
+			if !got.Equal(c.want) {
 				t.Fatalf("price=%v want %v", got, c.want)
 			}
 		})
@@ -310,10 +317,10 @@ func TestSplitAdjustedPrice(t *testing.T) {
 }
 
 func TestSplitAdjustedPrice_Errors(t *testing.T) {
-	if _, err := SplitAdjustedPrice(-1, SplitTerms{NewShares: 2, OldShares: 1}); !errors.Is(err, ErrNegativePrice) {
+	if _, err := SplitAdjustedPrice(dec("-1"), SplitTerms{NewShares: 2, OldShares: 1}); !errors.Is(err, ErrNegativePrice) {
 		t.Errorf("negative price: err=%v want ErrNegativePrice", err)
 	}
-	if _, err := SplitAdjustedPrice(10, SplitTerms{NewShares: 0, OldShares: 1}); !errors.Is(err, ErrInvalidRatio) {
+	if _, err := SplitAdjustedPrice(dec("10"), SplitTerms{NewShares: 0, OldShares: 1}); !errors.Is(err, ErrInvalidRatio) {
 		t.Errorf("invalid ratio: err=%v want ErrInvalidRatio", err)
 	}
 }
@@ -323,12 +330,12 @@ func TestSplitAdjustedPrice_Errors(t *testing.T) {
 func TestSplit_PreservesMarketValue(t *testing.T) {
 	terms := SplitTerms{NewShares: 2, OldShares: 1}
 	const qty int64 = 100
-	const price = 80.0
+	price := dec("80")
 	newQty, _, _ := SplitAdjustedQuantity(qty, terms)
 	newPrice, _ := SplitAdjustedPrice(price, terms)
-	before := float64(qty) * price
-	after := float64(newQty) * newPrice
-	if before != after {
+	before := price.MulInt64(qty)
+	after := newPrice.MulInt64(newQty)
+	if !before.Equal(after) {
 		t.Fatalf("value not preserved: before=%v after=%v", before, after)
 	}
 }
@@ -373,7 +380,7 @@ func TestApplySplit_Errors(t *testing.T) {
 
 func TestCalculateRights_Basic(t *testing.T) {
 	// 1-for-5 at 8.00: 100 held -> 20 rights, cost 160.00.
-	terms := RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 8.00}
+	terms := RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("8.00")}
 	ents, err := CalculateRights(rightsAction(), terms, []Position{pos("p1", 100)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -385,7 +392,7 @@ func TestCalculateRights_Basic(t *testing.T) {
 	if e.RightsQuantity != 20 {
 		t.Errorf("rights=%d want 20", e.RightsQuantity)
 	}
-	if e.SubscriptionCost != 160.00 {
+	if !e.SubscriptionCost.Equal(dec("160.00")) {
 		t.Errorf("cost=%v want 160.00", e.SubscriptionCost)
 	}
 	if e.HeldQuantity != 100 || e.Status != EntitlementPending {
@@ -395,7 +402,7 @@ func TestCalculateRights_Basic(t *testing.T) {
 
 func TestCalculateRights_FloorsFractionalRights(t *testing.T) {
 	// 1-for-3: 100 held -> floor(33.33) = 33 rights.
-	terms := RightsTerms{NewShares: 1, OldShares: 3, SubscriptionPrice: 10}
+	terms := RightsTerms{NewShares: 1, OldShares: 3, SubscriptionPrice: dec("10")}
 	ents, err := CalculateRights(rightsAction(), terms, []Position{pos("p1", 100)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -403,7 +410,7 @@ func TestCalculateRights_FloorsFractionalRights(t *testing.T) {
 	if ents[0].RightsQuantity != 33 {
 		t.Fatalf("rights=%d want 33", ents[0].RightsQuantity)
 	}
-	if ents[0].SubscriptionCost != 330 {
+	if !ents[0].SubscriptionCost.Equal(dec("330")) {
 		t.Fatalf("cost=%v want 330", ents[0].SubscriptionCost)
 	}
 }
@@ -414,7 +421,7 @@ func TestCalculateRights_SkipsIneligible(t *testing.T) {
 		{ParticipantID: "wrong-tenant", InstrumentID: instr, TenantID: otherTenant, Quantity: 50},
 		pos("zero", 0),
 	}
-	ents, err := CalculateRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 1}, holders)
+	ents, err := CalculateRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("1")}, holders)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -430,11 +437,11 @@ func TestCalculateRights_Errors(t *testing.T) {
 		terms RightsTerms
 		want  error
 	}{
-		{"wrong action type", dividendAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 1}, ErrWrongActionType},
-		{"zero new shares", rightsAction(), RightsTerms{NewShares: 0, OldShares: 5, SubscriptionPrice: 1}, ErrInvalidRatio},
-		{"zero old shares", rightsAction(), RightsTerms{NewShares: 1, OldShares: 0, SubscriptionPrice: 1}, ErrInvalidRatio},
-		{"negative price", rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: -1}, ErrNegativePrice},
-		{"missing tenant", func() CorporateAction { c := rightsAction(); c.TenantID = ""; return c }(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 1}, ErrMissingTenant},
+		{"wrong action type", dividendAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("1")}, ErrWrongActionType},
+		{"zero new shares", rightsAction(), RightsTerms{NewShares: 0, OldShares: 5, SubscriptionPrice: dec("1")}, ErrInvalidRatio},
+		{"zero old shares", rightsAction(), RightsTerms{NewShares: 1, OldShares: 0, SubscriptionPrice: dec("1")}, ErrInvalidRatio},
+		{"negative price", rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("-1")}, ErrNegativePrice},
+		{"missing tenant", func() CorporateAction { c := rightsAction(); c.TenantID = ""; return c }(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("1")}, ErrMissingTenant},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -448,27 +455,27 @@ func TestCalculateRights_Errors(t *testing.T) {
 
 func TestTheoreticalExRightsPrice(t *testing.T) {
 	// 1-for-5 at 8.00, cum price 10.00:
-	// TERP = (5*10 + 1*8) / 6 = 58/6 = 9.666... -> 9.67
-	terp, err := TheoreticalExRightsPrice(10.00, RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 8.00})
+	// TERP = (5*10 + 1*8) / 6 = 58/6 = 9.6666... -> 9.6667 (half-even at 4dp).
+	terp, err := TheoreticalExRightsPrice(dec("10.00"), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("8.00")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if terp != 9.67 {
-		t.Fatalf("terp=%v want 9.67", terp)
+	if !terp.Equal(dec("9.6667")) {
+		t.Fatalf("terp=%v want 9.6667", terp)
 	}
 }
 
 func TestTheoreticalExRightsPrice_Errors(t *testing.T) {
-	if _, err := TheoreticalExRightsPrice(-1, RightsTerms{NewShares: 1, OldShares: 5}); !errors.Is(err, ErrNegativePrice) {
+	if _, err := TheoreticalExRightsPrice(dec("-1"), RightsTerms{NewShares: 1, OldShares: 5}); !errors.Is(err, ErrNegativePrice) {
 		t.Errorf("negative cum price: err=%v", err)
 	}
-	if _, err := TheoreticalExRightsPrice(10, RightsTerms{NewShares: 0, OldShares: 5}); !errors.Is(err, ErrInvalidRatio) {
+	if _, err := TheoreticalExRightsPrice(dec("10"), RightsTerms{NewShares: 0, OldShares: 5}); !errors.Is(err, ErrInvalidRatio) {
 		t.Errorf("invalid ratio: err=%v", err)
 	}
 }
 
 func TestCalculateRights_NeverNil(t *testing.T) {
-	ents, err := CalculateRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 1}, nil)
+	ents, err := CalculateRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("1")}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

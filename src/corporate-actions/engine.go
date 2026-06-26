@@ -11,6 +11,12 @@
 // github.com/garudax-platform/securities-service/internal/types so the same
 // values flow through the platform without translation.
 //
+// All monetary amounts (dividend cash, subscription cost, adjusted prices) use
+// the platform's shared fixed-point Decimal type rather than float64. Decimal
+// arithmetic rounds half-to-even (banker's rounding) and never silently
+// overflows or divides by zero, so the per-holder calculations are exact and
+// reproducible across services.
+//
 // Platform invariant: tenant ID is never optional. Every corporate action must
 // carry a non-empty TenantID, and holdings are only acted upon when their
 // tenant matches the action's tenant.
@@ -18,8 +24,14 @@ package corporateactions
 
 import (
 	"errors"
-	"math"
+
+	"github.com/garudax-platform/decimal"
 )
+
+// Decimal is the platform's shared fixed-point money type, re-exported so the
+// domain structs below can declare money fields as Decimal without every caller
+// importing the shared module directly.
+type Decimal = decimal.Decimal
 
 // ActionType enumerates the supported corporate action events.
 type ActionType string
@@ -86,7 +98,7 @@ type Entitlement struct {
 	InstrumentID      string
 	TenantID          string
 	Quantity          int64   // holding at the record date
-	Value             float64 // cash value of the entitlement
+	Value             Decimal // cash value of the entitlement
 	Status            EntitlementStatus
 }
 
@@ -99,13 +111,13 @@ type RightsEntitlement struct {
 	TenantID          string
 	HeldQuantity      int64
 	RightsQuantity    int64   // number of new shares the holder may subscribe to
-	SubscriptionCost  float64 // RightsQuantity * subscription price
+	SubscriptionCost  Decimal // RightsQuantity * subscription price
 	Status            EntitlementStatus
 }
 
 // DividendTerms describes a cash dividend.
 type DividendTerms struct {
-	AmountPerShare float64
+	AmountPerShare Decimal
 }
 
 // SplitTerms describes a stock split as a ratio of NewShares-for-OldShares.
@@ -121,7 +133,7 @@ type SplitTerms struct {
 type RightsTerms struct {
 	NewShares         int64
 	OldShares         int64
-	SubscriptionPrice float64
+	SubscriptionPrice Decimal
 }
 
 // ----------------------------------------------------------------------------
@@ -194,20 +206,15 @@ func eligible(ca CorporateAction, p Position) bool {
 		p.Quantity > 0
 }
 
-// round2 rounds a monetary amount to two decimal places (half away from zero).
-func round2(v float64) float64 {
-	return math.Round(v*100) / 100
-}
-
 // CalculateDividend produces one PENDING entitlement per eligible holder, with a
-// cash value of quantity * amount-per-share rounded to two decimals. Holders in
-// a different tenant or instrument, or with a non-positive quantity, are
-// skipped. The returned slice is never nil.
+// cash value of quantity * amount-per-share. The multiplication is exact in the
+// fixed-point Decimal domain. Holders in a different tenant or instrument, or
+// with a non-positive quantity, are skipped. The returned slice is never nil.
 func CalculateDividend(ca CorporateAction, terms DividendTerms, holders []Position) ([]Entitlement, error) {
 	if err := ca.validate(Dividend); err != nil {
 		return nil, err
 	}
-	if terms.AmountPerShare < 0 {
+	if terms.AmountPerShare.IsNeg() {
 		return nil, ErrNegativeDividend
 	}
 
@@ -222,7 +229,7 @@ func CalculateDividend(ca CorporateAction, terms DividendTerms, holders []Positi
 			InstrumentID:      ca.InstrumentID,
 			TenantID:          ca.TenantID,
 			Quantity:          p.Quantity,
-			Value:             round2(float64(p.Quantity) * terms.AmountPerShare),
+			Value:             terms.AmountPerShare.MulInt64(p.Quantity),
 			Status:            EntitlementPending,
 		})
 	}
@@ -239,30 +246,32 @@ func (t SplitTerms) Ratio() (float64, error) {
 
 // SplitAdjustedQuantity converts a pre-split holding into its post-split whole
 // share count, returning any fractional remainder separately (the basis for
-// cash-in-lieu). A negative input quantity yields ErrInvalidRatio's sibling via
-// the ratio check only; quantities are otherwise floored toward zero.
-func SplitAdjustedQuantity(qty int64, terms SplitTerms) (newQty int64, fractional float64, err error) {
-	ratio, err := terms.Ratio()
-	if err != nil {
-		return 0, 0, err
+// cash-in-lieu). The whole-share count is qty*NewShares/OldShares floored toward
+// zero; the fractional remainder is the exact leftover fraction of a share,
+// expressed as a Decimal. Quantities are expected to be non-negative (eligible
+// holdings always are).
+func SplitAdjustedQuantity(qty int64, terms SplitTerms) (newQty int64, fractional Decimal, err error) {
+	if _, err := terms.Ratio(); err != nil {
+		return 0, Decimal{}, err
 	}
-	exact := float64(qty) * ratio
-	newQty = int64(math.Floor(exact))
-	fractional = round2(exact - float64(newQty))
+	total := qty * terms.NewShares
+	newQty = total / terms.OldShares
+	rem := total % terms.OldShares
+	fractional = decimal.DecimalFromInt(rem).DivInt64(terms.OldShares)
 	return newQty, fractional, nil
 }
 
 // SplitAdjustedPrice converts a pre-split price into its post-split price,
-// preserving total market value: price * OldShares / NewShares.
-func SplitAdjustedPrice(price float64, terms SplitTerms) (float64, error) {
-	if price < 0 {
-		return 0, ErrNegativePrice
+// preserving total market value: price * OldShares / NewShares. The division
+// rounds half-to-even in the Decimal domain.
+func SplitAdjustedPrice(price Decimal, terms SplitTerms) (Decimal, error) {
+	if price.IsNeg() {
+		return Decimal{}, ErrNegativePrice
 	}
-	ratio, err := terms.Ratio()
-	if err != nil {
-		return 0, err
+	if _, err := terms.Ratio(); err != nil {
+		return Decimal{}, err
 	}
-	return round2(price / ratio), nil
+	return price.MulInt64(terms.OldShares).DivInt64(terms.NewShares), nil
 }
 
 // ApplySplit returns copies of the eligible positions with their quantities
@@ -298,17 +307,17 @@ func CalculateRights(ca CorporateAction, terms RightsTerms, holders []Position) 
 	if terms.NewShares <= 0 || terms.OldShares <= 0 {
 		return nil, ErrInvalidRatio
 	}
-	if terms.SubscriptionPrice < 0 {
+	if terms.SubscriptionPrice.IsNeg() {
 		return nil, ErrNegativePrice
 	}
 
-	ratio := float64(terms.NewShares) / float64(terms.OldShares)
 	out := make([]RightsEntitlement, 0, len(holders))
 	for _, p := range holders {
 		if !eligible(ca, p) {
 			continue
 		}
-		rights := int64(math.Floor(float64(p.Quantity) * ratio))
+		// floor(held * NewShares / OldShares) via exact integer arithmetic.
+		rights := p.Quantity * terms.NewShares / terms.OldShares
 		out = append(out, RightsEntitlement{
 			CorporateActionID: ca.ID,
 			ParticipantID:     p.ParticipantID,
@@ -316,7 +325,7 @@ func CalculateRights(ca CorporateAction, terms RightsTerms, holders []Position) 
 			TenantID:          ca.TenantID,
 			HeldQuantity:      p.Quantity,
 			RightsQuantity:    rights,
-			SubscriptionCost:  round2(float64(rights) * terms.SubscriptionPrice),
+			SubscriptionCost:  terms.SubscriptionPrice.MulInt64(rights),
 			Status:            EntitlementPending,
 		})
 	}
@@ -329,15 +338,14 @@ func CalculateRights(ca CorporateAction, terms RightsTerms, holders []Position) 
 //	TERP = (OldShares*cumPrice + NewShares*subscriptionPrice) / (OldShares+NewShares)
 //
 // It is the expected price of the share once it trades ex-rights.
-func TheoreticalExRightsPrice(cumPrice float64, terms RightsTerms) (float64, error) {
-	if cumPrice < 0 || terms.SubscriptionPrice < 0 {
-		return 0, ErrNegativePrice
+func TheoreticalExRightsPrice(cumPrice Decimal, terms RightsTerms) (Decimal, error) {
+	if cumPrice.IsNeg() || terms.SubscriptionPrice.IsNeg() {
+		return Decimal{}, ErrNegativePrice
 	}
 	if terms.NewShares <= 0 || terms.OldShares <= 0 {
-		return 0, ErrInvalidRatio
+		return Decimal{}, ErrInvalidRatio
 	}
-	old := float64(terms.OldShares)
-	nw := float64(terms.NewShares)
-	terp := (old*cumPrice + nw*terms.SubscriptionPrice) / (old + nw)
-	return round2(terp), nil
+	// TERP = (OldShares*cumPrice + NewShares*subscriptionPrice) / (OldShares+NewShares)
+	numerator := cumPrice.MulInt64(terms.OldShares).Add(terms.SubscriptionPrice.MulInt64(terms.NewShares))
+	return numerator.DivInt64(terms.OldShares + terms.NewShares), nil
 }

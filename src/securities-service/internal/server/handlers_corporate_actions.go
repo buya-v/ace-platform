@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/securities-service/internal/store"
 	"github.com/garudax-platform/securities-service/internal/types"
 )
@@ -203,13 +204,16 @@ func (s *Server) handleProcessCorporateAction(w http.ResponseWriter, r *http.Req
 // and updates CSD custody balances for each participant.
 // dividend_amount must be present in ca.Details["dividend_amount"].
 func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types.Entitlement, error) {
-	dividendAmount := 0.0
+	// dividend_amount arrives as a JSON number (float64) or an int; convert it to
+	// the fixed-point Decimal money type at this boundary so all entitlement
+	// arithmetic stays exact.
+	var dividendAmount types.Decimal
 	if v, ok := ca.Details["dividend_amount"]; ok {
 		switch val := v.(type) {
 		case float64:
-			dividendAmount = val
+			dividendAmount, _ = decimal.NewFromFloat(val)
 		case int:
-			dividendAmount = float64(val)
+			dividendAmount = decimal.DecimalFromInt(int64(val))
 		}
 	}
 
@@ -230,7 +234,7 @@ func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types
 			return nil, err
 		}
 
-		entitlementValue := float64(pos.Quantity) * dividendAmount
+		entitlementValue := dividendAmount.MulInt64(int64(pos.Quantity))
 		e := types.Entitlement{
 			ID:                id,
 			CorporateActionID: ca.ID,
@@ -251,7 +255,7 @@ func (s *Server) processDividend(ca *types.CorporateAction, now string) ([]types
 			accountID := s.findCustodyAccountForParticipant(pos.ParticipantID)
 			if accountID != "" {
 				// Use entitlement value as integer delta (monetary units) on the instrument balance.
-				_, _ = s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, int(entitlementValue), 0)
+				_, _ = s.custodyBalanceStore.GetOrUpdate(accountID, ca.InstrumentID, int(entitlementValue.Float64()), 0)
 			}
 		}
 	}
