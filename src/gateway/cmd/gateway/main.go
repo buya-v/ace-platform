@@ -117,7 +117,9 @@ func main() {
 
 	// Register platform-service routes: /platform/v1/* → platform-service:8095
 	// These routes SKIP tenant middleware (platform API is above tenant scope).
-	// The bypass is handled in TenantMiddleware via tenantBypassPrefixes.
+	// The bypass is handled in TenantMiddleware via tenantBypassPrefixes, which
+	// is narrowed to genuine platform-level prefixes (/platform/, /api/v1/platform/,
+	// /api/v1/auth/) — all business routes are tenant-scoped and require the header.
 	platformBaseURL := fmt.Sprintf("http://%s", cfg.PlatformServiceAddr)
 	platformTarget, err := url.Parse(platformBaseURL)
 	if err != nil {
@@ -463,8 +465,11 @@ func main() {
 
 	// Build tenant middleware with the registered tenant whitelist.
 	// TenantMiddleware must run BEFORE auth so that tenant context is available
-	// to all downstream handlers. Health/metrics bypass paths are exempt.
-	tenantMW := middleware.TenantMiddleware([]string{"ace-commodities", "mse-equities"})
+	// to all downstream handlers. Health/metrics and platform-level paths are
+	// exempt; every other (tenant-scoped) route requires the X-GarudaX-Tenant
+	// header. The router is wired as a RouteChecker so unknown paths get 404
+	// before tenant enforcement (no 401 leak on nonexistent endpoints).
+	tenantMW := middleware.TenantMiddleware([]string{"ace-commodities", "mse-equities"}, rt)
 
 	// Build middleware chain: RequestID → Tracing → Metrics → BodyLimit → Tenant → Auth → RateLimit → Router
 	var httpHandler http.Handler = rt

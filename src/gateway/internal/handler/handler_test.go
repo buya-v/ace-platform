@@ -107,6 +107,48 @@ func TestSubmitOrderForwarding(t *testing.T) {
 	}
 }
 
+func TestForwardInjectsTenantMetadata(t *testing.T) {
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{"generic forward", "GET", "/api/v1/clearing/positions", ""},
+		{"submit order", "POST", "/api/v1/orders", `{"instrument_id":"WHT","side":"buy","price":"100.00","quantity":10}`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mc := &mockClient{}
+			rt := setupRouter(mc)
+			// Wrap with the real tenant middleware so the resolved tenant lands in
+			// the request context exactly as it does in production.
+			handler := middleware.TenantMiddleware([]string{"ace-commodities"})(rt)
+
+			var bodyReader *strings.Reader
+			if tc.body != "" {
+				bodyReader = strings.NewReader(tc.body)
+			} else {
+				bodyReader = strings.NewReader("")
+			}
+			req := httptest.NewRequest(tc.method, tc.path, bodyReader)
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-GarudaX-Tenant", "ace-commodities")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if mc.lastReq == nil {
+				t.Fatal("expected request to be forwarded")
+			}
+			got := mc.lastReq.Metadata[middleware.TenantHeaderName]
+			if got != "ace-commodities" {
+				t.Errorf("forwarded tenant metadata = %q, want ace-commodities", got)
+			}
+		})
+	}
+}
+
 func TestGetOrderBookPublic(t *testing.T) {
 	mc := &mockClient{
 		resp: &proxy.BackendResponse{

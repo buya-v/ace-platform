@@ -33,6 +33,17 @@ func NewWithRisk(client proxy.BackendClient, riskStore risk.Store) *Handler {
 	}
 }
 
+// addTenantMetadata injects the tenant resolved by TenantMiddleware into the
+// backend metadata under the canonical X-GarudaX-Tenant header, so downstream
+// services receive the same tenant the gateway validated. Tenant-scoped routes
+// always carry a tenant here; platform-level routes (auth/platform) do not, in
+// which case nothing is added.
+func addTenantMetadata(r *http.Request, meta map[string]string) {
+	if tid, ok := middleware.TenantFromContext(r.Context()); ok && tid != "" {
+		meta[middleware.TenantHeaderName] = tid.String()
+	}
+}
+
 // forward is the generic request forwarding function.
 func (h *Handler) forward(w http.ResponseWriter, r *http.Request, service, rpcMethod string) {
 	reqID := middleware.RequestIDFromContext(r.Context())
@@ -59,6 +70,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, service, rpcMe
 		rolesJSON, _ := json.Marshal(claims.Roles)
 		meta["x-roles"] = string(rolesJSON)
 	}
+	addTenantMetadata(r, meta)
 
 	// Extract path params and query params
 	pathParams := make(map[string]string)
@@ -138,6 +150,7 @@ func (h *Handler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
 		rolesJSON, _ := json.Marshal(claims.Roles)
 		meta["x-roles"] = string(rolesJSON)
 	}
+	addTenantMetadata(r, meta)
 
 	req := &proxy.BackendRequest{
 		Service:    "matching-engine",

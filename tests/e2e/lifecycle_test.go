@@ -71,6 +71,9 @@ func (lc *lifecycleClient) do(method, path string, body interface{}) *http.Respo
 		lc.t.Fatalf("create request %s %s: %v", method, path, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Single-tenant default: the gateway enforces X-GarudaX-Tenant on all
+	// tenant-scoped routes, so send the active tenant on every request.
+	req.Header.Set("X-GarudaX-Tenant", "ace-commodities")
 	if lc.token != "" {
 		req.Header.Set("Authorization", "Bearer "+lc.token)
 	}
