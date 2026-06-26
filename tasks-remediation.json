@@ -1,7 +1,7 @@
 {
   "feature": "Platform Remediation — Codebase Review 2026-06-26",
   "created_at": "2026-06-26T00:00:00Z",
-  "last_updated": "2026-06-26T02:15:00Z",
+  "last_updated": "2026-06-26T03:06:00Z",
   "critical_path": "R001 -> R002 -> R003/R004 -> R015 (fresh integration gate)",
   "highest_risk_seam": "R003/R004 decimal migration across all engines + securities float removal",
   "parallel_streams": [
@@ -464,6 +464,26 @@
       "worktree_branch": "feature/R022-money-reaudit",
       "deliverables": [
         "handoff/R022.md"
+      ]
+    },
+    {
+      "id": "R023",
+      "title": "gateway reporting generator →decimal",
+      "description": "R022 re-audit found one latent residual: gateway/internal/reporting/generator.go computes settlement-statement P&L, fee totals, net amount, and market-summary OHLC in float64 (PositionInput/MarginInput/FeeInput/TradeInput/PositionSnapshot/PnLDetail money fields + roundTo4), and reporting/store.go scans/stores OHLC + money columns as float64. Currently DORMANT (Generate* not wired to a live route) but must be migrated before wiring. Convert to shared decimal (mirror R020 fees/risk recipe + decFromFloat DB shim); keep HTTP wire shape (decimal marshals as bare JSON number). Also fold the reporting/store.go DB-at-rest float columns into this (or the R011 *_raw migration) so settlement net-amounts persist exactly.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 15,
+      "status": "deferred",
+      "worktree_branch": "feature/R023-gateway-reporting-decimal",
+      "deliverables": [
+        "src/gateway/internal/reporting/generator.go",
+        "src/gateway/internal/reporting/store.go"
       ]
     }
   ]

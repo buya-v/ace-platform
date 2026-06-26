@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T02:20:00Z",
+  "last_updated": "2026-06-26T03:16:00Z",
   "phases": [
     {
       "id": 0,
@@ -1296,12 +1296,14 @@
         "R002"
       ],
       "estimate_minutes": 20,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R018-corporate-actions-decimal",
       "deliverables": [
         "src/corporate-actions",
         "src/securities-service/internal/server/handlers_corporate_actions.go"
-      ]
+      ],
+      "started_at": "2026-06-26T02:28:23Z",
+      "finished_at": "2026-06-26T02:40:24Z"
     },
     {
       "id": "R019",
@@ -1316,12 +1318,14 @@
         "R002"
       ],
       "estimate_minutes": 18,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R019-compliance-money-decimal",
       "deliverables": [
         "src/compliance-service/integration/mcsd.go",
         "src/compliance-service/reporting/frc.go"
-      ]
+      ],
+      "started_at": "2026-06-26T02:28:23Z",
+      "finished_at": "2026-06-26T02:36:28Z"
     },
     {
       "id": "R020",
@@ -1336,12 +1340,14 @@
         "R002"
       ],
       "estimate_minutes": 18,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R020-gateway-fees-risk-decimal",
       "deliverables": [
         "src/gateway/internal/fees/calculator.go",
         "src/gateway/internal/risk/pretrade.go"
-      ]
+      ],
+      "started_at": "2026-06-26T02:28:23Z",
+      "finished_at": "2026-06-26T02:43:51Z"
     },
     {
       "id": "R021",
@@ -1356,12 +1362,14 @@
         "R002"
       ],
       "estimate_minutes": 15,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R021-fixgateway-price-decimal",
       "deliverables": [
         "src/fix-gateway/internal/fix/mapper.go",
         "src/fix-gateway/internal/fix/parser.go"
-      ]
+      ],
+      "started_at": "2026-06-26T02:48:14Z",
+      "finished_at": "2026-06-26T02:55:20Z"
     },
     {
       "id": "R022",
@@ -1382,10 +1390,32 @@
         "R021"
       ],
       "estimate_minutes": 10,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R022-money-reaudit",
       "deliverables": [
         "handoff/R022.md"
+      ],
+      "started_at": "2026-06-26T02:57:31Z",
+      "finished_at": "2026-06-26T03:02:26Z"
+    },
+    {
+      "id": "R023",
+      "title": "gateway reporting generator →decimal",
+      "description": "R022 re-audit found one latent residual: gateway/internal/reporting/generator.go computes settlement-statement P&L, fee totals, net amount, and market-summary OHLC in float64 (PositionInput/MarginInput/FeeInput/TradeInput/PositionSnapshot/PnLDetail money fields + roundTo4), and reporting/store.go scans/stores OHLC + money columns as float64. Currently DORMANT (Generate* not wired to a live route) but must be migrated before wiring. Convert to shared decimal (mirror R020 fees/risk recipe + decFromFloat DB shim); keep HTTP wire shape (decimal marshals as bare JSON number). Also fold the reporting/store.go DB-at-rest float columns into this (or the R011 *_raw migration) so settlement net-amounts persist exactly.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 15,
+      "status": "deferred",
+      "worktree_branch": "feature/R023-gateway-reporting-decimal",
+      "deliverables": [
+        "src/gateway/internal/reporting/generator.go",
+        "src/gateway/internal/reporting/store.go"
       ]
     }
   ]
