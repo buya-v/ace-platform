@@ -1,8 +1,9 @@
 package fix
 
 import (
-	"strconv"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // newOrderMsg builds a minimal FIXMessage for a NewOrderSingle with the given fields.
@@ -27,9 +28,9 @@ func newOrderMsg(fields map[int]string) *FIXMessage {
 // TestMapNewOrderSingle_LimitBuy verifies a limit buy order (Side=1, OrdType=2).
 func TestMapNewOrderSingle_LimitBuy(t *testing.T) {
 	msg := newOrderMsg(map[int]string{
-		TagSide:    "1",
-		TagOrdType: "2",
-		TagPrice:   "275.50",
+		TagSide:     "1",
+		TagOrdType:  "2",
+		TagPrice:    "275.50",
 		TagOrderQty: "200",
 	})
 
@@ -44,8 +45,8 @@ func TestMapNewOrderSingle_LimitBuy(t *testing.T) {
 	if order.OrderType != OrdTypeLimit {
 		t.Errorf("OrdType: got %q, want %q", order.OrderType, OrdTypeLimit)
 	}
-	if order.Price != 275.50 {
-		t.Errorf("Price: got %f, want 275.50", order.Price)
+	if !order.Price.Equal(decimal.MustParse("275.50")) {
+		t.Errorf("Price: got %s, want 275.50", order.Price.String())
 	}
 	if order.Quantity != 200 {
 		t.Errorf("Quantity: got %d, want 200", order.Quantity)
@@ -83,8 +84,8 @@ func TestMapNewOrderSingle_MarketSell(t *testing.T) {
 	if order.OrderType != OrdTypeMarket {
 		t.Errorf("OrdType: got %q, want %q", order.OrderType, OrdTypeMarket)
 	}
-	if order.Price != 0.0 {
-		t.Errorf("Price: got %f, want 0.0 for market order", order.Price)
+	if !order.Price.IsZero() {
+		t.Errorf("Price: got %s, want 0 for market order", order.Price.String())
 	}
 	if order.IsShortSell {
 		t.Error("IsShortSell: got true, want false for regular sell")
@@ -149,8 +150,8 @@ func TestMapNewOrderSingle_InvalidSide(t *testing.T) {
 func TestMapNewOrderSingle_MissingSymbol(t *testing.T) {
 	msg := &FIXMessage{
 		Fields: map[int]string{
-			TagMsgType:     MsgTypeNewOrderSingle,
-			TagClOrdID:     "ORD-001",
+			TagMsgType: MsgTypeNewOrderSingle,
+			TagClOrdID: "ORD-001",
 			// TagSymbol intentionally omitted
 			TagSide:        "1",
 			TagOrdType:     "2",
@@ -169,7 +170,7 @@ func TestMapNewOrderSingle_MissingSymbol(t *testing.T) {
 func TestMapNewOrderSingle_MissingClOrdID(t *testing.T) {
 	msg := &FIXMessage{
 		Fields: map[int]string{
-			TagMsgType:     MsgTypeNewOrderSingle,
+			TagMsgType: MsgTypeNewOrderSingle,
 			// TagClOrdID intentionally omitted
 			TagSymbol:      "MSE001",
 			TagSide:        "1",
@@ -258,15 +259,15 @@ func TestMapNewOrderSingle_TimeInForce(t *testing.T) {
 // TestMapExecutionReport verifies that all required FIX tags are present in the built message.
 func TestMapExecutionReport(t *testing.T) {
 	execMsg := MapExecutionReport(
-		"ORD-12345",    // orderID        → tag 37
-		"EXEC-001",     // execID         → tag 17
-		"0",            // execType       → tag 150
-		"0",            // ordStatus      → tag 39
-		SideBuy,        // side
-		500,            // qty            → tag 38
-		275.50,         // price          → tag 6 (AvgPx)
-		400,            // leavesQty      → tag 151
-		100,            // cumQty         → tag 14
+		"ORD-12345",                 // orderID        → tag 37
+		"EXEC-001",                  // execID         → tag 17
+		"0",                         // execType       → tag 150
+		"0",                         // ordStatus      → tag 39
+		SideBuy,                     // side
+		500,                         // qty            → tag 38
+		decimal.MustParse("275.50"), // price          → tag 6 (AvgPx)
+		400,                         // leavesQty      → tag 151
+		100,                         // cumQty         → tag 14
 	)
 
 	if execMsg == nil {
@@ -321,9 +322,9 @@ func TestMapExecutionReport(t *testing.T) {
 		t.Errorf("Side: got %q, want 1 (BUY)", got)
 	}
 
-	// AvgPx should be formatted to 4 decimal places.
+	// AvgPx is rendered via Decimal.String() — exact, no float drift.
 	avgPx := GetTag(execMsg, TagAvgPx)
-	expected := strconv.FormatFloat(275.50, 'f', 4, 64)
+	expected := decimal.MustParse("275.50").String() // "275.5"
 	if avgPx != expected {
 		t.Errorf("AvgPx: got %q, want %q", avgPx, expected)
 	}
@@ -331,7 +332,7 @@ func TestMapExecutionReport(t *testing.T) {
 
 // TestMapExecutionReport_SellSide verifies side mapping for sell in an execution report.
 func TestMapExecutionReport_SellSide(t *testing.T) {
-	execMsg := MapExecutionReport("ORD-999", "EXEC-002", "F", "4", SideSell, 100, 0, 0, 100)
+	execMsg := MapExecutionReport("ORD-999", "EXEC-002", "F", "4", SideSell, 100, decimal.Zero(), 0, 100)
 	if got := GetTag(execMsg, TagSide); got != "2" {
 		t.Errorf("Side for SELL: got %q, want 2", got)
 	}
@@ -339,7 +340,7 @@ func TestMapExecutionReport_SellSide(t *testing.T) {
 
 // TestMapExecutionReport_ShortSellSide verifies side mapping for short sell.
 func TestMapExecutionReport_ShortSellSide(t *testing.T) {
-	execMsg := MapExecutionReport("ORD-999", "EXEC-003", "F", "4", SideShortSell, 50, 0, 0, 50)
+	execMsg := MapExecutionReport("ORD-999", "EXEC-003", "F", "4", SideShortSell, 50, decimal.Zero(), 0, 50)
 	if got := GetTag(execMsg, TagSide); got != "5" {
 		t.Errorf("Side for SHORT_SELL: got %q, want 5", got)
 	}
@@ -359,8 +360,8 @@ func TestMapNewOrderSingle_StopOrder(t *testing.T) {
 	if order.OrderType != OrdTypeStop {
 		t.Errorf("OrdType: got %q, want %q", order.OrderType, OrdTypeStop)
 	}
-	if order.StopPrice != 100.00 {
-		t.Errorf("StopPrice: got %f, want 100.00", order.StopPrice)
+	if !order.StopPrice.Equal(decimal.MustParse("100.00")) {
+		t.Errorf("StopPrice: got %s, want 100.00", order.StopPrice.String())
 	}
 }
 
