@@ -3,6 +3,7 @@ module github.com/garudax-platform/compliance-service
 go 1.25.0
 
 require (
+	github.com/garudax-platform/decimal v0.0.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/segmentio/kafka-go v0.4.47
 )
@@ -16,3 +17,5 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )
+
+replace github.com/garudax-platform/decimal v0.0.0 => ../shared/pkg/types/decimal

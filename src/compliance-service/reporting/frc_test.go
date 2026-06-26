@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
 
 const testTenant = "mse-equities"
@@ -35,16 +37,16 @@ func TestNewReporterRequiresTenant(t *testing.T) {
 func TestDailyTradingSummaryTotalsAndMovers(t *testing.T) {
 	r, _ := newTestReporter(t)
 	instruments := []InstrumentVolume{
-		{InstrumentID: "MSE:APU", Symbol: "APU", Trades: 10, Volume: 1000, Value: 5000, PriceChange: 1.5},
-		{InstrumentID: "MSE:GOV", Symbol: "GOV", Trades: 5, Volume: 500, Value: 2500, PriceChange: -3.2},
-		{InstrumentID: "MSE:TDB", Symbol: "TDB", Trades: 2, Volume: 200, Value: 800, PriceChange: 0.1},
+		{InstrumentID: "MSE:APU", Symbol: "APU", Trades: 10, Volume: 1000, Value: decimal.DecimalFromInt(5000), PriceChange: 1.5},
+		{InstrumentID: "MSE:GOV", Symbol: "GOV", Trades: 5, Volume: 500, Value: decimal.DecimalFromInt(2500), PriceChange: -3.2},
+		{InstrumentID: "MSE:TDB", Symbol: "TDB", Trades: 2, Volume: 200, Value: decimal.DecimalFromInt(800), PriceChange: 0.1},
 	}
 	rep, err := r.GenerateDailyTradingSummary("2026-06-19", instruments, FormatJSON)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	body := rep.Body.(DailyTradingSummary)
-	if body.TotalTrades != 17 || body.TotalVolume != 1700 || body.TotalValue != 8300 {
+	if body.TotalTrades != 17 || body.TotalVolume != 1700 || !body.TotalValue.Equal(decimal.DecimalFromInt(8300)) {
 		t.Fatalf("totals wrong: %+v", body)
 	}
 	// Top mover should be the largest absolute change (GOV at -3.2).
@@ -67,7 +69,7 @@ func TestRenderCSVOnlyForDailySummary(t *testing.T) {
 	r, _ := newTestReporter(t)
 	// CSV allowed for daily summary.
 	rep, err := r.GenerateDailyTradingSummary("2026-06-19",
-		[]InstrumentVolume{{InstrumentID: "MSE:APU", Symbol: "APU", Trades: 1, Volume: 10, Value: 50, PriceChange: 0.5}},
+		[]InstrumentVolume{{InstrumentID: "MSE:APU", Symbol: "APU", Trades: 1, Volume: 10, Value: decimal.DecimalFromInt(50), PriceChange: 0.5}},
 		FormatCSV)
 	if err != nil {
 		t.Fatalf("generate csv: %v", err)
@@ -120,15 +122,15 @@ func TestLargeTraderPercentComputed(t *testing.T) {
 func TestSettlementFailsReportTotals(t *testing.T) {
 	r, _ := newTestReporter(t)
 	fails := []SettlementFail{
-		{ObligationID: "o1", ParticipantID: "p1", InstrumentID: "i1", Quantity: 100, FailValue: 1000, PenaltyAmount: 12.34, BuyInStatus: "NONE"},
-		{ObligationID: "o2", ParticipantID: "p2", InstrumentID: "i2", Quantity: 50, FailValue: 500, PenaltyAmount: 7.66, BuyInStatus: "INITIATED"},
+		{ObligationID: "o1", ParticipantID: "p1", InstrumentID: "i1", Quantity: 100, FailValue: decimal.DecimalFromInt(1000), PenaltyAmount: decimal.MustParse("12.34"), BuyInStatus: "NONE"},
+		{ObligationID: "o2", ParticipantID: "p2", InstrumentID: "i2", Quantity: 50, FailValue: decimal.DecimalFromInt(500), PenaltyAmount: decimal.MustParse("7.66"), BuyInStatus: "INITIATED"},
 	}
 	rep, err := r.GenerateSettlementFailsReport("2026-06-19", fails)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 	body := rep.Body.(SettlementFailsReport)
-	if body.TotalFails != 2 || body.TotalPenalty != 20 {
+	if body.TotalFails != 2 || !body.TotalPenalty.Equal(decimal.DecimalFromInt(20)) {
 		t.Fatalf("totals wrong: %+v", body)
 	}
 	// Empty fails is a valid clean report with a non-nil slice.

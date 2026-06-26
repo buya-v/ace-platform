@@ -3,6 +3,8 @@ package integration
 import (
 	"context"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
 
 const testTenant = "mse-equities"
@@ -72,7 +74,7 @@ func TestInstructDvPSettlesImmediately(t *testing.T) {
 
 	resp, err := a.InstructDvP(ctx, DvPInstruction{
 		TenantID: testTenant, FromAccountID: from.AccountID, ToAccountID: to.AccountID,
-		InstrumentID: "MSE:APU", Quantity: 400, SettlementAmount: 8000, Currency: "MNT", SettlementDate: "2026-06-23",
+		InstrumentID: "MSE:APU", Quantity: 400, SettlementAmount: decimal.DecimalFromInt(8000), Currency: "MNT", SettlementDate: "2026-06-23",
 	})
 	if err != nil {
 		t.Fatalf("InstructDvP: %v", err)
@@ -110,10 +112,10 @@ func TestInstructValidation(t *testing.T) {
 		req  DvPInstruction
 		want error
 	}{
-		{"missing tenant", DvPInstruction{FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: 1}, ErrMissingTenant},
-		{"bad amount", DvPInstruction{TenantID: testTenant, FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: 0}, ErrInvalidAmount},
-		{"missing fields", DvPInstruction{TenantID: testTenant, FromAccountID: "", ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: 1}, ErrMissingFields},
-		{"bad qty", DvPInstruction{TenantID: testTenant, FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 0, SettlementAmount: 1}, ErrInvalidQuantity},
+		{"missing tenant", DvPInstruction{FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: decimal.DecimalFromInt(1)}, ErrMissingTenant},
+		{"bad amount", DvPInstruction{TenantID: testTenant, FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: decimal.Zero()}, ErrInvalidAmount},
+		{"missing fields", DvPInstruction{TenantID: testTenant, FromAccountID: "", ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 1, SettlementAmount: decimal.DecimalFromInt(1)}, ErrMissingFields},
+		{"bad qty", DvPInstruction{TenantID: testTenant, FromAccountID: from.AccountID, ToAccountID: to.AccountID, InstrumentID: "i", Quantity: 0, SettlementAmount: decimal.DecimalFromInt(1)}, ErrInvalidQuantity},
 	}
 	for _, c := range cases {
 		if _, err := a.InstructDvP(ctx, c.req); err != c.want {
@@ -271,10 +273,10 @@ func TestCorporateActionEntitlements(t *testing.T) {
 	for _, e := range ents {
 		byOwner[e.OwnerID] = e
 	}
-	if byOwner["holder-1"].CashEntitlement != 2500 {
+	if !byOwner["holder-1"].CashEntitlement.Equal(decimal.DecimalFromInt(2500)) {
 		t.Fatalf("holder-1 cash = %v, want 2500", byOwner["holder-1"].CashEntitlement)
 	}
-	if byOwner["holder-2"].CashEntitlement != 1250 {
+	if !byOwner["holder-2"].CashEntitlement.Equal(decimal.DecimalFromInt(1250)) {
 		t.Fatalf("holder-2 cash = %v, want 1250", byOwner["holder-2"].CashEntitlement)
 	}
 }
