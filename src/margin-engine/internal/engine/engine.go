@@ -61,7 +61,11 @@ func NewEngine(
 }
 
 // SetMarginHandler sets a callback invoked after margin calculation.
+// The handler field is guarded by e.mu so it may be set concurrently with
+// CalculateMargin without a data race.
 func (e *Engine) SetMarginHandler(h MarginHandler) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.marginHandler = h
 }
 
@@ -72,6 +76,30 @@ func (e *Engine) SetMarginCallHandler(h MarginCallHandler) {
 
 // CalculateMargin computes margin for a participant given their current positions.
 func (e *Engine) CalculateMargin(participantID string, positions []types.Position) (*types.PortfolioMargin, error) {
+	pm, marginHandler, err := e.calculateMarginLocked(participantID, positions)
+	if err != nil {
+		return nil, err
+	}
+
+	// Invoke the margin handler OUTSIDE the critical section so a slow or
+	// re-entrant callback cannot deadlock on e.mu or serialize calculations.
+	if marginHandler != nil {
+		marginHandler(pm)
+	}
+
+	// Evaluate margin call. callService has its own synchronization and fires
+	// its own handler outside its lock, so this runs without e.mu held.
+	if _, err := e.callService.Evaluate(pm); err != nil {
+		return nil, fmt.Errorf("margin engine: margin call evaluation failed: %w", err)
+	}
+
+	return &pm, nil
+}
+
+// calculateMarginLocked computes and caches the portfolio margin under e.mu and
+// returns a snapshot of the margin handler for the caller to invoke after the
+// lock is released.
+func (e *Engine) calculateMarginLocked(participantID string, positions []types.Position) (types.PortfolioMargin, MarginHandler, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -79,25 +107,14 @@ func (e *Engine) CalculateMargin(participantID string, positions []types.Positio
 
 	pm, err := e.calculator.CalculatePortfolio(participantID, positions, collateral)
 	if err != nil {
-		return nil, fmt.Errorf("margin engine: calculation failed for %s: %w", participantID, err)
+		return types.PortfolioMargin{}, nil, fmt.Errorf("margin engine: calculation failed for %s: %w", participantID, err)
 	}
 
 	// Cache
 	stored := pm
 	e.portfolios[participantID] = &stored
 
-	if e.marginHandler != nil {
-		e.marginHandler(pm)
-	}
-
-	// Evaluate margin call
-	call, err := e.callService.Evaluate(pm)
-	if err != nil {
-		return nil, fmt.Errorf("margin engine: margin call evaluation failed: %w", err)
-	}
-	_ = call // call is logged via handler if set
-
-	return &pm, nil
+	return pm, e.marginHandler, nil
 }
 
 // GetPortfolioMargin returns the last calculated margin for a participant.
