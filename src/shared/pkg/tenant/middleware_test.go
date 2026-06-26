@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/garudax-platform/shared/internal/tenant"
+	"github.com/garudax-platform/tenant"
 )
 
 // captureHandler is an http.Handler that records the tenant extracted from

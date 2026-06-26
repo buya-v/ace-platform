@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/garudax-platform/shared/internal/tenant"
+	"github.com/garudax-platform/tenant"
 )
 
 // These tests complement middleware_test.go. They focus on two areas the

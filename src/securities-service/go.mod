@@ -6,6 +6,7 @@ require github.com/jackc/pgx/v5 v5.9.2
 
 require (
 	github.com/garudax-platform/decimal v0.0.0
+	github.com/garudax-platform/tenant v0.0.0
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -14,3 +15,5 @@ require (
 )
 
 replace github.com/garudax-platform/decimal v0.0.0 => ../shared/pkg/types/decimal
+
+replace github.com/garudax-platform/tenant v0.0.0 => ../shared/pkg/tenant
