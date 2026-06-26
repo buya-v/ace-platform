@@ -686,6 +686,11 @@ func TestOrderNegativeCases(t *testing.T) {
 		req, _ := http.NewRequest("POST", url, strings.NewReader("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
+		// Tenant middleware (R011) runs before the order handler, so a request
+		// missing X-GarudaX-Tenant is rejected with 401 TENANT_REQUIRED before
+		// the body is ever parsed. Send the active tenant like the real clients
+		// do so this negative case actually reaches the JSON-decode 400 path.
+		req.Header.Set("X-GarudaX-Tenant", "ace-commodities")
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
