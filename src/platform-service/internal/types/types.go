@@ -10,7 +10,7 @@ const (
 )
 
 // Tenant holds the registry entry for a GarudaX tenant (venue).
-// Corresponds to the platform.tenants table in V29__platform_schemas.sql.
+// Corresponds to the platform.tenants table in V029__platform_schemas.sql.
 type Tenant struct {
 	ID                 string                 `json:"id"`
 	Name               string                 `json:"name"`

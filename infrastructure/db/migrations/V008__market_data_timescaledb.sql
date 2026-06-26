@@ -1,0 +1,41 @@
+-- V008: Market data schema bootstrap (TimescaleDB)
+--
+-- ─────────────────────────────────────────────
+-- NEUTRALIZED — DUPLICATE market_data.trades REMOVED (R025)
+-- ─────────────────────────────────────────────
+-- This migration ORIGINALLY created `market_data.trades` (keyed on `executed_at`)
+-- plus a stack of OHLCV continuous aggregates (ohlcv_1m..ohlcv_1d), retention
+-- policies, and grants to the role `garudax_marketdata_svc`.
+--
+-- That `market_data.trades` definition conflicts with the AUTHORITATIVE one in
+-- V016__market_data_tables.sql, which keys the table on `traded_at` (and adds
+-- the `candles` / `tickers` tables). The market-data-service code uses the V016
+-- shape exclusively (`ace_market_data.trades.traded_at`, `ace_market_data.candles`,
+-- `ace_market_data.tickers` — see src/market-data-service/internal/store/postgres.go).
+--
+-- On a fresh database applied in version order, V008 used to win the
+-- `CREATE TABLE market_data.trades` and V016's `CREATE TABLE IF NOT EXISTS`
+-- then no-op'd, leaving the wrong (`executed_at`) shape in place; V016's
+-- `CREATE INDEX ... (traded_at ...)` then failed with
+-- `column "traded_at" does not exist`, aborting DB init.
+--
+-- The OHLCV continuous aggregates and their retention policies created here were
+-- never referenced by any service (no `ohlcv` reference exists anywhere in src/),
+-- and the role `garudax_marketdata_svc` (note: no underscore between "market" and
+-- "data") is a stale misspelling of the canonical `garudax_market_data_svc`
+-- created in V001 and granted in V030. All of that is therefore dropped.
+--
+-- The historical V008/V016 (and V008/V009) duplicate-version hazard is already
+-- documented in V032's header. This migration is now a harmless, idempotent no-op
+-- that only guarantees the TimescaleDB extension and the market_data schema exist
+-- before V016 (the authoritative definition) runs.
+
+-- ============================================================
+-- TimescaleDB Extension (idempotent; V016 also ensures this)
+-- ============================================================
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+-- ============================================================
+-- Schema (idempotent; V016 also ensures this)
+-- ============================================================
+CREATE SCHEMA IF NOT EXISTS market_data;
