@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T04:38:44Z",
+  "last_updated": "2026-06-26T05:31:00Z",
   "phases": [
     {
       "id": 0,
@@ -1225,7 +1225,7 @@
     {
       "id": "R014",
       "title": "Re-enable CI build+test gate",
-      "description": "Convert .github/workflows/deploy.yml.disabled (and any disabled CI) into an active workflow that, on PR/merge, builds every Go service and runs unit tests (skip the e2e graceful-skip suite or run it only in a full-stack job). Gate merges to main on green. Keep cloud-deploy steps disabled/guarded — this is a build+test gate, not a deploy.",
+      "description": "Convert .github/workflows/deploy.yml.disabled (and any disabled CI) into an active workflow that, on PR/merge, builds every Go service and runs unit tests (skip the e2e graceful-skip suite or run it only in a full-stack job). Gate merges to main on green. Keep cloud-deploy steps disabled/guarded — this is a build+test gate, not a deploy. REWORK (handoff/R014-review.md required fix): keep read-only terraform-validate + terraform-plan jobs on pull_request (they mutate nothing); guard ONLY the mutating terraform-apply-* jobs (which already have environment: approval). Make branch-protection.json required_status_checks.contexts EXACTLY equal the checks that report on a normal PR (CI Gate, Security Gate, + Validate if it runs on PR) — otherwise required checks block all merges. Also add terraform validate to the CI gate.",
       "agent_role": "devops",
       "phase": 14,
       "dependencies": [],
@@ -1235,7 +1235,9 @@
       "worktree_branch": "feature/R014-reenable-ci",
       "deliverables": [
         ".github/workflows/ci.yml"
-      ]
+      ],
+      "started_at": "2026-06-26T04:50:53Z",
+      "finished_at": "2026-06-26T05:01:56Z"
     },
     {
       "id": "R015",
@@ -1256,11 +1258,13 @@
         "R011"
       ],
       "estimate_minutes": 10,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R015-fresh-integration-run",
       "deliverables": [
         "handoff/integration-run-20260626.md"
-      ]
+      ],
+      "started_at": "2026-06-26T04:50:53Z",
+      "finished_at": "2026-06-26T05:14:16Z"
     },
     {
       "id": "R016",
@@ -1275,11 +1279,13 @@
         "R015"
       ],
       "estimate_minutes": 5,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R016-refresh-claude-metrics",
       "deliverables": [
         "CLAUDE.md"
-      ]
+      ],
+      "started_at": "2026-06-26T05:20:19Z",
+      "finished_at": "2026-06-26T05:22:42Z"
     },
     {
       "id": "R017",
@@ -1290,12 +1296,14 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 12,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R017-repo-hygiene",
       "deliverables": [
         "infrastructure/terraform",
         "infrastructure/db/migrations"
-      ]
+      ],
+      "started_at": "2026-06-26T04:50:53Z",
+      "finished_at": "2026-06-26T04:57:59Z"
     },
     {
       "id": "R018",
@@ -1425,11 +1433,34 @@
         "R002"
       ],
       "estimate_minutes": 15,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R023-gateway-reporting-decimal",
       "deliverables": [
         "src/gateway/internal/reporting/generator.go",
         "src/gateway/internal/reporting/store.go"
+      ]
+    },
+    {
+      "id": "R024",
+      "title": "Implement real cross-service Kafka event propagation",
+      "description": "Close the last historical e2e bug class (#3), confirmed OPEN by R015's fresh full-stack run: events do not actually flow matching-engine -> clearing-engine -> margin-engine -> settlement-engine across separate processes. R007 already made wiring fail-fast (no silent in-process fallback when KAFKA_BROKERS set) and a real segmentio/kafka-go writer exists; R024 must finish the real wire path. Scope: (1) ensure every engine's internal/kafka has BOTH a real wire-protocol Producer AND Consumer (segmentio/kafka-go) selected when KAFKA_BROKERS is set, behind the existing Producer/Consumer interfaces; (2) wire each downstream engine to actually SUBSCRIBE to and CONSUME the upstream topic it needs (matching trade-executed -> clearing; clearing position -> margin; margin/settlement chain), using the {tenant_id}.{domain}.{event} topic convention (tenant=ace-commodities default) and the shared kafka tenant router where applicable; (3) idempotent consume + DLQ/retry already exist in the channel adapter — preserve them in the real adapter; (4) add an integration test under tests/ that, against a real broker (docker compose, KAFKA_BROKERS set), publishes an order/trade on matching-engine's topic and asserts the clearing/margin/settlement consumers process it end-to-end across processes — graceful-skip when no broker. Verify go build/test green for all engines; do NOT regress R007 fail-fast or R008 concurrency fixes. Reference R015 handoff (handoff/integration-run-20260626-051039.md) for the exact gap + the 3 infra defects it flagged.",
+      "agent_role": "builder",
+      "phase": 12,
+      "dependencies": [
+        "R007"
+      ],
+      "blockedBy": [
+        "R007"
+      ],
+      "estimate_minutes": 25,
+      "status": "deferred",
+      "worktree_branch": "feature/R024-cross-service-kafka",
+      "deliverables": [
+        "src/matching-engine/internal/kafka",
+        "src/clearing-engine/internal/kafka",
+        "src/margin-engine/internal/kafka",
+        "src/settlement-engine/internal/kafka",
+        "tests/integration"
       ]
     }
   ]
