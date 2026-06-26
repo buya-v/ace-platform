@@ -1,8 +1,8 @@
-REJECTED
+APPROVED
 
-# Review — R014: Re-enable CI build+test gate
+# Review — R014: Re-enable CI build+test gate (REWORK)
 
-**Verdict:** REJECTED
+**Verdict:** APPROVED
 **Reviewer:** AI Reviewer Agent
 **Date:** 2026-06-26
 
@@ -10,111 +10,108 @@ REJECTED
 
 ## Summary
 
-This is a strong, well-reasoned change that is one surgical fix away from approval. The
-new `ci.yml` build+test gate is correct, the dynamic module discovery is a genuine
-improvement over the old one-level `src/*/` loop (which missed the nested
-`src/shared/pkg/*` modules), the Go 1.25 + `GOTOOLCHAIN: auto` bump matches the engine
-module directives, and guarding `deploy`/`docker-build`/`terraform` to `workflow_dispatch`
-is the security-conscious call. The handoff is thorough and honest.
+This rework resolves the single correctness defect that got the first attempt
+rejected: a required `Validate` status check (`branch-protection.json` lists it on
+`main` with `strict: true`) that could never report on a PR after `terraform.yml` was
+guarded to `workflow_dispatch`-only — which would have bricked every merge. The worker
+took the **preferred** remediation from the prior review: restore `pull_request` on
+`terraform.yml`, keep the read-only `terraform-validate`/`terraform-plan` jobs running
+on PRs, and guard only the mutating `terraform-apply-*` jobs to manual dispatch. All
+three required checks now report on a normal PR.
 
-It is rejected for **one correctness defect**: guarding the *entire* `terraform.yml` to
-manual dispatch makes the `Validate` status check — which `branch-protection.json` lists
-as a **required** check on `main` (`strict: true`) — impossible to satisfy on a PR. Since
-the whole point of this task is the merge gate, an artifact that would brick merges when
-applied has to be reconciled before approval.
+I verified the required-check ⇄ trigger alignment against the actual files rather than
+trusting the handoff.
 
 ---
 
 ## Evaluation
 
-### Correctness: FAIL
+### Correctness: PASS
 
-The core gate is correct, but the terraform/branch-protection interaction is broken:
+The bricking defect is genuinely fixed:
 
-- `terraform.yml` `terraform-validate` job is named `Validate` (`terraform.yml:26`).
-- `branch-protection.json` requires `"Validate"` (alongside `"CI Gate"`, `"Security Gate"`)
-  as a `required_status_checks.contexts` entry on `main`, with `strict: true`.
-- R014 changed `terraform.yml`'s triggers to `workflow_dispatch` **only** (removed the
-  `pull_request`/`push` triggers). The `Validate` check therefore **never runs on a PR**.
-- A required status check that never reports leaves every PR in a permanently-pending
-  ("Expected") state and blocks the merge. Applying `branch-protection.json` as-is after
-  this change would block all merges to `main` — the exact opposite of the task goal.
+- `branch-protection.json` requires `["CI Gate", "Security Gate", "Validate"]` on
+  `main` (`strict: true`).
+- `terraform.yml` `terraform-validate` is `name: Validate` (`terraform.yml:26`). The
+  diff restores `on: pull_request: [main, develop]` **and removes the old `paths:`
+  filter**. The paths-filter removal is the load-bearing detail: a required check
+  guarded by a paths filter would not report on PRs that don't touch
+  `infrastructure/terraform/**`, re-creating the same permanently-pending bricking
+  state. Without it, `Validate` reports on every PR.
+- `security.yml` (`Security Gate`, line 130) runs on `pull_request`; `trivy-fs`/
+  `trivy-config` don't set `exit-code`, so they upload SARIF without failing a clean
+  PR. `Security Gate` reports on every PR.
+- `ci.yml` (`CI Gate`) runs on `pull_request`; `ci-gate` is `if: always()`, needs
+  `[build, test, terraform-validate]`, and correctly aggregates matrix results
+  (`needs.<job>.result` is `failure` if any leg fails).
 
-The worker's handoff asserts `branch-protection.json` is "already present and correct;
-left as-is" but did not analyze that its own guarding change invalidates the `Validate`
-context. This is in-scope: the conflict is a direct consequence of the worker's design
-choice to guard the whole terraform workflow rather than just the mutating `apply` jobs.
+The mutating jobs are correctly re-guarded: `terraform-apply-{dev,staging,prod}` →
+`if: github.event_name == 'workflow_dispatch'` (retaining `environment:` approval),
+image push and EKS deploy → dispatch-only. The dead `deploy.yml`
+`promote-staging`/`promote-prod` jobs (flagged non-blocking in the first review) are
+removed, and no surviving job `needs:` them — no orphan reference introduced. The
+`deploy.yml` `workflow_run` trigger on "Docker Build & Push" is gone, matching
+docker-build.yml being dispatch-only.
 
-Note `deploy.yml`'s `promote-staging`/`promote-prod` jobs are now dead under
-dispatch-only (their `if:` requires `github.event.workflow_run.*` context that can no
-longer occur). Harmless, but it confirms the triggers weren't fully re-examined against
-the jobs' run conditions. (Non-blocking — see Suggestions.)
-
-Everything else in the gate is correct: `lint`/`build`/`test`/`ci-gate` jobs present,
-`pull_request` trigger present, `concurrency` set, `ci-gate` keys off `build`+`test`
-results, coverage emitted non-gating (correctly avoids the old false-fail-below-60%
-behavior), and `test` runs `-race` without forcing `CGO_ENABLED=0` (so the race detector
-actually works), while `build` uses `CGO_ENABLED=0`. `jq` is preinstalled on
-`ubuntu-latest`, so `discover` is fine.
+Dynamic module discovery (`find src tests/reconciliation -name go.mod | jq -R -s`)
+correctly picks up nested `shared/pkg/*` zero-dep modules + the reconciliation test
+module; `jq` is preinstalled on `ubuntu-latest`. `test` runs `-race` without forcing
+`CGO_ENABLED=0` (race needs cgo); `build` uses `CGO_ENABLED=0`; `GO_VERSION 1.25` +
+`GOTOOLCHAIN: auto` matches the engine `go 1.25.0` directives.
 
 ### Security: PASS
 
-- Cloud-mutating workflows (`deploy`, `docker-build`, `terraform`) are guarded to manual
-  `workflow_dispatch`, so no auto image-push / EKS deploy / `terraform apply` on merge.
-  This is the right posture and aligns with the "build+test gate, not a deploy" intent.
-- No hardcoded secrets; AWS auth uses OIDC `role-to-assume`; `permissions:` are scoped
-  (`contents: read` on CI). Deploy/apply jobs retain `environment:` approval gates.
-- `GITHUB_TOKEN` is the only token used by gitleaks (auto-provided).
+No regression. `ci.yml` declares `permissions: contents: read`. Every cloud-mutating
+path (terraform apply, EKS deploy, ECR push) is dispatch-only with `environment:`
+approval — nothing auto-applies on merge. No hardcoded secrets; AWS via OIDC
+`role-to-assume`. Removing the dead dev→staging→prod auto-promotion chain also closes
+an unintended privilege-escalation-by-merge path. govulncheck was widened to scan all
+modules via `find src -name go.mod`. Re-activating `security.yml` as an actually-running
+required gate is a net improvement.
 
 ### Code Quality: PASS
 
-- Clear, well-commented workflow; explanatory header distinguishes gate-vs-deploy.
-- Dynamic `discover` matrix is cleaner and more correct than the previous hardcoded loop.
-- Lint is non-gating (`continue-on-error`, excluded from `ci-gate`) — a reasonable choice;
-  dropping the `golangci-lint v1.57` pin (predates go1.25) for `go vet` is justified.
+Workflows are well-structured with inline rationale at each `on:` block and at the
+gate/required-check boundary — exactly the context a maintainer needs to avoid
+re-introducing the bricking bug. `lint` (`continue-on-error`, excluded from
+`ci-gate.needs`) and `e2e-fullstack` (dispatch-only) are correctly non-gating. Naming
+and YAML idiom match the repo.
 
-### Test Coverage: PASS
+### Test Coverage: PASS (structural)
 
-- The acceptance contract is `tests/cicd/test_workflows.py`, which parameterizes over all
-  active `*.yml` and adds per-workflow assertions. The change makes all five workflows
-  active `.yml`, satisfying the file-existence, structure, security-practice, CI-job,
-  security-job, terraform/docker/deploy-job, and branch-protection assertions. The handoff
-  claims 20→0 failures; the workflow structures I inspected are consistent with that
-  (all jobs have `runs-on`+`steps`; checkout pinned `@v4`; OIDC role-to-assume; `on:`/`True`
-  parsing handled by the tests).
-- No new tests were required for an infra-enablement task; the existing contract suite is
-  the right validation surface.
+CI configuration has no unit-testable surface; verification is structural
+(required-check ⇄ trigger alignment, result aggregation, guard conditions), performed
+by inspection above. The worker correctly flagged that workflows can't be executed
+locally (no `terraform`/`act` in the worker env), making the first real PR run the
+empirical confirmation step. Acceptable for an infra-enablement task — not a coverage
+gap.
 
 ---
 
-## Required Fixes (must address to flip to APPROVED)
+## Required Fixes (if REJECTED)
 
-1. **Reconcile the `Validate` required check with terraform being dispatch-only.** Pick one:
-   - **Preferred:** keep the read-only `terraform-validate` (and `terraform-plan`) jobs
-     running on `pull_request` (they mutate nothing), and guard only the mutating
-     `terraform-apply-*` jobs (they already have `environment:` approval). This keeps the
-     `Validate` required check satisfiable on every PR while still preventing auto-apply.
-   - **Alternative:** if terraform must stay fully manual, remove `"Validate"` from
-     `branch-protection.json` `rules.main.required_status_checks.contexts` so the required
-     set is only checks that reliably run on every PR (`CI Gate`, `Security Gate`).
-   Whichever path, ensure the required-check set in `branch-protection.json` exactly equals
-   the set of checks that report on a normal PR — otherwise applying it blocks all merges.
-
----
+None — the prior review's required fix #1 was implemented via its preferred path.
 
 ## Suggestions (non-blocking)
 
-- **Dead promotion jobs in `deploy.yml`:** under `workflow_dispatch`-only, `promote-staging`
-  and `promote-prod` can never trigger (their `if:` needs `workflow_run` context). Either
-  drop them or convert their gating to a dispatch-driven promotion input, so the file
-  reflects what can actually run.
-- **`security.yml` is now a required `Security Gate` on every PR.** Confirm it runs green on
-  a PR that touches no infra — notably the `trivy-config` IaC scan over `infrastructure/`
-  (the `security-gate` job fails if `trivy-config` fails). A flaky/failing security scan
-  would block merges just like the `Validate` issue above.
-- **Unpinned `aquasecurity/trivy-action@master`** (pre-existing in `security.yml`) is a
-  supply-chain risk; pin to a release tag/SHA. Not introduced by R014, but now active.
-- **Apply branch protection:** as the handoff notes, `branch-protection.json` is data only;
-  it must be `PUT` to the repo for the gate to actually block. Worth wiring into R015.
-- **Frontend out of the gate:** correct to defer until the R013-class fixture refresh lands,
-  per the handoff — add it as a non-blocking job first so it doesn't red-wall merges.
+1. **Redundant terraform validation.** `terraform.yml`'s `Validate` and `ci.yml`'s
+   new `terraform-validate` both run `fmt -check -recursive` + `init -backend=false` +
+   `validate` on the same dir, and both feed required checks. One is sufficient;
+   consider dropping the `ci.yml` copy to avoid double-running and a double-failure on
+   bad HCL.
+2. **First-run risk on post-R017 HCL.** Because `Validate` gates on `terraform fmt
+   -check`/`validate` and the R017-added `vpc`/`security-groups`/`elasticache` modules
+   were never validated locally, the first PR may be blocked until that HCL is
+   `fmt`-clean and valid. That is the gate working as intended, but note every merge —
+   including pure-Go PRs — is now coupled to infra-HCL health. Worth a heads-up before
+   the first PR.
+3. **`terraform-plan` PR noise.** With the `paths:` filter removed, the matrix plan
+   (dev/staging/prod) runs on every PR and goes red without `AWS_CI_ROLE_ARN`. It is
+   non-gating, so it does not block merges, but a later infra task could re-scope it to
+   run only when `infrastructure/**` changes.
+4. **Unpinned `aquasecurity/trivy-action@master`** (pre-existing in `security.yml`) is
+   a supply-chain risk now that the workflow is active; pin to a release tag/SHA.
+5. **Apply branch protection.** `branch-protection.json` is inert data — it must be
+   `PUT` to the repo (API `/repos/{owner}/{repo}/branches/main/protection` or Settings →
+   Branches) for the gate to enforce. Noted in the handoff; surfaced here so it isn't
+   missed at merge time.

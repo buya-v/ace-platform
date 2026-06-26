@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T05:31:00Z",
+  "last_updated": "2026-06-26T05:42:36Z",
   "phases": [
     {
       "id": 0,
@@ -1231,13 +1231,13 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 12,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R014-reenable-ci",
       "deliverables": [
         ".github/workflows/ci.yml"
       ],
-      "started_at": "2026-06-26T04:50:53Z",
-      "finished_at": "2026-06-26T05:01:56Z"
+      "started_at": "2026-06-26T05:32:11Z",
+      "finished_at": "2026-06-26T05:38:39Z"
     },
     {
       "id": "R015",
@@ -1433,12 +1433,14 @@
         "R002"
       ],
       "estimate_minutes": 15,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R023-gateway-reporting-decimal",
       "deliverables": [
         "src/gateway/internal/reporting/generator.go",
         "src/gateway/internal/reporting/store.go"
-      ]
+      ],
+      "started_at": "2026-06-26T05:32:12Z",
+      "finished_at": "2026-06-26T05:42:36Z"
     },
     {
       "id": "R024",
@@ -1453,7 +1455,7 @@
         "R007"
       ],
       "estimate_minutes": 25,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R024-cross-service-kafka",
       "deliverables": [
         "src/matching-engine/internal/kafka",
