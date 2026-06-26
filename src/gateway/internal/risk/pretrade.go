@@ -4,19 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"strconv"
+	"strings"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // OrderRequest represents the fields from an incoming order needed for risk checks.
+//
+// Price and Quantity are money/quantity values parsed from untrusted client
+// input and use the shared fixed-point Decimal type rather than float64 (R020):
+// order-value and price-band checks are money paths and must not drift.
 type OrderRequest struct {
-	InstrumentID  string  `json:"instrument_id"`
-	Side          string  `json:"side"`
-	Price         float64 `json:"-"` // parsed from string
-	PriceStr      string  `json:"price"`
-	Quantity      float64 `json:"-"` // parsed from numeric or string
+	InstrumentID  string          `json:"instrument_id"`
+	Side          string          `json:"side"`
+	Price         decimal.Decimal `json:"-"` // parsed from string
+	PriceStr      string          `json:"price"`
+	Quantity      decimal.Decimal `json:"-"` // parsed from numeric or string
 	QuantityRaw   json.RawMessage `json:"quantity"`
-	ParticipantID string  `json:"participant_id,omitempty"`
+	ParticipantID string          `json:"participant_id,omitempty"`
 }
 
 // ParseOrderRequest extracts and validates order fields from raw JSON.
@@ -44,30 +49,22 @@ func ParseOrderRequest(body json.RawMessage, participantID string) (*OrderReques
 
 	// Parse price (string in financial APIs)
 	if raw.Price != "" {
-		p, err := strconv.ParseFloat(raw.Price, 64)
+		p, err := decimal.ParseDecimal(raw.Price)
 		if err != nil {
 			return nil, fmt.Errorf("invalid price %q: %w", raw.Price, err)
 		}
 		or.Price = p
 	}
 
-	// Parse quantity (can be number or string)
+	// Parse quantity (can be a JSON number or a JSON string). Strip optional
+	// surrounding quotes and parse through the precision-preserving decimal path.
 	if len(raw.Quantity) > 0 {
-		// Try as number first
-		var qf float64
-		if err := json.Unmarshal(raw.Quantity, &qf); err != nil {
-			// Try as string
-			var qs string
-			if err2 := json.Unmarshal(raw.Quantity, &qs); err2 != nil {
-				return nil, fmt.Errorf("invalid quantity: %w", err)
-			}
-			qf2, err3 := strconv.ParseFloat(qs, 64)
-			if err3 != nil {
-				return nil, fmt.Errorf("invalid quantity string %q: %w", qs, err3)
-			}
-			qf = qf2
+		qstr := strings.Trim(strings.TrimSpace(string(raw.Quantity)), `"`)
+		q, err := decimal.ParseDecimal(qstr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid quantity %q: %w", qstr, err)
 		}
-		or.Quantity = qf
+		or.Quantity = q
 	}
 
 	return or, nil
@@ -103,7 +100,7 @@ func (c *PreTradeChecker) Store() Store {
 // CheckOrder runs all pre-trade checks on an order.
 // Returns nil if all checks pass. Returns a RiskError if any check fails.
 // If the risk store is unavailable, checks are skipped (fail-open).
-func (c *PreTradeChecker) CheckOrder(ctx context.Context, order *OrderRequest, lastPrice float64) *RiskError {
+func (c *PreTradeChecker) CheckOrder(ctx context.Context, order *OrderRequest, lastPrice decimal.Decimal) *RiskError {
 	if c.store == nil {
 		return nil // fail-open: no store configured
 	}
@@ -132,21 +129,27 @@ func (c *PreTradeChecker) CheckOrder(ctx context.Context, order *OrderRequest, l
 
 // CheckOrderSize validates order quantity and notional value against limits.
 func CheckOrderSize(order *OrderRequest, limits *OrderLimits) *RiskError {
-	if order.Quantity > limits.MaxOrderQty {
+	if order.Quantity.GreaterThan(limits.MaxOrderQty) {
 		return &RiskError{
 			Code:    "ORDER_QTY_EXCEEDED",
-			Message: fmt.Sprintf("Order quantity %.4f exceeds maximum %.4f for %s", order.Quantity, limits.MaxOrderQty, order.InstrumentID),
+			Message: fmt.Sprintf("Order quantity %s exceeds maximum %s for %s", order.Quantity.String(), limits.MaxOrderQty.String(), order.InstrumentID),
 			Field:   "quantity",
 		}
 	}
 
-	// Check notional value (price * quantity)
-	if order.Price > 0 {
-		notional := order.Price * order.Quantity
-		if notional > limits.MaxOrderValue {
+	// Check notional value (price * quantity). A notional too large to even
+	// represent in the fixed-point type necessarily exceeds any configured
+	// limit, so treat an overflow as a value-exceeded rejection (fail-closed).
+	if order.Price.IsPos() {
+		notional, err := order.Price.TryMulDecimal(order.Quantity)
+		if err != nil || notional.GreaterThan(limits.MaxOrderValue) {
+			msg := fmt.Sprintf("Order value exceeds maximum %s for %s", limits.MaxOrderValue.String(), order.InstrumentID)
+			if err == nil {
+				msg = fmt.Sprintf("Order value %s exceeds maximum %s for %s", notional.String(), limits.MaxOrderValue.String(), order.InstrumentID)
+			}
 			return &RiskError{
 				Code:    "ORDER_VALUE_EXCEEDED",
-				Message: fmt.Sprintf("Order value %.2f exceeds maximum %.2f for %s", notional, limits.MaxOrderValue, order.InstrumentID),
+				Message: msg,
 				Field:   "price",
 			}
 		}
@@ -157,22 +160,39 @@ func CheckOrderSize(order *OrderRequest, limits *OrderLimits) *RiskError {
 
 // CheckPriceBand validates that the order price is within the allowed price band
 // relative to the last traded price.
-func CheckPriceBand(order *OrderRequest, lastPrice float64, limits *OrderLimits) *RiskError {
+//
+// The band decision avoids decimal/decimal division: since lastPrice > 0,
+//
+//	|price - lastPrice| / lastPrice * 100 > bandPct
+//
+// is equivalent to the exact decimal comparison
+//
+//	|price - lastPrice| * 100 > bandPct * lastPrice
+//
+// which is computed entirely in fixed point. The percentage shown in the error
+// message is for display only and is the one place a float appears.
+func CheckPriceBand(order *OrderRequest, lastPrice decimal.Decimal, limits *OrderLimits) *RiskError {
 	// Skip price band check if no last price available (e.g., first trade of the day)
-	if lastPrice <= 0 {
+	if !lastPrice.IsPos() {
 		return nil
 	}
 
 	// Skip for market orders (price == 0)
-	if order.Price <= 0 {
+	if !order.Price.IsPos() {
 		return nil
 	}
 
-	deviation := math.Abs(order.Price-lastPrice) / lastPrice * 100.0
-	if deviation > limits.PriceBandPct {
+	diff := order.Price.Sub(lastPrice).Abs()
+	bandPct := decFromFloat(limits.PriceBandPct)
+
+	lhs, err1 := diff.TryMulInt64(100)
+	rhs, err2 := lastPrice.TryMulDecimal(bandPct)
+	// Overflow here means astronomically large prices; reject conservatively.
+	if err1 != nil || err2 != nil || lhs.GreaterThan(rhs) {
+		deviation := diff.Float64() / lastPrice.Float64() * 100.0
 		return &RiskError{
 			Code:    "PRICE_BAND_EXCEEDED",
-			Message: fmt.Sprintf("Order price %.4f deviates %.2f%% from last price %.4f, exceeding %.2f%% band", order.Price, deviation, lastPrice, limits.PriceBandPct),
+			Message: fmt.Sprintf("Order price %s deviates %.2f%% from last price %s, exceeding %.2f%% band", order.Price.String(), deviation, lastPrice.String(), limits.PriceBandPct),
 			Field:   "price",
 		}
 	}

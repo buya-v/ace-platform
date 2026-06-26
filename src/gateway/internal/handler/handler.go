@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/garudax-platform/decimal"
 	"github.com/garudax-platform/gateway/internal/middleware"
 	"github.com/garudax-platform/gateway/internal/proxy"
 	"github.com/garudax-platform/gateway/internal/risk"
@@ -118,7 +119,7 @@ func (h *Handler) SubmitOrder(w http.ResponseWriter, r *http.Request) {
 		order, parseErr := risk.ParseOrderRequest(body, participantID)
 		if parseErr == nil {
 			// Last price of 0 means no price band check (fail-open for first trade)
-			if rErr := h.riskChecker.CheckOrder(r.Context(), order, 0); rErr != nil {
+			if rErr := h.riskChecker.CheckOrder(r.Context(), order, decimal.Zero()); rErr != nil {
 				types.WriteErrorWithDetails(w, http.StatusBadRequest, rErr.Code, rErr.Message, reqID,
 					[]types.ErrorDetail{{Field: rErr.Field, Reason: rErr.Message}})
 				return
@@ -545,12 +546,12 @@ func (h *Handler) UpdateOrderLimits(w http.ResponseWriter, r *http.Request) {
 	limits.InstrumentID = instrumentID
 
 	// Validate
-	if limits.MaxOrderQty <= 0 {
+	if !limits.MaxOrderQty.IsPos() {
 		types.WriteError(w, http.StatusBadRequest, "INVALID_LIMIT",
 			"max_order_qty must be positive", reqID)
 		return
 	}
-	if limits.MaxOrderValue <= 0 {
+	if !limits.MaxOrderValue.IsPos() {
 		types.WriteError(w, http.StatusBadRequest, "INVALID_LIMIT",
 			"max_order_value must be positive", reqID)
 		return

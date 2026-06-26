@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
+
+// d parses a decimal literal for tests (panicking on bad input).
+func d(s string) decimal.Decimal { return decimal.MustParse(s) }
 
 // --- Mock Store ---
 
@@ -45,32 +50,40 @@ func TestParseOrderRequest(t *testing.T) {
 		body          string
 		participantID string
 		wantErr       bool
-		wantQty       float64
-		wantPrice     float64
+		wantQty       decimal.Decimal
+		wantPrice     decimal.Decimal
 		wantInst      string
 	}{
 		{
 			name:          "valid order with numeric quantity",
 			body:          `{"instrument_id":"WHT-HRW-2026M07-UB","side":"buy","price":"250.50","quantity":10}`,
 			participantID: "part-1",
-			wantQty:       10,
-			wantPrice:     250.50,
+			wantQty:       d("10"),
+			wantPrice:     d("250.50"),
 			wantInst:      "WHT-HRW-2026M07-UB",
 		},
 		{
 			name:          "valid order with string quantity",
 			body:          `{"instrument_id":"CRN-YEL","side":"sell","price":"100.00","quantity":"25"}`,
 			participantID: "part-2",
-			wantQty:       25,
-			wantPrice:     100.0,
+			wantQty:       d("25"),
+			wantPrice:     d("100.00"),
 			wantInst:      "CRN-YEL",
+		},
+		{
+			name:          "fractional numeric quantity preserved",
+			body:          `{"instrument_id":"WHT","side":"buy","price":"12.3456","quantity":2.5}`,
+			participantID: "part-frac",
+			wantQty:       d("2.5"),
+			wantPrice:     d("12.3456"),
+			wantInst:      "WHT",
 		},
 		{
 			name:          "market order no price",
 			body:          `{"instrument_id":"WHT","side":"buy","price":"","quantity":5}`,
 			participantID: "part-3",
-			wantQty:       5,
-			wantPrice:     0,
+			wantQty:       d("5"),
+			wantPrice:     decimal.Zero(),
 			wantInst:      "WHT",
 		},
 		{
@@ -114,10 +127,10 @@ func TestParseOrderRequest(t *testing.T) {
 			if order.InstrumentID != tt.wantInst {
 				t.Errorf("instrument_id = %q, want %q", order.InstrumentID, tt.wantInst)
 			}
-			if order.Quantity != tt.wantQty {
+			if !order.Quantity.Equal(tt.wantQty) {
 				t.Errorf("quantity = %v, want %v", order.Quantity, tt.wantQty)
 			}
-			if order.Price != tt.wantPrice {
+			if !order.Price.Equal(tt.wantPrice) {
 				t.Errorf("price = %v, want %v", order.Price, tt.wantPrice)
 			}
 			if order.ParticipantID != tt.participantID {
@@ -132,8 +145,8 @@ func TestParseOrderRequest(t *testing.T) {
 func TestCheckOrderSize(t *testing.T) {
 	limits := &OrderLimits{
 		InstrumentID:  "WHT",
-		MaxOrderQty:   100,
-		MaxOrderValue: 50000,
+		MaxOrderQty:   d("100"),
+		MaxOrderValue: d("50000"),
 		PriceBandPct:  10.0,
 	}
 
@@ -144,38 +157,43 @@ func TestCheckOrderSize(t *testing.T) {
 	}{
 		{
 			name:     "within limits",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 50, Price: 200},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("50"), Price: d("200")},
 			wantCode: "",
 		},
 		{
 			name:     "quantity at limit",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 100, Price: 200},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("100"), Price: d("200")},
 			wantCode: "",
 		},
 		{
 			name:     "quantity exceeds limit",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 101, Price: 200},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("101"), Price: d("200")},
 			wantCode: "ORDER_QTY_EXCEEDED",
 		},
 		{
 			name:     "value at limit",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 100, Price: 500},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("100"), Price: d("500")},
 			wantCode: "",
 		},
 		{
 			name:     "value exceeds limit",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 100, Price: 501},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("100"), Price: d("501")},
 			wantCode: "ORDER_VALUE_EXCEEDED",
 		},
 		{
 			name:     "market order no value check",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 50, Price: 0},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("50"), Price: decimal.Zero()},
 			wantCode: "",
 		},
 		{
 			name:     "large quantity small price within value",
-			order:    &OrderRequest{InstrumentID: "WHT", Quantity: 90, Price: 100},
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("90"), Price: d("100")},
 			wantCode: "",
+		},
+		{
+			name:     "fractional notional just over limit",
+			order:    &OrderRequest{InstrumentID: "WHT", Quantity: d("100"), Price: d("500.01")},
+			wantCode: "ORDER_VALUE_EXCEEDED",
 		},
 	}
 
@@ -207,56 +225,68 @@ func TestCheckPriceBand(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		price     float64
-		lastPrice float64
+		price     decimal.Decimal
+		lastPrice decimal.Decimal
 		wantCode  string
 	}{
 		{
 			name:      "within band",
-			price:     105,
-			lastPrice: 100,
+			price:     d("105"),
+			lastPrice: d("100"),
 			wantCode:  "",
 		},
 		{
 			name:      "at band boundary",
-			price:     110,
-			lastPrice: 100,
+			price:     d("110"),
+			lastPrice: d("100"),
 			wantCode:  "",
 		},
 		{
 			name:      "exceeds band above",
-			price:     111,
-			lastPrice: 100,
+			price:     d("111"),
+			lastPrice: d("100"),
 			wantCode:  "PRICE_BAND_EXCEEDED",
 		},
 		{
 			name:      "exceeds band below",
-			price:     89,
-			lastPrice: 100,
+			price:     d("89"),
+			lastPrice: d("100"),
+			wantCode:  "PRICE_BAND_EXCEEDED",
+		},
+		{
+			name:      "fractional within band",
+			price:     d("110.00"),
+			lastPrice: d("100"),
+			wantCode:  "",
+		},
+		{
+			name:      "fractional just over band",
+			price:     d("110.01"),
+			lastPrice: d("100"),
 			wantCode:  "PRICE_BAND_EXCEEDED",
 		},
 		{
 			name:      "no last price skips check",
-			price:     500,
-			lastPrice: 0,
+			price:     d("500"),
+			lastPrice: decimal.Zero(),
 			wantCode:  "",
 		},
 		{
 			name:      "market order skips check",
-			price:     0,
-			lastPrice: 100,
+			price:     decimal.Zero(),
+			lastPrice: d("100"),
 			wantCode:  "",
 		},
 		{
 			name:      "exact match",
-			price:     100,
-			lastPrice: 100,
+			price:     d("100"),
+			lastPrice: d("100"),
 			wantCode:  "",
 		},
 		{
 			name:      "negative last price skips",
-			price:     100,
-			lastPrice: -1,
+			price:     d("100"),
+			lastPrice: d("-1"),
 			wantCode:  "",
 		},
 	}
@@ -337,8 +367,8 @@ func TestCheckParticipantStatus(t *testing.T) {
 
 func TestPreTradeChecker_NilStore(t *testing.T) {
 	checker := NewPreTradeChecker(nil)
-	order := &OrderRequest{InstrumentID: "WHT", Quantity: 99999, Price: 99999}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "WHT", Quantity: d("99999"), Price: d("99999")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr != nil {
 		t.Errorf("nil store should fail-open, got %v", rErr)
 	}
@@ -347,8 +377,8 @@ func TestPreTradeChecker_NilStore(t *testing.T) {
 func TestPreTradeChecker_StoreError(t *testing.T) {
 	store := &mockStore{err: errors.New("db connection refused")}
 	checker := NewPreTradeChecker(store)
-	order := &OrderRequest{InstrumentID: "WHT", Quantity: 99999, Price: 99999}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "WHT", Quantity: d("99999"), Price: d("99999")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr != nil {
 		t.Errorf("store error should fail-open, got %v", rErr)
 	}
@@ -357,8 +387,8 @@ func TestPreTradeChecker_StoreError(t *testing.T) {
 func TestPreTradeChecker_NoLimitsConfigured(t *testing.T) {
 	store := &mockStore{limits: map[string]*OrderLimits{}}
 	checker := NewPreTradeChecker(store)
-	order := &OrderRequest{InstrumentID: "UNKNOWN", Quantity: 99999, Price: 99999}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "UNKNOWN", Quantity: d("99999"), Price: d("99999")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr != nil {
 		t.Errorf("no limits configured should pass, got %v", rErr)
 	}
@@ -367,12 +397,12 @@ func TestPreTradeChecker_NoLimitsConfigured(t *testing.T) {
 func TestPreTradeChecker_OrderSizeReject(t *testing.T) {
 	store := &mockStore{
 		limits: map[string]*OrderLimits{
-			"WHT": {MaxOrderQty: 100, MaxOrderValue: 50000, PriceBandPct: 20},
+			"WHT": {MaxOrderQty: d("100"), MaxOrderValue: d("50000"), PriceBandPct: 20},
 		},
 	}
 	checker := NewPreTradeChecker(store)
-	order := &OrderRequest{InstrumentID: "WHT", Quantity: 200, Price: 100}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "WHT", Quantity: d("200"), Price: d("100")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr == nil {
 		t.Fatal("expected rejection for oversized order")
 	}
@@ -384,13 +414,13 @@ func TestPreTradeChecker_OrderSizeReject(t *testing.T) {
 func TestPreTradeChecker_PriceBandReject(t *testing.T) {
 	store := &mockStore{
 		limits: map[string]*OrderLimits{
-			"WHT": {MaxOrderQty: 1000, MaxOrderValue: 1000000, PriceBandPct: 10},
+			"WHT": {MaxOrderQty: d("1000"), MaxOrderValue: d("1000000"), PriceBandPct: 10},
 		},
 	}
 	checker := NewPreTradeChecker(store)
 	// Price 200 vs last 100 = 100% deviation, exceeds 10% band
-	order := &OrderRequest{InstrumentID: "WHT", Quantity: 10, Price: 200}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "WHT", Quantity: d("10"), Price: d("200")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr == nil {
 		t.Fatal("expected rejection for price band violation")
 	}
@@ -402,12 +432,12 @@ func TestPreTradeChecker_PriceBandReject(t *testing.T) {
 func TestPreTradeChecker_AllChecksPass(t *testing.T) {
 	store := &mockStore{
 		limits: map[string]*OrderLimits{
-			"WHT": {MaxOrderQty: 1000, MaxOrderValue: 1000000, PriceBandPct: 10},
+			"WHT": {MaxOrderQty: d("1000"), MaxOrderValue: d("1000000"), PriceBandPct: 10},
 		},
 	}
 	checker := NewPreTradeChecker(store)
-	order := &OrderRequest{InstrumentID: "WHT", Quantity: 10, Price: 105}
-	rErr := checker.CheckOrder(context.Background(), order, 100)
+	order := &OrderRequest{InstrumentID: "WHT", Quantity: d("10"), Price: d("105")}
+	rErr := checker.CheckOrder(context.Background(), order, d("100"))
 	if rErr != nil {
 		t.Errorf("expected all checks to pass, got %v", rErr)
 	}
@@ -422,8 +452,11 @@ func TestRiskError_Error(t *testing.T) {
 
 func TestDefaultOrderLimits(t *testing.T) {
 	defaults := DefaultOrderLimits()
-	if defaults.MaxOrderQty <= 0 {
+	if !defaults.MaxOrderQty.IsPos() {
 		t.Error("default max order qty should be positive")
+	}
+	if !defaults.MaxOrderValue.IsPos() {
+		t.Error("default max order value should be positive")
 	}
 	if defaults.PriceBandPct != 100.0 {
 		t.Errorf("default price band = %v, want 100.0", defaults.PriceBandPct)

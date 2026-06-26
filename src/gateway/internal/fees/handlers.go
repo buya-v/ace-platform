@@ -187,10 +187,13 @@ func (h *Handlers) CreateFeeRule(w http.ResponseWriter, r *http.Request) {
 		FeeType:           req.FeeType,
 		InstrumentPattern: req.InstrumentPattern,
 		ParticipantTier:   req.ParticipantTier,
-		RateBPS:           req.RateBPS,
-		MinFee:            req.MinFee,
-		MaxFee:            req.MaxFee,
-		PerContractFee:    req.PerContractFee,
+		RateBPS:           decFromFloat(req.RateBPS),
+		MinFee:            decFromFloat(req.MinFee),
+		PerContractFee:    decFromFloat(req.PerContractFee),
+	}
+	if req.MaxFee != nil {
+		m := decFromFloat(*req.MaxFee)
+		rule.MaxFee = &m
 	}
 
 	if err := h.store.CreateRule(r.Context(), rule); err != nil {
