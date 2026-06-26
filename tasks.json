@@ -1231,7 +1231,7 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 12,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R014-reenable-ci",
       "deliverables": [
         ".github/workflows/ci.yml"
@@ -1256,7 +1256,7 @@
         "R011"
       ],
       "estimate_minutes": 10,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R015-fresh-integration-run",
       "deliverables": [
         "handoff/integration-run-20260626.md"
@@ -1275,7 +1275,7 @@
         "R015"
       ],
       "estimate_minutes": 5,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R016-refresh-claude-metrics",
       "deliverables": [
         "CLAUDE.md"
@@ -1284,13 +1284,13 @@
     {
       "id": "R017",
       "title": "Repository hygiene",
-      "description": "Clean up: (1) delete the ~111 merged worktree-agent-* git branches (keep main + any unmerged); (2) commit or revert the 4 dirty working-tree files (nginx config, demo-runner tsbuildinfo, .softhouse/patterns.md, test-results); (3) finish or remove the 5 zero-byte Terraform stub modules (vpc, elasticache, iam, s3, security-groups) that main.tf wires in but which would fail terraform apply — at minimum stop wiring non-existent modules; (4) remove or fill the V2-V5 zero-byte migration stubs (real DDL starts at V6); (5) reconcile corporate-actions — it is imported as a library but listed as a service with no main.go/Dockerfile: either add a runnable entrypoint or document it as a library and drop it from the service list.",
+      "description": "Repository hygiene (branch cleanup ALREADY DONE manually: 119 stale worktree-agent-*/postmortem-* branches deleted, only main remains). Remaining file cleanup: (1) finish or remove the 5 zero-byte Terraform stub modules (vpc, elasticache, iam, s3, security-groups) that infrastructure/terraform/main.tf wires in but would fail terraform apply — at minimum stop referencing non-existent modules; (2) remove or fill the V2-V5 zero-byte Flyway migration stubs in infrastructure/db/migrations (real DDL starts at V6); (3) reconcile corporate-actions: it is imported as a library but has no main.go/Dockerfile — either add a runnable entrypoint or document it as a library and drop it from any service list.",
       "agent_role": "devops",
       "phase": 15,
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 12,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R017-repo-hygiene",
       "deliverables": [
         "infrastructure/terraform",
