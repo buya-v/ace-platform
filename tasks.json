@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T03:56:49Z",
+  "last_updated": "2026-06-26T04:38:44Z",
   "phases": [
     {
       "id": 0,
@@ -1146,13 +1146,15 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R010-adopt-shared-tenant",
       "deliverables": [
         "src/gateway",
         "src/securities-service",
         "src/platform-service"
-      ]
+      ],
+      "started_at": "2026-06-26T04:07:05Z",
+      "finished_at": "2026-06-26T04:17:50Z"
     },
     {
       "id": "R011",
@@ -1167,12 +1169,14 @@
         "R010"
       ],
       "estimate_minutes": 15,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R011-gateway-tenant-enforcement",
       "deliverables": [
         "src/gateway/internal/middleware/tenant.go",
         "src/gateway/internal/proxy/backend.go"
-      ]
+      ],
+      "started_at": "2026-06-26T04:21:23Z",
+      "finished_at": "2026-06-26T04:29:41Z"
     },
     {
       "id": "R012",
@@ -1187,11 +1191,13 @@
         "R011"
       ],
       "estimate_minutes": 10,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R012-gateway-tenant-tests",
       "deliverables": [
         "src/gateway/internal/middleware/tenant_test.go"
-      ]
+      ],
+      "started_at": "2026-06-26T04:32:11Z",
+      "finished_at": "2026-06-26T04:38:13Z"
     },
     {
       "id": "R013",
@@ -1206,13 +1212,15 @@
         "R011"
       ],
       "estimate_minutes": 8,
-      "status": "pending",
+      "status": "done",
       "worktree_branch": "feature/R013-tenancy-docs-rescope",
       "deliverables": [
         "README.md",
         "AiX_Project_Knowledge.md",
         "docs/specs/R013_mse_prerequisites_backlog.md"
-      ]
+      ],
+      "started_at": "2026-06-26T04:32:11Z",
+      "finished_at": "2026-06-26T04:38:44Z"
     },
     {
       "id": "R014",
