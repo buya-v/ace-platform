@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/garudax-platform/margin-engine/internal/collateral"
 	"github.com/garudax-platform/margin-engine/internal/engine"
+	"github.com/garudax-platform/margin-engine/internal/eventbus"
 	"github.com/garudax-platform/margin-engine/internal/params"
 	"github.com/garudax-platform/margin-engine/internal/server"
 	"github.com/garudax-platform/margin-engine/internal/store"
@@ -81,6 +83,32 @@ func main() {
 
 	eng := engine.NewEngine(paramStore, idGen, colSrc, callDeadline)
 
+	// Cross-service Kafka wiring (R024): consume {tenant}.clearing.novated from
+	// the clearing engine, recalculate margin, and publish {tenant}.margin.call-issued.
+	// Created before the margin-call handler so the handler can compose
+	// persistence/logging with cross-service publication. Skipped when
+	// KAFKA_BROKERS is unset.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var rt *eventbus.Runtime
+	if eventbus.Enabled() {
+		rt = eventbus.New(eng)
+		defer func() { _ = rt.Close() }()
+		go func() {
+			if err := rt.Start(ctx); err != nil {
+				log.Printf("margin-engine event bus stopped: %v", err)
+			}
+		}()
+		log.Println("Kafka cross-service consumer enabled (clearing.novated -> margin.call-issued)")
+	} else {
+		log.Println("Kafka cross-service consumer disabled (KAFKA_BROKERS not set)")
+	}
+	publishCall := func(call types.MarginCall) {
+		if rt != nil {
+			rt.PublishMarginCall(call)
+		}
+	}
+
 	// Set up PostgreSQL persistence when DB_HOST is set
 	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
 		dbPort := 5432
@@ -120,6 +148,7 @@ func main() {
 			}
 			log.Printf("MARGIN CALL: participant=%s deficit=%s deadline=%s",
 				call.ParticipantID, call.Deficit.String(), call.Deadline.Format(time.RFC3339))
+			publishCall(call)
 		})
 	} else {
 		// In-memory mode: just log
@@ -132,6 +161,7 @@ func main() {
 		eng.SetMarginCallHandler(func(call types.MarginCall) {
 			log.Printf("MARGIN CALL: participant=%s deficit=%s deadline=%s",
 				call.ParticipantID, call.Deficit.String(), call.Deadline.Format(time.RFC3339))
+			publishCall(call)
 		})
 	}
 

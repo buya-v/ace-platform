@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/garudax-platform/clearing-engine/internal/engine"
+	"github.com/garudax-platform/clearing-engine/internal/eventbus"
 	"github.com/garudax-platform/clearing-engine/internal/novation"
 	"github.com/garudax-platform/clearing-engine/internal/server"
 	"github.com/garudax-platform/clearing-engine/internal/store"
@@ -67,6 +69,24 @@ func main() {
 
 	srv := server.NewServer(eng, cfg)
 
+	// Cross-service Kafka wiring (R024): consume {tenant}.trades.executed from
+	// the matching engine, clear each trade, and publish {tenant}.clearing.novated
+	// for the margin and settlement engines. Skipped when KAFKA_BROKERS is unset.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if eventbus.Enabled() {
+		rt := eventbus.New(eng)
+		defer func() { _ = rt.Close() }()
+		go func() {
+			if err := rt.Start(ctx); err != nil {
+				log.Printf("clearing-engine event bus stopped: %v", err)
+			}
+		}()
+		log.Println("Kafka cross-service consumer enabled (trades.executed -> clearing.novated)")
+	} else {
+		log.Println("Kafka cross-service consumer disabled (KAFKA_BROKERS not set)")
+	}
+
 	go func() {
 		if err := srv.StartHealthServer(); err != nil {
 			log.Fatalf("Health server error: %v", err)
@@ -81,8 +101,6 @@ func main() {
 	srv.SetReady()
 	log.Printf("GarudaX Clearing Engine ready (gRPC=%s, health=%s:%d, direct_pod_comms=%v)",
 		lis.Addr().String(), cfg.BindAddress, cfg.HealthPort, cfg.DirectPodComms)
-
-	_ = os.Getenv("MATCHING_ENGINE_ADDR") // Will be used for trade subscription
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
