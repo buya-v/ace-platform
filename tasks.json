@@ -1146,7 +1146,7 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R010-adopt-shared-tenant",
       "deliverables": [
         "src/gateway",
@@ -1167,7 +1167,7 @@
         "R010"
       ],
       "estimate_minutes": 15,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R011-gateway-tenant-enforcement",
       "deliverables": [
         "src/gateway/internal/middleware/tenant.go",
@@ -1187,7 +1187,7 @@
         "R011"
       ],
       "estimate_minutes": 10,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R012-gateway-tenant-tests",
       "deliverables": [
         "src/gateway/internal/middleware/tenant_test.go"
@@ -1206,7 +1206,7 @@
         "R011"
       ],
       "estimate_minutes": 8,
-      "status": "deferred",
+      "status": "pending",
       "worktree_branch": "feature/R013-tenancy-docs-rescope",
       "deliverables": [
         "README.md",
