@@ -53,7 +53,11 @@ func NewEngine(
 }
 
 // SetTradeHandler sets a callback invoked after each trade is cleared.
+// The handler field is guarded by e.mu so it may be set concurrently with
+// clearing operations without a data race.
 func (e *Engine) SetTradeHandler(h TradeHandler) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.tradeHandler = h
 }
 
@@ -65,53 +69,68 @@ func (e *Engine) SetTradeHandler(h TradeHandler) {
 //
 // Returns the novation result and updated positions for buyer and seller.
 func (e *Engine) ClearTrade(trade types.Trade) (*ClearingResult, error) {
+	result, novResult, handler, err := e.clearTradeLocked(trade)
+	if err != nil {
+		return nil, err
+	}
+
+	// Invoke the trade handler OUTSIDE the critical section. Running an
+	// arbitrary callback while holding e.mu risks deadlock if it re-enters
+	// the engine (e.g. NetObligations) and serializes unrelated clearing.
+	if handler != nil {
+		handler(trade, novResult)
+	}
+
+	return result, nil
+}
+
+// clearTradeLocked performs the clearing pipeline under e.mu and returns the
+// result along with a snapshot of the trade handler, which the caller invokes
+// after releasing the lock.
+func (e *Engine) clearTradeLocked(trade types.Trade) (*ClearingResult, novation.NovationResult, TradeHandler, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	// Idempotency check
 	if e.processedTrades[trade.TradeID] {
-		return nil, fmt.Errorf("clearing: trade %s already processed", trade.TradeID)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: trade %s already processed", trade.TradeID)
 	}
 
 	// Step 1: Novate
 	novResult, err := e.novationSvc.Novate(trade)
 	if err != nil {
-		return nil, fmt.Errorf("clearing: novation failed: %w", err)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: novation failed: %w", err)
 	}
 
 	// Step 2: Persist obligations
 	if err := e.oblStore.Append(novResult.BuyerObligation); err != nil {
-		return nil, fmt.Errorf("clearing: failed to store buyer obligation: %w", err)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: failed to store buyer obligation: %w", err)
 	}
 	if err := e.oblStore.Append(novResult.SellerObligation); err != nil {
-		return nil, fmt.Errorf("clearing: failed to store seller obligation: %w", err)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: failed to store seller obligation: %w", err)
 	}
 
 	// Step 3: Update positions
 	buyerPos, err := e.positionMgr.Apply(novResult.BuyerObligation)
 	if err != nil {
-		return nil, fmt.Errorf("clearing: failed to update buyer position: %w", err)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: failed to update buyer position: %w", err)
 	}
 	sellerPos, err := e.positionMgr.Apply(novResult.SellerObligation)
 	if err != nil {
-		return nil, fmt.Errorf("clearing: failed to update seller position: %w", err)
+		return nil, novation.NovationResult{}, nil, fmt.Errorf("clearing: failed to update seller position: %w", err)
 	}
 
 	// Mark trade as processed
 	e.processedTrades[trade.TradeID] = true
 
 	result := &ClearingResult{
-		Trade:            trade,
-		Novation:         novResult,
-		BuyerPosition:    *buyerPos,
-		SellerPosition:   *sellerPos,
+		Trade:          trade,
+		Novation:       novResult,
+		BuyerPosition:  *buyerPos,
+		SellerPosition: *sellerPos,
 	}
 
-	if e.tradeHandler != nil {
-		e.tradeHandler(trade, novResult)
-	}
-
-	return result, nil
+	return result, novResult, e.tradeHandler, nil
 }
 
 // NetObligations performs multilateral netting on all novated obligations.

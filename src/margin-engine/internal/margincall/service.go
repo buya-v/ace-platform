@@ -36,26 +36,54 @@ func NewService(idGen IDGenerator, deadline time.Duration) *Service {
 }
 
 // SetHandler sets the callback for new margin calls.
+// The handler field is guarded by s.mu so it may be set concurrently with
+// Evaluate without a data race.
 func (s *Service) SetHandler(h CallHandler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.handler = h
 }
 
 // Evaluate checks a portfolio margin result and issues/resolves margin calls as needed.
 func (s *Service) Evaluate(pm types.PortfolioMargin) (*types.MarginCall, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+
+	var (
+		result   *types.MarginCall
+		fire     bool
+		snapshot types.MarginCall
+	)
 
 	if pm.ExcessDeficit.IsNeg() {
 		// Deficit — need a margin call
-		return s.issueOrUpdateCall(pm)
+		var issued bool
+		result, issued = s.issueOrUpdateCall(pm)
+		if issued {
+			// Snapshot the call under the lock; the handler runs after unlock.
+			fire = true
+			snapshot = *result
+		}
+	} else {
+		// No deficit — resolve any active call
+		s.resolveCall(pm.ParticipantID)
 	}
 
-	// No deficit — resolve any active call
-	s.resolveCall(pm.ParticipantID)
-	return nil, nil
+	handler := s.handler
+	s.mu.Unlock()
+
+	// Invoke the handler OUTSIDE the critical section so a slow or re-entrant
+	// callback (e.g. one that calls GetActive) cannot deadlock on s.mu.
+	if fire && handler != nil {
+		handler(snapshot)
+	}
+
+	return result, nil
 }
 
-func (s *Service) issueOrUpdateCall(pm types.PortfolioMargin) (*types.MarginCall, error) {
+// issueOrUpdateCall issues a new margin call or updates the existing active one.
+// The returned bool is true only when a NEW call was issued (in which case the
+// caller must fire the handler). The caller must hold s.mu.
+func (s *Service) issueOrUpdateCall(pm types.PortfolioMargin) (*types.MarginCall, bool) {
 	deficit := pm.ExcessDeficit.Negate() // Make positive
 
 	// Check if there's already an active call for this participant
@@ -65,7 +93,7 @@ func (s *Service) issueOrUpdateCall(pm types.PortfolioMargin) (*types.MarginCall
 		existing.Required = pm.TotalRequired
 		existing.OnHand = pm.CollateralOnHand
 		existing.Deficit = deficit
-		return existing, nil
+		return existing, false
 	}
 
 	// Issue new margin call
@@ -84,11 +112,7 @@ func (s *Service) issueOrUpdateCall(pm types.PortfolioMargin) (*types.MarginCall
 	s.calls[call.CallID] = call
 	s.active[pm.ParticipantID] = call.CallID
 
-	if s.handler != nil {
-		s.handler(*call)
-	}
-
-	return call, nil
+	return call, true
 }
 
 func (s *Service) resolveCall(participantID string) {

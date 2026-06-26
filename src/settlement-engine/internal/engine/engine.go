@@ -23,7 +23,7 @@ type CycleHandler func(cycle types.SettlementCycle)
 
 // Engine orchestrates the daily mark-to-market settlement cycle.
 type Engine struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
 	priceStore    valuation.PriceStore
 	pnlCalc       *pnl.Calculator
@@ -67,8 +67,20 @@ func (e *Engine) RegisterInstrument(config types.InstrumentConfig) {
 	e.instruments[config.InstrumentID] = config
 }
 
-// getInstrumentConfig returns the config for an instrument, defaulting to cash-settled.
+// getInstrumentConfig returns the config for an instrument, defaulting to
+// cash-settled. It takes the read lock so it is safe for concurrent use with
+// RegisterInstrument (which writes e.instruments under the write lock).
 func (e *Engine) getInstrumentConfig(instrumentID string) types.InstrumentConfig {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lookupInstrumentConfig(instrumentID)
+}
+
+// lookupInstrumentConfig returns the config for an instrument, defaulting to
+// cash-settled. The caller MUST hold e.mu (read or write); this exists so
+// cycle methods that already hold the write lock can read configs without a
+// non-reentrant RLock deadlock.
+func (e *Engine) lookupInstrumentConfig(instrumentID string) types.InstrumentConfig {
 	if cfg, ok := e.instruments[instrumentID]; ok {
 		return cfg
 	}
@@ -79,7 +91,11 @@ func (e *Engine) getInstrumentConfig(instrumentID string) types.InstrumentConfig
 }
 
 // SetCycleHandler sets a callback invoked when a settlement cycle completes.
+// The handler field is guarded by e.mu so it may be set concurrently with
+// cycle execution without a data race.
 func (e *Engine) SetCycleHandler(h CycleHandler) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.handler = h
 }
 
@@ -90,6 +106,19 @@ func (e *Engine) SetCycleHandler(h CycleHandler) {
 // 4. Generate net settlement instructions per participant
 // 5. Submit payments via the payment gateway
 func (e *Engine) RunSettlementCycle(cycleID string, settleDate time.Time, positions []types.Position) (*types.SettlementCycle, error) {
+	cycle, snapshot, handler, err := e.runSettlementCycleLocked(cycleID, settleDate, positions)
+
+	// Invoke the cycle handler OUTSIDE the critical section. handler is nil on
+	// the early P&L-failure path (matching the previous behavior where the
+	// handler only fired once a cycle reached completion).
+	if handler != nil {
+		handler(snapshot)
+	}
+
+	return cycle, err
+}
+
+func (e *Engine) runSettlementCycleLocked(cycleID string, settleDate time.Time, positions []types.Position) (*types.SettlementCycle, types.SettlementCycle, CycleHandler, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -107,7 +136,7 @@ func (e *Engine) RunSettlementCycle(cycleID string, settleDate time.Time, positi
 	if err != nil {
 		cycle.Status = types.CycleStatusFailed
 		cycle.Error = fmt.Sprintf("P&L calculation failed: %v", err)
-		return cycle, err
+		return cycle, types.SettlementCycle{}, nil, err
 	}
 	cycle.PnLRecords = pnlRecords
 	cycle.Status = types.CycleStatusCalculated
@@ -140,11 +169,7 @@ func (e *Engine) RunSettlementCycle(cycleID string, settleDate time.Time, positi
 	}
 	cycle.CompletedAt = time.Now()
 
-	if e.handler != nil {
-		e.handler(*cycle)
-	}
-
-	return cycle, nil
+	return cycle, *cycle, e.handler, nil
 }
 
 // RunMultiInstrumentCycle executes a settlement cycle across ALL active instruments.
@@ -157,6 +182,22 @@ func (e *Engine) RunMultiInstrumentCycle(
 	positions []types.Position,
 	deliveryReceipts map[string][]types.DeliveryReceipt, // instrumentID -> receipts
 ) (*types.SettlementCycle, *types.MultiInstrumentResult, error) {
+	cycle, multiResult, snapshot, handler, err := e.runMultiInstrumentCycleLocked(cycleID, settleDate, positions, deliveryReceipts)
+
+	// Invoke the cycle handler OUTSIDE the critical section.
+	if handler != nil {
+		handler(snapshot)
+	}
+
+	return cycle, multiResult, err
+}
+
+func (e *Engine) runMultiInstrumentCycleLocked(
+	cycleID string,
+	settleDate time.Time,
+	positions []types.Position,
+	deliveryReceipts map[string][]types.DeliveryReceipt,
+) (*types.SettlementCycle, *types.MultiInstrumentResult, types.SettlementCycle, CycleHandler, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -185,7 +226,7 @@ func (e *Engine) RunMultiInstrumentCycle(
 
 	// Process each instrument
 	for instrumentID, instrPositions := range positionsByInstrument {
-		instrConfig := e.getInstrumentConfig(instrumentID)
+		instrConfig := e.lookupInstrumentConfig(instrumentID)
 		instrResult := &types.InstrumentSettlementResult{
 			InstrumentID:   instrumentID,
 			InstrumentType: instrConfig.Type,
@@ -265,17 +306,13 @@ func (e *Engine) RunMultiInstrumentCycle(
 	}
 	cycle.CompletedAt = time.Now()
 
-	if e.handler != nil {
-		e.handler(*cycle)
-	}
-
-	return cycle, multiResult, nil
+	return cycle, multiResult, *cycle, e.handler, nil
 }
 
 // GetCycle returns a settlement cycle by ID.
 func (e *Engine) GetCycle(cycleID string) (types.SettlementCycle, bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	c, ok := e.cycles[cycleID]
 	if !ok {
@@ -286,8 +323,8 @@ func (e *Engine) GetCycle(cycleID string) (types.SettlementCycle, bool) {
 
 // GetAllCycles returns all settlement cycles.
 func (e *Engine) GetAllCycles() []types.SettlementCycle {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	result := make([]types.SettlementCycle, 0, len(e.cycles))
 	for _, c := range e.cycles {
