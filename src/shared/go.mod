@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/garudax-platform/tenant v0.0.0
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -19,3 +20,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
+
+replace github.com/garudax-platform/tenant v0.0.0 => ./pkg/tenant

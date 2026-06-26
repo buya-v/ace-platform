@@ -5,16 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	tenant "github.com/garudax-platform/tenant"
 )
 
-// tenantContextKey is an unexported type to prevent context key collisions.
-type tenantContextKey struct{}
-
-// TenantID is a named string type that carries a validated tenant identifier.
-type TenantID string
-
-// String implements fmt.Stringer for ergonomic logging.
-func (t TenantID) String() string { return string(t) }
+// TenantID is the canonical tenant identifier, re-exported from the shared
+// tenant module so the gateway, downstream services, and domain logic all agree
+// on one type and one context key. Tenant context set here is readable via
+// tenant.TenantFromContext / tenant.MustTenant anywhere in the platform.
+type TenantID = tenant.TenantID
 
 // tenantHealthPaths are the paths that bypass tenant enforcement.
 // Exact match only — no prefix match — to prevent accidental bypass.
@@ -109,7 +108,7 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 				}
 			}
 
-			header := r.Header.Get("X-GarudaX-Tenant")
+			header := r.Header.Get(tenant.HeaderName)
 			if header == "" {
 				writeTenantError(w, http.StatusUnauthorized,
 					"TENANT_REQUIRED",
@@ -126,8 +125,9 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Store validated tenant ID in request context.
-			ctx := context.WithValue(r.Context(), tenantContextKey{}, TenantID(header))
+			// Store validated tenant ID in request context using the shared
+			// context key so downstream handlers and services resolve it.
+			ctx := tenant.WithTenant(r.Context(), tenant.TenantID(header))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -136,6 +136,5 @@ func TenantMiddleware(validTenants []string) func(http.Handler) http.Handler {
 // TenantFromContext extracts the TenantID from the context.
 // Returns ("", false) when no tenant has been set (e.g. bypass paths).
 func TenantFromContext(ctx context.Context) (TenantID, bool) {
-	t, ok := ctx.Value(tenantContextKey{}).(TenantID)
-	return t, ok
+	return tenant.TenantFromContext(ctx)
 }
