@@ -18,7 +18,9 @@
 
 > **GarudaX is the platform. Tenants are the venues. MSE is the flagship. Tenant ID is never optional.**
 
-Every runtime artefact — every database row, Kafka message, S3 object, metric, log line, cache key, and IAM role — carries an explicit `tenant_id`. A query without a tenant filter is a bug. Three layers of isolation hold simultaneously: data, operational, and governance (see §2.2 of the Strategy Directive).
+This is the **target** invariant: every runtime artefact — every database row, Kafka message, S3 object, metric, log line, cache key, and IAM role — should carry an explicit `tenant_id`, and a query without a tenant filter is a bug.
+
+> **Reality check (single-tenant with namespacing today).** GarudaX currently runs as **one live tenant** (`ace-commodities`) on a tenant-aware edge, **not** as a fully-isolated multi-tenant platform. Shipped: an `ace_*` Postgres schema namespace (V30/V32/V33), a `platform.*` control-plane schema, the shared `pkg/tenant` context/middleware, and gateway enforcement that requires + validates `X-GarudaX-Tenant` on every business route and forwards it downstream (R010/R011). **Not yet shipped:** row-level `tenant_id` columns + `WHERE` filtering on domain tables (only audit/event rows are annotated, V32), a `platform.tenants`-backed registry (the registry is in-memory), a full provisioner (schema-only today), `mse_*` schemas, per-tenant IRSA/KMS, and backend-side tenant enforcement. The three layers of isolation (data, operational, governance) described in §2.2 of the Strategy Directive are the **destination**; only governance (per-tenant `venues/` config) and the API edge are partially in place. See the **MSE Onboarding Prerequisites** in `README.md` for the full gap list.
 
 ### Tenants
 
@@ -57,11 +59,11 @@ Introduced by `GarudaX_Strategy_Directive.md`. Sequenced as its own cluster: the
 
 | Ph | Name | Status | Scope |
 |----|------|--------|-------|
-| **0.5** | Multi-tenant platform specs | **Complete** | Platform architecture, Flyway migrations V29–V30, tenant-context design, `venues/*/config.json` |
-| **0.6** | `ace-commodities` retrofit | **Next** | Schema renames (`reference → ace_reference`, …), tenant-context middleware, application code updates, Kafka topic rename to `ace-commodities.*` (dual-write then cutover), IRSA role rename, audit event `tenant_id` annotation — **zero downtime for live commodity operations** |
-| **0.7** | Platform control plane | Pending | Tenant registry service, tenant lifecycle/provisioning workflows, platform-admin API + UI (platform operators only) |
-| **0.8** | `mse-equities` flagship build | Pending | Equities domain, corporate actions service, opening/closing auctions, short selling + locate, T+2 settlement profile, FRC reporting, MCSD integration |
-| 9 | FIX protocol gateway | Pending | Tenant-aware broker connectivity |
+| **0.5** | Multi-tenant platform specs | **Complete** | Platform architecture, Flyway migrations V29–V31, tenant-context design, `venues/*/config.json` |
+| **0.6** | `ace-commodities` retrofit | **In progress (partial)** | **Done:** `ace_*` schema renames (V30/V32/V33), shared `pkg/tenant` middleware, gateway header enforcement (R010/R011), audit-row `tenant_id` annotation (V32). **Not done:** row-level `tenant_id` on domain tables + `WHERE` filtering, Kafka topic rename/cutover, IRSA role rename |
+| **0.7** | Platform control plane | **In progress (partial)** | **Done:** `platform-service` with an in-memory (seeded) registry and a schema-only/dry-run provisioner. **Not done:** `platform.tenants`-backed registry, IAM/Kafka/Redis/dashboard provisioning, platform-admin API + UI |
+| **0.8** | `mse-equities` flagship build | Pending | `securities-service` + `corporate-actions` modules **exist but are not wired to a live tenant**; no `mse_*` schemas. Remaining: opening/closing auctions, short selling + locate, T+2 settlement profile, FRC reporting, MCSD integration |
+| 9 | FIX protocol gateway | **In progress (partial)** | `fix-gateway` module exists (tenant-aware broker connectivity) |
 | 10 | AI bot expansion | Pending | Tenant-scoped agent operations |
 
 **Critical path (platform):** Ph0.5 → Ph0.6 (retrofit) → Ph0.7 (control plane) → Ph0.8 (MSE flagship)
@@ -214,13 +216,14 @@ PositionLimit → PositionLimitBreach
 
 ## 5. NEXT TASKS (UNLOCKED)
 
-The original exchange foundation (Phases 0–8) is complete and lives as the `ace-commodities` tenant. Active work is now the multi-tenant platform cluster (see §2b):
+The original exchange foundation (Phases 0–8) is complete and lives as the `ace-commodities` tenant. Active work is the multi-tenant platform cluster (see §2b). The single largest remaining theme is **standing up a second live tenant**; the full gate list is in `README.md` → **MSE Onboarding Prerequisites**.
 
-**Phase 0.6 — `ace-commodities` retrofit (NEXT, critical path):**
-- Schema rename `reference → ace_reference`, `exchange → ace_exchange`, etc. via Flyway (V30), application code updated in the same deployment
-- Tenant-context middleware on every inbound request (HTTP / FIX / Kafka consumer) — no service accepts traffic with an unresolved tenant
-- Kafka topic rename to `ace-commodities.{domain}.{event}` — dual-write transition, then cutover
-- IRSA role rename to `garudax-ace-commodities-{service}`; audit events annotated `tenant_id = 'ace-commodities'`
+**Phase 0.6 — `ace-commodities` retrofit (in progress, critical path):**
+- ✅ Schema rename `reference → ace_reference`, `exchange → ace_exchange`, etc. via Flyway (V30/V32/V33)
+- ✅ Tenant-context middleware at the API edge (shared `pkg/tenant`; gateway requires + validates `X-GarudaX-Tenant` and forwards it — R010/R011). HTTP edge done; FIX/Kafka-consumer enforcement and **backend-side** enforcement still pending
+- ✅ Audit/event rows annotated `tenant_id` (V32) — but **row-level `tenant_id` + `WHERE` filtering on domain tables is NOT done**
+- ⬜ Kafka topic rename to `ace-commodities.{domain}.{event}` — dual-write transition, then cutover
+- ⬜ IRSA role rename to `garudax-ace-commodities-{service}`
 - Constraint: **zero downtime** for live commodity operations
 
 **Phase 0.7 — platform control plane:**
@@ -252,7 +255,7 @@ The original exchange foundation (Phases 0–8) is complete and lives as the `ac
 | Layer | Technology |
 |-------|-----------|
 | Container orchestration | Kubernetes (EKS) + Istio |
-| Languages (expected) | Go (matching engine), Java/Kotlin (services), React (frontend) |
+| Languages (actual) | **Go** for all 14 Go modules (13 services + the `shared` lib — not Java/Kotlin), **TypeScript** for the MCP bots (admin-bot, architect-bot), **React/TypeScript** for the 3 SPAs (web-ui, admin-ui, demo-runner) |
 | Primary DB | PostgreSQL 15 |
 | Tick data | TimescaleDB (PostgreSQL extension) |
 | Cache | Redis 7 cluster mode |
@@ -264,7 +267,7 @@ The original exchange foundation (Phases 0–8) is complete and lives as the `ac
 | CI/CD | GitHub Actions (T006) |
 | Secrets | AWS Secrets Manager + SSM Parameter Store |
 | Auth | JWT + OAuth2 PKCE + RBAC + IRSA |
-| FIX protocol | FIX 4.4 (T053 external broker gateway) |
+| FIX protocol | FIX 4.4 — `src/fix-gateway/` module exists (Phase 9, partial) |
 
 ---
 
