@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // FIX tag constants.
@@ -20,65 +22,65 @@ const (
 	TagEncryptMethod = 98
 	TagHeartBtInt    = 108
 	TagResetSeqNum   = 141
-	TagUsername       = 553
+	TagUsername      = 553
 	TagPassword      = 554
 	TagTestReqID     = 112
 
 	// Application tags — orders.
-	TagClOrdID      = 11
-	TagOrigClOrdID  = 41
-	TagOrderID      = 37
-	TagExecID       = 17
-	TagExecType     = 150
-	TagOrdStatus    = 39
-	TagSymbol       = 55
-	TagSecurityID   = 48
-	TagSecurityIDSrc = 22
-	TagSide         = 54
-	TagOrderQty     = 38
-	TagOrdType      = 40
-	TagPrice        = 44
-	TagStopPx       = 99
-	TagTimeInForce  = 59
-	TagExpireDate   = 432
-	TagAccount      = 1
-	TagTransactTime = 60
-	TagLeavesQty    = 151
-	TagCumQty       = 14
-	TagAvgPx        = 6
-	TagLastPx       = 31
-	TagLastQty      = 32
-	TagLastMkt      = 30
-	TagTrdMatchID   = 880
-	TagOrdRejReason = 103
-	TagCxlRejReason = 102
+	TagClOrdID          = 11
+	TagOrigClOrdID      = 41
+	TagOrderID          = 37
+	TagExecID           = 17
+	TagExecType         = 150
+	TagOrdStatus        = 39
+	TagSymbol           = 55
+	TagSecurityID       = 48
+	TagSecurityIDSrc    = 22
+	TagSide             = 54
+	TagOrderQty         = 38
+	TagOrdType          = 40
+	TagPrice            = 44
+	TagStopPx           = 99
+	TagTimeInForce      = 59
+	TagExpireDate       = 432
+	TagAccount          = 1
+	TagTransactTime     = 60
+	TagLeavesQty        = 151
+	TagCumQty           = 14
+	TagAvgPx            = 6
+	TagLastPx           = 31
+	TagLastQty          = 32
+	TagLastMkt          = 30
+	TagTrdMatchID       = 880
+	TagOrdRejReason     = 103
+	TagCxlRejReason     = 102
 	TagCxlRejResponseTo = 434
 
 	// Market data tags.
-	TagMDReqID              = 262
-	TagSubscriptionReqType  = 263
-	TagMarketDepth          = 264
-	TagNoMDEntryTypes       = 267
-	TagMDEntryType          = 269
-	TagNoRelatedSym         = 146
-	TagMDUpdateType         = 265
-	TagNoMDEntries          = 268
-	TagMDEntryPx            = 270
-	TagMDEntrySize          = 271
-	TagMDEntryDate          = 272
-	TagMDEntryTime          = 273
-	TagMDEntryPositionNo    = 290
-	TagMDUpdateAction       = 279
-	TagMDReqRejReason       = 281
+	TagMDReqID             = 262
+	TagSubscriptionReqType = 263
+	TagMarketDepth         = 264
+	TagNoMDEntryTypes      = 267
+	TagMDEntryType         = 269
+	TagNoRelatedSym        = 146
+	TagMDUpdateType        = 265
+	TagNoMDEntries         = 268
+	TagMDEntryPx           = 270
+	TagMDEntrySize         = 271
+	TagMDEntryDate         = 272
+	TagMDEntryTime         = 273
+	TagMDEntryPositionNo   = 290
+	TagMDUpdateAction      = 279
+	TagMDReqRejReason      = 281
 
 	// Session-level message types.
-	MsgTypeLogon          = "A"
-	MsgTypeLogout         = "5"
-	MsgTypeHeartbeat      = "0"
-	MsgTypeTestRequest    = "1"
-	MsgTypeResendRequest  = "2"
-	MsgTypeReject         = "3"
-	MsgTypeSequenceReset  = "4"
+	MsgTypeLogon         = "A"
+	MsgTypeLogout        = "5"
+	MsgTypeHeartbeat     = "0"
+	MsgTypeTestRequest   = "1"
+	MsgTypeResendRequest = "2"
+	MsgTypeReject        = "3"
+	MsgTypeSequenceReset = "4"
 
 	// Application-level message types.
 	MsgTypeNewOrderSingle       = "D"
@@ -219,17 +221,20 @@ func GetIntTag(msg *FIXMessage, tag int) int {
 	return n
 }
 
-// GetFloatTag returns the float64 value for a tag, or 0.0 if not present or not a valid float.
-func GetFloatTag(msg *FIXMessage, tag int) float64 {
+// GetDecimalTag returns the price-bearing value for a tag as a shared fixed-point
+// Decimal, or zero if the tag is absent or not a valid number. FIX tags are
+// strings on the wire, so price tags are round-tripped through ParseDecimal to
+// avoid the float64 drift that the previous GetFloatTag introduced.
+func GetDecimalTag(msg *FIXMessage, tag int) decimal.Decimal {
 	v := GetTag(msg, tag)
 	if v == "" {
-		return 0.0
+		return decimal.Zero()
 	}
-	f, err := strconv.ParseFloat(v, 64)
+	d, err := decimal.ParseDecimal(v)
 	if err != nil {
-		return 0.0
+		return decimal.Zero()
 	}
-	return f
+	return d
 }
 
 func writeField(b *strings.Builder, tag int, value string) {

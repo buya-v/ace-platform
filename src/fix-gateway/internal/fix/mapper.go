@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // Side constants (internal representation).
@@ -36,8 +38,8 @@ type InternalOrder struct {
 	Side          string
 	OrderType     string
 	Quantity      int
-	Price         float64
-	StopPrice     float64
+	Price         decimal.Decimal
+	StopPrice     decimal.Decimal
 	TimeInForce   string
 	ClientOrderID string
 	Account       string
@@ -105,8 +107,8 @@ func MapNewOrderSingle(msg *FIXMessage) (*InternalOrder, error) {
 		Side:          side,
 		OrderType:     ordType,
 		Quantity:      qty,
-		Price:         GetFloatTag(msg, TagPrice),
-		StopPrice:     GetFloatTag(msg, TagStopPx),
+		Price:         GetDecimalTag(msg, TagPrice),
+		StopPrice:     GetDecimalTag(msg, TagStopPx),
 		TimeInForce:   tif,
 		ClientOrderID: clOrdID,
 		Account:       GetTag(msg, TagAccount),
@@ -118,19 +120,19 @@ func MapNewOrderSingle(msg *FIXMessage) (*InternalOrder, error) {
 }
 
 // MapExecutionReport builds a FIX ExecutionReport message from internal order data.
-func MapExecutionReport(orderID, execID, execType, ordStatus, side string, qty int, price float64, leavesQty, cumQty int) *FIXMessage {
+func MapExecutionReport(orderID, execID, execType, ordStatus, side string, qty int, price decimal.Decimal, leavesQty, cumQty int) *FIXMessage {
 	msg := &FIXMessage{
 		Fields: map[int]string{
-			TagMsgType:   MsgTypeExecutionReport,
-			TagOrderID:   orderID,
-			TagExecID:    execID,
-			TagExecType:  execType,
-			TagOrdStatus: ordStatus,
-			TagSide:      mapSideToFIX(side),
-			TagOrderQty:  strconv.Itoa(qty),
-			TagLeavesQty: strconv.Itoa(leavesQty),
-			TagCumQty:    strconv.Itoa(cumQty),
-			TagAvgPx:     formatPrice(price),
+			TagMsgType:      MsgTypeExecutionReport,
+			TagOrderID:      orderID,
+			TagExecID:       execID,
+			TagExecType:     execType,
+			TagOrdStatus:    ordStatus,
+			TagSide:         mapSideToFIX(side),
+			TagOrderQty:     strconv.Itoa(qty),
+			TagLeavesQty:    strconv.Itoa(leavesQty),
+			TagCumQty:       strconv.Itoa(cumQty),
+			TagAvgPx:        formatPrice(price),
 			TagTransactTime: time.Now().UTC().Format("20060102-15:04:05.000"),
 		},
 	}
@@ -201,6 +203,9 @@ func mapTimeInForce(fixTIF string) (string, error) {
 	}
 }
 
-func formatPrice(price float64) string {
-	return strconv.FormatFloat(price, 'f', 4, 64)
+// formatPrice renders a price-bearing Decimal for the FIX wire. Because FIX
+// price tags are strings, we emit Decimal.String() directly — no float
+// round-trip, so no drift.
+func formatPrice(price decimal.Decimal) string {
+	return price.String()
 }

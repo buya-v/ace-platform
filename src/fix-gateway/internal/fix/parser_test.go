@@ -3,6 +3,8 @@ package fix
 import (
 	"strings"
 	"testing"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // buildSOHMessage constructs a raw FIX message using real SOH delimiters.
@@ -124,8 +126,8 @@ func TestParseMessage_NewOrderSingle(t *testing.T) {
 	if got := GetIntTag(msg, TagOrderQty); got != 100 {
 		t.Errorf("OrderQty: got %d, want 100", got)
 	}
-	if got := GetFloatTag(msg, TagPrice); got != 150.25 {
-		t.Errorf("Price: got %f, want 150.25", got)
+	if got := GetDecimalTag(msg, TagPrice); !got.Equal(decimal.MustParse("150.25")) {
+		t.Errorf("Price: got %s, want 150.25", got.String())
 	}
 	if got := GetTag(msg, TagClOrdID); got != "ORD-001" {
 		t.Errorf("ClOrdID: got %q, want ORD-001", got)
@@ -287,14 +289,14 @@ func TestCalculateChecksum_KnownValue(t *testing.T) {
 	}
 }
 
-// TestGetTag_Helpers tests GetIntTag and GetFloatTag for valid and invalid values.
+// TestGetTag_Helpers tests GetIntTag and GetDecimalTag for valid and invalid values.
 func TestGetTag_Helpers(t *testing.T) {
 	msg := &FIXMessage{
 		Fields: map[int]string{
-			TagOrderQty:  "500",
-			TagPrice:     "123.456",
+			TagOrderQty:   "500",
+			TagPrice:      "123.456",
 			TagBodyLength: "notanumber",
-			TagText:      "hello",
+			TagText:       "hello",
 		},
 	}
 
@@ -313,19 +315,19 @@ func TestGetTag_Helpers(t *testing.T) {
 		t.Errorf("GetIntTag missing: got %d, want 0", got)
 	}
 
-	// GetFloatTag — valid.
-	if got := GetFloatTag(msg, TagPrice); got != 123.456 {
-		t.Errorf("GetFloatTag valid: got %f, want 123.456", got)
+	// GetDecimalTag — valid (round-tripped through ParseDecimal, no float drift).
+	if got := GetDecimalTag(msg, TagPrice); !got.Equal(decimal.MustParse("123.456")) {
+		t.Errorf("GetDecimalTag valid: got %s, want 123.456", got.String())
 	}
 
-	// GetFloatTag — invalid (non-numeric string).
-	if got := GetFloatTag(msg, TagText); got != 0.0 {
-		t.Errorf("GetFloatTag invalid: got %f, want 0.0", got)
+	// GetDecimalTag — invalid (non-numeric string) → zero.
+	if got := GetDecimalTag(msg, TagText); !got.IsZero() {
+		t.Errorf("GetDecimalTag invalid: got %s, want 0", got.String())
 	}
 
-	// GetFloatTag — missing tag.
-	if got := GetFloatTag(msg, TagStopPx); got != 0.0 {
-		t.Errorf("GetFloatTag missing: got %f, want 0.0", got)
+	// GetDecimalTag — missing tag → zero.
+	if got := GetDecimalTag(msg, TagStopPx); !got.IsZero() {
+		t.Errorf("GetDecimalTag missing: got %s, want 0", got.String())
 	}
 
 	// GetTag — nil message.
@@ -338,9 +340,9 @@ func TestGetTag_Helpers(t *testing.T) {
 		t.Errorf("GetIntTag nil msg: got %d, want 0", got)
 	}
 
-	// GetFloatTag — nil message.
-	if got := GetFloatTag(nil, TagPrice); got != 0.0 {
-		t.Errorf("GetFloatTag nil msg: got %f, want 0.0", got)
+	// GetDecimalTag — nil message → zero.
+	if got := GetDecimalTag(nil, TagPrice); !got.IsZero() {
+		t.Errorf("GetDecimalTag nil msg: got %s, want 0", got.String())
 	}
 }
 
@@ -360,8 +362,8 @@ func TestBuildMessage_SkipsHeaderTrailerTags(t *testing.T) {
 	// Pass BeginString and CheckSum explicitly — they should be handled by BuildMessage
 	// and not cause duplicate tags.
 	fields := map[int]string{
-		TagBeginString: "FIX.4.2",   // should be ignored
-		TagCheckSum:    "999",        // should be ignored
+		TagBeginString: "FIX.4.2", // should be ignored
+		TagCheckSum:    "999",     // should be ignored
 		TagText:        "uniquetext",
 	}
 
