@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T03:16:00Z",
+  "last_updated": "2026-06-26T03:56:49Z",
   "phases": [
     {
       "id": 0,
@@ -1084,7 +1084,7 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 12,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R007-kafka-failfast",
       "deliverables": [
         "src/matching-engine/internal/kafka",
@@ -1092,7 +1092,9 @@
         "src/margin-engine/internal/kafka",
         "src/settlement-engine/internal/kafka",
         "src/gateway/internal/kafka"
-      ]
+      ],
+      "started_at": "2026-06-26T03:32:37Z",
+      "finished_at": "2026-06-26T03:46:09Z"
     },
     {
       "id": "R008",
@@ -1103,14 +1105,16 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R008-engine-concurrency",
       "deliverables": [
         "src/clearing-engine",
         "src/margin-engine",
         "src/settlement-engine",
         "src/matching-engine"
-      ]
+      ],
+      "started_at": "2026-06-26T03:32:37Z",
+      "finished_at": "2026-06-26T03:42:00Z"
     },
     {
       "id": "R009",
@@ -1125,11 +1129,13 @@
         "R008"
       ],
       "estimate_minutes": 10,
-      "status": "deferred",
+      "status": "done",
       "worktree_branch": "feature/R009-race-tests",
       "deliverables": [
         "tests/concurrency"
-      ]
+      ],
+      "started_at": "2026-06-26T03:50:41Z",
+      "finished_at": "2026-06-26T03:56:49Z"
     },
     {
       "id": "R010",
