@@ -1,7 +1,7 @@
 {
   "feature": "Platform Remediation — Codebase Review 2026-06-26",
   "created_at": "2026-06-26T00:00:00Z",
-  "last_updated": "2026-06-26T00:00:00Z",
+  "last_updated": "2026-06-26T02:15:00Z",
   "critical_path": "R001 -> R002 -> R003/R004 -> R015 (fresh integration gate)",
   "highest_risk_seam": "R003/R004 decimal migration across all engines + securities float removal",
   "parallel_streams": [
@@ -11,11 +11,26 @@
     "R4 hygiene (R017)"
   ],
   "phases": [
-    { "id": 11, "name": "R0 Financial correctness (P0, blocking)" },
-    { "id": 12, "name": "R1 Eventing & concurrency correctness" },
-    { "id": 13, "name": "R2 Tenancy honesty (re-scope + cheap enforcement)" },
-    { "id": 14, "name": "R3 Restore the signal" },
-    { "id": 15, "name": "R4 Hygiene" }
+    {
+      "id": 11,
+      "name": "R0 Financial correctness (P0, blocking)"
+    },
+    {
+      "id": 12,
+      "name": "R1 Eventing & concurrency correctness"
+    },
+    {
+      "id": 13,
+      "name": "R2 Tenancy honesty (re-scope + cheap enforcement)"
+    },
+    {
+      "id": 14,
+      "name": "R3 Restore the signal"
+    },
+    {
+      "id": 15,
+      "name": "R4 Hygiene"
+    }
   ],
   "tasks": [
     {
@@ -29,7 +44,9 @@
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R001-shared-decimal-spec",
-      "deliverables": ["docs/specs/R001_shared_decimal_spec.md"]
+      "deliverables": [
+        "docs/specs/R001_shared_decimal_spec.md"
+      ]
     },
     {
       "id": "R002",
@@ -37,12 +54,19 @@
       "description": "Implement the shared decimal type per docs/specs/R001_shared_decimal_spec.md as an importable Go module (src/shared/pkg/types/decimal). Use int128 (math/bits) or checked int64 so Mul/Div cannot silently overflow; return errors on overflow and divide-by-zero; implement banker's rounding. Include exhaustive unit tests (boundary/overflow/rounding/parse). Target 90%+ coverage on this package (financial-critical). Do NOT yet migrate consumers — that is R003/R004.",
       "agent_role": "builder",
       "phase": 11,
-      "dependencies": ["R001"],
-      "blockedBy": ["R001"],
+      "dependencies": [
+        "R001"
+      ],
+      "blockedBy": [
+        "R001"
+      ],
       "estimate_minutes": 15,
       "status": "pending",
       "worktree_branch": "feature/R002-shared-decimal-impl",
-      "deliverables": ["src/shared/pkg/types/decimal/decimal.go", "src/shared/pkg/types/decimal/decimal_test.go"]
+      "deliverables": [
+        "src/shared/pkg/types/decimal/decimal.go",
+        "src/shared/pkg/types/decimal/decimal_test.go"
+      ]
     },
     {
       "id": "R003",
@@ -50,12 +74,23 @@
       "description": "Replace the six divergent local Decimal copies (matching-engine, clearing-engine, margin-engine, settlement-engine, market-data-service, warehouse-service internal/types|internal/.../decimal.go) with the shared module via go.mod replace directives. Delete the local copies. Fix every call site; in particular replace margin-engine MulDecimal (decimal.go:98, silent overflow) and all truncating DivInt/DivInt64 with the checked/rounded shared ops. Ensure all existing engine tests still pass. Note the 'zero-dependency module' claim is already broken by kafka-go, so adding a shared internal dependency is acceptable.",
       "agent_role": "builder",
       "phase": 11,
-      "dependencies": ["R002"],
-      "blockedBy": ["R002"],
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
       "estimate_minutes": 20,
       "status": "pending",
       "worktree_branch": "feature/R003-engines-shared-decimal",
-      "deliverables": ["src/matching-engine", "src/clearing-engine", "src/margin-engine", "src/settlement-engine", "src/market-data-service", "src/warehouse-service"]
+      "deliverables": [
+        "src/matching-engine",
+        "src/clearing-engine",
+        "src/margin-engine",
+        "src/settlement-engine",
+        "src/market-data-service",
+        "src/warehouse-service"
+      ]
     },
     {
       "id": "R004",
@@ -63,12 +98,18 @@
       "description": "Replace all float64 money math in securities-service with the shared decimal type. Targets: internal/engine/engine.go:678-681 (AvgCost/MarketValue/UnrealizedPnl) and auction.go:346-363; internal/settlement/engine.go:79 and equities.go:186 (NetAmount = Price*Quantity); internal/settlement/engine.go:207-220 (bond accrued interest days*couponRate*parValue/365); internal/protocol/message.go:36 (uint64(price*PriceScale) truncation). Settlement cash, P&L, and accrual must use the shared decimal so values reconcile with the int-based engines. Update tests.",
       "agent_role": "builder",
       "phase": 11,
-      "dependencies": ["R002"],
-      "blockedBy": ["R002"],
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
       "estimate_minutes": 20,
       "status": "pending",
       "worktree_branch": "feature/R004-securities-decimal",
-      "deliverables": ["src/securities-service"]
+      "deliverables": [
+        "src/securities-service"
+      ]
     },
     {
       "id": "R005",
@@ -76,12 +117,20 @@
       "description": "Add property-based and reconciliation tests for money math: (1) Mul/Div round-trip and rounding-direction invariants; (2) overflow on large notionals now errors instead of wrapping; (3) divide-by-zero errors; (4) cross-service reconciliation — a trade priced and quantified the same way produces identical settlement cash in securities-service and the settlement-engine (the previous float-vs-int boundary). Place in tests/ and per-service _test.go where appropriate.",
       "agent_role": "test_writer",
       "phase": 11,
-      "dependencies": ["R003", "R004"],
-      "blockedBy": ["R003", "R004"],
+      "dependencies": [
+        "R003",
+        "R004"
+      ],
+      "blockedBy": [
+        "R003",
+        "R004"
+      ],
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R005-decimal-reconciliation-tests",
-      "deliverables": ["tests/decimal"]
+      "deliverables": [
+        "tests/decimal"
+      ]
     },
     {
       "id": "R006",
@@ -89,12 +138,20 @@
       "description": "Static audit confirming no residual float64 or silent truncation remains in any price/quantity/cash/P&L/margin/settlement path across all services after R003/R004. grep for float64, /365, *PriceScale, DivInt, MulDecimal; verify each is gone or justified. Write findings to handoff/R006.md with a pass/fail verdict per service.",
       "agent_role": "architect",
       "phase": 11,
-      "dependencies": ["R003", "R004"],
-      "blockedBy": ["R003", "R004"],
+      "dependencies": [
+        "R003",
+        "R004"
+      ],
+      "blockedBy": [
+        "R003",
+        "R004"
+      ],
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R006-money-path-audit",
-      "deliverables": ["handoff/R006.md"]
+      "deliverables": [
+        "handoff/R006.md"
+      ]
     },
     {
       "id": "R007",
@@ -107,7 +164,13 @@
       "estimate_minutes": 12,
       "status": "pending",
       "worktree_branch": "feature/R007-kafka-failfast",
-      "deliverables": ["src/matching-engine/internal/kafka", "src/clearing-engine/internal/kafka", "src/margin-engine/internal/kafka", "src/settlement-engine/internal/kafka", "src/gateway/internal/kafka"]
+      "deliverables": [
+        "src/matching-engine/internal/kafka",
+        "src/clearing-engine/internal/kafka",
+        "src/margin-engine/internal/kafka",
+        "src/settlement-engine/internal/kafka",
+        "src/gateway/internal/kafka"
+      ]
     },
     {
       "id": "R008",
@@ -120,7 +183,12 @@
       "estimate_minutes": 15,
       "status": "pending",
       "worktree_branch": "feature/R008-engine-concurrency",
-      "deliverables": ["src/clearing-engine", "src/margin-engine", "src/settlement-engine", "src/matching-engine"]
+      "deliverables": [
+        "src/clearing-engine",
+        "src/margin-engine",
+        "src/settlement-engine",
+        "src/matching-engine"
+      ]
     },
     {
       "id": "R009",
@@ -128,12 +196,18 @@
       "description": "Add go test -race coverage exercising concurrent ClearTrade + callback, concurrent RegisterInstrument during a settlement cycle, and concurrent handler invocation, proving R008's fixes. Ensure these tests fail on the pre-fix code and pass after. Document how to run the suite with -race in tests/ README.",
       "agent_role": "test_writer",
       "phase": 12,
-      "dependencies": ["R008"],
-      "blockedBy": ["R008"],
+      "dependencies": [
+        "R008"
+      ],
+      "blockedBy": [
+        "R008"
+      ],
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R009-race-tests",
-      "deliverables": ["tests/concurrency"]
+      "deliverables": [
+        "tests/concurrency"
+      ]
     },
     {
       "id": "R010",
@@ -146,7 +220,11 @@
       "estimate_minutes": 15,
       "status": "pending",
       "worktree_branch": "feature/R010-adopt-shared-tenant",
-      "deliverables": ["src/gateway", "src/securities-service", "src/platform-service"]
+      "deliverables": [
+        "src/gateway",
+        "src/securities-service",
+        "src/platform-service"
+      ]
     },
     {
       "id": "R011",
@@ -154,12 +232,19 @@
       "description": "Two changes in the gateway: (1) remove the tenantBypassPrefixes entries in src/gateway/internal/middleware/tenant.go:27-49 that exempt real trading endpoints (/api/v1/orders, /clearing, /margin, /settlement, /warehouse, /participants, /compliance, /market-data, /securities, /auth, /admin) — keep only genuine platform-level/health bypasses, so core traffic without a tenant header is rejected per the directive. (2) Forward the resolved tenant_id to gRPC/HTTP backends by adding it to src/gateway/internal/proxy/backend.go BackendRequest.Metadata (:17-24). Keep the single-tenant default (ace-commodities) working for existing clients via the admin-ui/web-ui X-GarudaX-Tenant header already sent.",
       "agent_role": "builder",
       "phase": 13,
-      "dependencies": ["R010"],
-      "blockedBy": ["R010"],
+      "dependencies": [
+        "R010"
+      ],
+      "blockedBy": [
+        "R010"
+      ],
       "estimate_minutes": 15,
       "status": "pending",
       "worktree_branch": "feature/R011-gateway-tenant-enforcement",
-      "deliverables": ["src/gateway/internal/middleware/tenant.go", "src/gateway/internal/proxy/backend.go"]
+      "deliverables": [
+        "src/gateway/internal/middleware/tenant.go",
+        "src/gateway/internal/proxy/backend.go"
+      ]
     },
     {
       "id": "R012",
@@ -167,12 +252,18 @@
       "description": "Add tests proving the gateway rejects core trading-endpoint requests with no/invalid X-GarudaX-Tenant (401 TENANT_REQUIRED / 403 UNKNOWN_TENANT) and that a valid tenant is forwarded to the backend metadata. Cover the path-bypass whitelist so health/platform endpoints still pass without a tenant.",
       "agent_role": "test_writer",
       "phase": 13,
-      "dependencies": ["R011"],
-      "blockedBy": ["R011"],
+      "dependencies": [
+        "R011"
+      ],
+      "blockedBy": [
+        "R011"
+      ],
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R012-gateway-tenant-tests",
-      "deliverables": ["src/gateway/internal/middleware/tenant_test.go"]
+      "deliverables": [
+        "src/gateway/internal/middleware/tenant_test.go"
+      ]
     },
     {
       "id": "R013",
@@ -180,12 +271,20 @@
       "description": "Make the docs truthful. In README.md, AiX_Project_Knowledge.md (and flag CLAUDE.md edits for the postmortem step): (1) describe the platform as single-tenant-with-namespacing today — ace_* schema namespace + tenant-aware API surface, with one live tenant (ace-commodities); (2) add an explicit 'MSE onboarding prerequisites' backlog listing the deferred work (row-level tenant_id columns + WHERE filtering, platform.tenants-backed registry, working provisioner for schemas/IAM/Kafka/Redis/dashboards, mse_* schemas, per-tenant IRSA/KMS); (3) fix drift: correct service count (14 not 11), remove the phantom src/clearing-service reference, reconcile the garudax/ vs ace-platform root name, and mark roadmap phases whose code exists. Do not overstate enforcement beyond what R011 actually ships.",
       "agent_role": "docs",
       "phase": 13,
-      "dependencies": ["R011"],
-      "blockedBy": ["R011"],
+      "dependencies": [
+        "R011"
+      ],
+      "blockedBy": [
+        "R011"
+      ],
       "estimate_minutes": 8,
       "status": "pending",
       "worktree_branch": "feature/R013-tenancy-docs-rescope",
-      "deliverables": ["README.md", "AiX_Project_Knowledge.md", "docs/specs/R013_mse_prerequisites_backlog.md"]
+      "deliverables": [
+        "README.md",
+        "AiX_Project_Knowledge.md",
+        "docs/specs/R013_mse_prerequisites_backlog.md"
+      ]
     },
     {
       "id": "R014",
@@ -198,7 +297,9 @@
       "estimate_minutes": 12,
       "status": "pending",
       "worktree_branch": "feature/R014-reenable-ci",
-      "deliverables": [".github/workflows/ci.yml"]
+      "deliverables": [
+        ".github/workflows/ci.yml"
+      ]
     },
     {
       "id": "R015",
@@ -206,12 +307,24 @@
       "description": "Run the full stack via docker-compose with a real Kafka broker (KAFKA_BROKERS set) and execute the e2e suite against the live gateway so tests do not graceful-skip. Confirm the 3 historical e2e bug classes are actually fixed now (gateway 404-before-auth via RouteChecker, compliance KYC object response, cross-service event propagation over real Kafka). Write the verdict to handoff/integration-run-<id>.md replacing the stale 2026-03-29 FAIL. Report both statement-weighted and business-logic coverage per the documented methodology.",
       "agent_role": "test_writer",
       "phase": 14,
-      "dependencies": ["R003", "R004", "R007", "R011"],
-      "blockedBy": ["R003", "R004", "R007", "R011"],
+      "dependencies": [
+        "R003",
+        "R004",
+        "R007",
+        "R011"
+      ],
+      "blockedBy": [
+        "R003",
+        "R004",
+        "R007",
+        "R011"
+      ],
       "estimate_minutes": 10,
       "status": "pending",
       "worktree_branch": "feature/R015-fresh-integration-run",
-      "deliverables": ["handoff/integration-run-20260626.md"]
+      "deliverables": [
+        "handoff/integration-run-20260626.md"
+      ]
     },
     {
       "id": "R016",
@@ -219,12 +332,18 @@
       "description": "Update the CLAUDE.md learned-patterns metrics to current reality or mark the March baselines explicitly historical: record true test counts (~2770 Test funcs + subtests, not 1199), the current service count (14), the real latest integration verdict from R015, and note that the '6 unfixed e2e bugs' narrative is resolved. This is a postmortem-style edit to CLAUDE.md (owned by the postmortem step), driven by R015's results.",
       "agent_role": "docs",
       "phase": 14,
-      "dependencies": ["R015"],
-      "blockedBy": ["R015"],
+      "dependencies": [
+        "R015"
+      ],
+      "blockedBy": [
+        "R015"
+      ],
       "estimate_minutes": 5,
       "status": "pending",
       "worktree_branch": "feature/R016-refresh-claude-metrics",
-      "deliverables": ["CLAUDE.md"]
+      "deliverables": [
+        "CLAUDE.md"
+      ]
     },
     {
       "id": "R017",
@@ -237,7 +356,115 @@
       "estimate_minutes": 12,
       "status": "pending",
       "worktree_branch": "feature/R017-repo-hygiene",
-      "deliverables": ["infrastructure/terraform", "infrastructure/db/migrations"]
+      "deliverables": [
+        "infrastructure/terraform",
+        "infrastructure/db/migrations"
+      ]
+    },
+    {
+      "id": "R018",
+      "title": "corporate-actions float→decimal",
+      "description": "Migrate the standalone corporate-actions module to the shared decimal type. R006 audit found the ENTIRE engine on float64: dividend cash, rights subscription cost, split/ex-rights price, and a float round2 (engine.go:89,102,108,124 Value/SubscriptionCost/AmountPerShare/SubscriptionPrice; :198 round2; :225 Value=round2(qty*AmountPerShare); :319 SubscriptionCost; :257 SplitAdjustedPrice; :332 TheoreticalExRightsPrice). Module is zero-dep and does NOT import shared decimal. NOT currently wired (no cmd/main.go) so not live — but MUST be migrated before it is wired. Add go.mod replace ../shared/pkg/types/decimal; convert money fields+arithmetic; replace round2 with banker's rounding; also fix securities handlers_corporate_actions.go:233 dividend entitlementValue float and the EntitlementValue field.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 20,
+      "status": "deferred",
+      "worktree_branch": "feature/R018-corporate-actions-decimal",
+      "deliverables": [
+        "src/corporate-actions",
+        "src/securities-service/internal/server/handlers_corporate_actions.go"
+      ]
+    },
+    {
+      "id": "R019",
+      "title": "compliance-service MCSD/FRC money→decimal",
+      "description": "R006 audit found residual float money paths in compliance-service MSE integration/reporting: corporate-action cash entitlement, settlement amount, settlement-fail penalties, with float round2=int64(f*100±0.5). Sites: integration/mcsd.go:114,149 SettlementAmount, :175 CashEntitlement, :499 CashEntitlement=round2(qty*RatioOrAmount), :553-557 round2; reporting/frc.go:111 TotalValue, :133 FailValue, :134 PenaltyAmount, :144 TotalPenalty, :507-511 round2. Convert to shared decimal. Surveillance package floats (22) are non-money risk scores/thresholds — leave as float64.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 18,
+      "status": "deferred",
+      "worktree_branch": "feature/R019-compliance-money-decimal",
+      "deliverables": [
+        "src/compliance-service/integration/mcsd.go",
+        "src/compliance-service/reporting/frc.go"
+      ]
+    },
+    {
+      "id": "R020",
+      "title": "gateway fees + pre-trade risk →decimal",
+      "description": "R006 audit found the gateway computes trading FEES and PRE-TRADE RISK order-value/limit checks in float64 — both money paths. internal/fees/calculator.go: CalculateFee(tradeValue float64,…), TotalFee/RateBPS/MinFee/MaxFee/PerContractFee float64, roundTo4 float; internal/risk/pretrade.go: Price/Quantity float64, CheckOrder/CheckPriceBand(lastPrice float64), store.go MaxOrderValue/MaxLong/MaxShort/MaxGross float64. Convert to shared decimal. Leave gateway reporting/observability/middleware/tickets/bot floats (metrics/SLA/rate-limit) as float64.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 18,
+      "status": "deferred",
+      "worktree_branch": "feature/R020-gateway-fees-risk-decimal",
+      "deliverables": [
+        "src/gateway/internal/fees/calculator.go",
+        "src/gateway/internal/risk/pretrade.go"
+      ]
+    },
+    {
+      "id": "R021",
+      "title": "fix-gateway price mapper →decimal",
+      "description": "R006 audit found fix-gateway carries FIX order Price/StopPrice as float64 through the protocol mapper. internal/fix/mapper.go:39,40 Price/StopPrice, :121 MapExecutionReport(price float64), :204 formatPrice; parser.go:223 GetFloatTag. FIX tags are strings on the wire, but price-bearing — round-trip via shared decimal (ParseDecimal on inbound tag, String() on outbound) to avoid float drift.",
+      "agent_role": "builder",
+      "phase": 11,
+      "dependencies": [
+        "R002"
+      ],
+      "blockedBy": [
+        "R002"
+      ],
+      "estimate_minutes": 15,
+      "status": "deferred",
+      "worktree_branch": "feature/R021-fixgateway-price-decimal",
+      "deliverables": [
+        "src/fix-gateway/internal/fix/mapper.go",
+        "src/fix-gateway/internal/fix/parser.go"
+      ]
+    },
+    {
+      "id": "R022",
+      "title": "R0-extension money-path re-audit",
+      "description": "After R018-R021, re-run the money-path audit across corporate-actions, compliance-service, gateway, fix-gateway (and re-confirm the 6 engines + securities) to verify zero residual float64 money math platform-wide. Write verdict to handoff/R022.md.",
+      "agent_role": "architect",
+      "phase": 11,
+      "dependencies": [
+        "R018",
+        "R019",
+        "R020",
+        "R021"
+      ],
+      "blockedBy": [
+        "R018",
+        "R019",
+        "R020",
+        "R021"
+      ],
+      "estimate_minutes": 10,
+      "status": "deferred",
+      "worktree_branch": "feature/R022-money-reaudit",
+      "deliverables": [
+        "handoff/R022.md"
+      ]
     }
   ]
 }
