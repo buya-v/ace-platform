@@ -11,12 +11,13 @@ GarudaX is a **multi-tenant, AI-native operating platform** that hosts regulated
 ### Platform Invariant
 > GarudaX is the platform. Tenants are the venues. MSE is the flagship. Tenant ID is never optional.
 
-### Current State
-- 11 Go services (matching, clearing, margin, settlement, auth, compliance, market-data, warehouse, gateway, admin-bot, securities-service)
-- 3 React SPAs (trading terminal, admin dashboard, demo runner)
+### Current State (refreshed 2026-06-26 by R016 from the R015 fresh full-stack run)
+- 14 Go modules under `src/*/go.mod` (auth-service, clearing-engine, compliance-service, corporate-actions, fix-gateway, gateway, margin-engine, market-data-service, matching-engine, platform-service, securities-service, settlement-engine, shared, warehouse-service) + 2 shared zero-dep sub-modules (`shared/pkg/types/decimal`, `shared/pkg/tenant`)
+- 3 React SPAs (web-ui trading terminal :3000, admin-ui dashboard :3001, demo-runner :3002)
 - Securities module complete (Phase 7): instrument CRUD, order matching, T+2 settlement, 9 MCP tools
-- Multi-tenant platform pivot in progress (Phase 0.5 specs complete)
-- 500+ admin-ui tests, 100+ securities-service tests
+- Multi-tenant platform pivot in progress — gateway tenant enforcement live (R011); cross-tenant authZ + backend gRPC enforcement still open
+- ~2769 Go test funcs (+515 `t.Run` subtests); R015 ran all Go tests green; e2e suite 32 top-level / 141 subtests / 8 graceful skips / 0 fail on a freshly-built stack
+- Latest integration verdict: `run-20260626-051039` (R015) **PASS** — supersedes the stale 2026-03-29 FAIL narrative. See the dated R016 pattern in Learned Patterns for the full metric reconciliation.
 
 ### Roadmap
 - **Phase 0.5** (complete): Multi-tenant platform specs — architecture, migrations V29-V30, tenant context design
@@ -737,6 +738,17 @@ It compounds: week-1 plans are generic, week-8 plans are codebase-aware.
 - **Context:** R010 (shared tenant module + platform-control deletion) 15m est / ~11m = 1.4x; R011 (gateway enforcement) 15m / ~8m = 1.9x; R012 (e2e tenant tests) 10m / ~6m = 1.7x; R013 (docs re-scope) 8m / ~6.5m = 1.2x.
 - **Finding:** The whole R-series (financial-correctness + concurrency + tenancy) holds the established cross-cutting/refactor profile of ~1–2x, well under the 2–3x greenfield steady state. R013 (docs) at 1.2x is the tightest, consistent with the "documentation tasks read code rather than write it" pattern. The tenancy batch parallelized cleanly where modules were disjoint (R012/R013 started at the same timestamp), but R010→R011 were correctly sequential — both touch the gateway tenant middleware, so they could not run concurrently (the "reserve sequential scheduling for tasks that share a module" rule held).
 - **Action:** Keep estimating R-series cross-cutting tasks (module extraction, enforcement wiring, e2e tests, docs) at ~1.5x of the greenfield estimate. Continue gating co-located tasks sequentially (R010/R011 both in gateway middleware) while parallelizing module-disjoint ones (R012 tests + R013 docs).
+
+### Pattern: Metric reconciliation — the March "final pipeline totals" baselines are HISTORICAL; current reality is ~2769 Go tests, 14 modules (2026-06-26)
+- **Context:** R016 refresh, driven by R015's fresh full-stack run (`run-20260626-051039`, PASS). Numerous March-2026 patterns in this file assert "final pipeline totals" of 857 / 887 / 1199 tests, **9 Go services**, and a 66% coverage baseline — and the 2026-03-29 patterns assert "6 unfixed e2e bugs" across three bug classes as a live FAIL. Both narratives are now stale by three months of R-series work (R001–R022). The codebase grew from 9 to 14 Go modules (added corporate-actions, fix-gateway, platform-service, securities-service, shared, plus 2 shared zero-dep sub-modules), and the test count is ~3.6x the last-quoted total.
+- **Finding (current reality, measured on `main` 2026-06-26):**
+  - **Go modules:** **14** (`ls src/*/go.mod`) + 2 shared sub-modules (`shared/pkg/types/decimal`, `shared/pkg/tenant`). The repeated "9 services" / "11 Go services" / "15 Go modules" counts are all superseded by **14**.
+  - **Go tests:** **~2769 `func Test*`** across `src/**/_test.go`, plus **~515 `t.Run` subtests** (the "828 Go tests" / "689 unit tests" / "2768 Go tests" figures are all historical snapshots; R015 ran the full Go suite green). The platform-wide "1199 total tests" milestone is **historical** — it predates the entire R-series.
+  - **e2e:** **32 top-level / 141 subtests / 8 graceful skips / 0 fail** against a live gateway + real Kafka broker on a freshly-rebuilt stack (R015). This is the canonical e2e baseline; the older "20 all-skip" and "55 (6 fail)" e2e figures are historical.
+  - **Coverage:** **65.0% statement-weighted** (12 modules, 41.5%–88.3%) / **69.5% business-logic-only** (87 pkgs) — consistent with, and supersedes, the ~66% March baseline. Race tier: all 4 engines PASS `-race`.
+  - **Latest integration verdict:** `run-20260626-051039` **PASS**, superseding the four 2026-03-29 FAIL runs *and* the four 2026-06-26 pre-R010 FAIL runs (`-012134/-022823/-033236/-040705`).
+  - **"6 unfixed e2e bugs" narrative — RESOLVED.** Bug class #1 (gateway 404-before-auth / RouteChecker) = **FIXED** (R011, verified live). Bug class #2 (compliance KYC array-vs-object) = **FIXED** (verified live). Bug class #3 (cross-service Kafka propagation) = **OPEN but NOT-IMPLEMENTED, not failing** — engines never wire `internal/kafka` into `cmd/main.go`, so no topics are created and `TestFullTradingLifecycle` passes only vacuously; tracked as **R024**, not as an e2e regression. The 4-FAIL-run "documents but doesn't fix" loop for these bugs is closed.
+- **Action:** Treat every pre-2026-06 "final/definitive pipeline totals" and "6 e2e bugs" pattern as **historical**, not current — do not quote 857/887/1199 tests or "9 services" as the baseline. The canonical baseline going forward: **14 Go modules, ~2769 Go test funcs, e2e 32/141/8-skip PASS, 65% stmt / 69.5% biz-logic coverage, latest verdict `run-20260626-051039` PASS.** Re-measure (don't copy) test/module counts each refresh — they drift fast. Known open follow-ups from R015: **R024** (wire real Kafka into engine mains → close bug class #3), **R025** (zero-pad migration filenames + dedupe `market_data.trades` V8/V16 so a clean DB initializes), **R026** (Dockerfile build context `./src` so fresh images include the shared `replace` modules — the cause of the 06-22 image staleness).
 
 <!-- LEARNED PATTERNS END — do not remove this comment -->
 
