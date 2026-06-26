@@ -359,14 +359,16 @@ func TestDecimalParseErrors(t *testing.T) {
 	}
 }
 
-func TestDecimalParseTruncation(t *testing.T) {
-	// Input with >4 decimal places should truncate
+func TestDecimalParseRounding(t *testing.T) {
+	// Input with >4 decimal places is rounded half-to-even (R003: the shared
+	// decimal type no longer truncates — truncation caused systematic bias).
+	// 1.123456789 -> kept .1234, discarded .56789 > half -> rounds up to .1235.
 	d, err := types.ParseDecimal("1.123456789")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if d.String() != "1.1234" {
-		t.Errorf("got %s, want 1.1234", d.String())
+	if d.String() != "1.1235" {
+		t.Errorf("got %s, want 1.1235", d.String())
 	}
 }
 
