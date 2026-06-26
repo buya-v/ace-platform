@@ -5,42 +5,57 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/garudax-platform/decimal"
 )
 
+// Money fields in this package use the platform's shared fixed-point Decimal
+// type (Decimal(18,4)) rather than float64: settlement P&L, fee totals, net
+// amounts and OHLC prices are money and must be aggregated without float drift,
+// silent int64 overflow or truncation bias (see the R006/R022 money-path audit
+// and the R020 fees/risk migration). Genuine quantities (contract counts,
+// volume, open interest, net/gross positions) and ratios (percent of open
+// interest) remain float64 — they are not money and do not require exact
+// fixed-point arithmetic, mirroring how fees.Volume30D / risk percentages were
+// left as float64.
+
 // PositionInput represents a single position for report generation.
+// AvgPrice and MarkPrice are prices (money); Quantity is a contract count.
 type PositionInput struct {
-	InstrumentID string  `json:"instrument_id"`
-	Side         string  `json:"side"` // "long" or "short"
-	Quantity     float64 `json:"quantity"`
-	AvgPrice     float64 `json:"avg_price"`
-	MarkPrice    float64 `json:"mark_price"`
+	InstrumentID string          `json:"instrument_id"`
+	Side         string          `json:"side"` // "long" or "short"
+	Quantity     float64         `json:"quantity"`
+	AvgPrice     decimal.Decimal `json:"avg_price"`
+	MarkPrice    decimal.Decimal `json:"mark_price"`
 }
 
-// MarginInput represents margin data for a participant.
+// MarginInput represents margin data for a participant. All fields are money.
 type MarginInput struct {
-	InitialMargin     float64 `json:"initial_margin"`
-	MaintenanceMargin float64 `json:"maintenance_margin"`
-	MarginUsed        float64 `json:"margin_used"`
-	ExcessMargin      float64 `json:"excess_margin"`
+	InitialMargin     decimal.Decimal `json:"initial_margin"`
+	MaintenanceMargin decimal.Decimal `json:"maintenance_margin"`
+	MarginUsed        decimal.Decimal `json:"margin_used"`
+	ExcessMargin      decimal.Decimal `json:"excess_margin"`
 }
 
-// FeeInput represents aggregated fee data.
+// FeeInput represents aggregated fee data. All fields are money.
 type FeeInput struct {
-	TradingFees  float64 `json:"trading_fees"`
-	ClearingFees float64 `json:"clearing_fees"`
-	DataFees     float64 `json:"data_fees"`
-	OtherFees    float64 `json:"other_fees"`
+	TradingFees  decimal.Decimal `json:"trading_fees"`
+	ClearingFees decimal.Decimal `json:"clearing_fees"`
+	DataFees     decimal.Decimal `json:"data_fees"`
+	OtherFees    decimal.Decimal `json:"other_fees"`
 }
 
 // TradeInput represents a single trade for market summary generation.
+// Price is money; Quantity is a contract count.
 type TradeInput struct {
-	Price    float64 `json:"price"`
-	Quantity float64 `json:"quantity"`
+	Price    decimal.Decimal `json:"price"`
+	Quantity float64         `json:"quantity"`
 	// Timestamp is used for ordering; earlier trades come first in the slice.
 }
 
 // PositionSnapshot represents a participant's position in one instrument,
-// used as input for large trader report generation.
+// used as input for large trader report generation. Quantities are contract
+// counts (float64), not money.
 type PositionSnapshot struct {
 	ParticipantID string  `json:"participant_id"`
 	InstrumentID  string  `json:"instrument_id"`
@@ -49,14 +64,20 @@ type PositionSnapshot struct {
 }
 
 // PnLDetail is a per-position P&L breakdown included in settlement statements.
+// Both fields are money.
 type PnLDetail struct {
-	InstrumentID string  `json:"instrument_id"`
-	RealizedPnL  float64 `json:"realized_pnl"`
-	UnrealizedPnL float64 `json:"unrealized_pnl"`
+	InstrumentID  string          `json:"instrument_id"`
+	RealizedPnL   decimal.Decimal `json:"realized_pnl"`
+	UnrealizedPnL decimal.Decimal `json:"unrealized_pnl"`
 }
 
 // GenerateSettlementStatement creates a DailyStatement from the given inputs.
 // This is a pure function: it computes the statement without side effects.
+//
+// P&L and net amount are computed in fixed-point Decimal so settlement
+// statements are exact to 4 dp. Per-position unrealized P&L is
+// (mark - avg) * quantity; MulDecimal already rounds half-to-even to 4 dp, so
+// no separate rounding step is needed.
 func GenerateSettlementStatement(
 	id string,
 	participantID string,
@@ -67,32 +88,32 @@ func GenerateSettlementStatement(
 ) DailyStatement {
 	// Calculate per-position P&L
 	var pnlDetails []PnLDetail
-	var totalUnrealized float64
+	totalUnrealized := decimal.Zero()
 	for _, pos := range positions {
-		var unrealized float64
+		qty := decFromFloat(pos.Quantity)
+		var unrealized decimal.Decimal
 		if pos.Side == "long" {
-			unrealized = (pos.MarkPrice - pos.AvgPrice) * pos.Quantity
+			unrealized = pos.MarkPrice.Sub(pos.AvgPrice).MulDecimal(qty)
 		} else {
-			unrealized = (pos.AvgPrice - pos.MarkPrice) * pos.Quantity
+			unrealized = pos.AvgPrice.Sub(pos.MarkPrice).MulDecimal(qty)
 		}
-		unrealized = roundTo4(unrealized)
-		totalUnrealized += unrealized
+		totalUnrealized = totalUnrealized.Add(unrealized)
 		pnlDetails = append(pnlDetails, PnLDetail{
 			InstrumentID:  pos.InstrumentID,
-			RealizedPnL:   0, // realized P&L requires trade history; set to 0 for EOD snapshot
+			RealizedPnL:   decimal.Zero(), // realized P&L requires trade history; 0 for EOD snapshot
 			UnrealizedPnL: unrealized,
 		})
 	}
 
-	totalFees := roundTo4(fees.TradingFees + fees.ClearingFees + fees.DataFees + fees.OtherFees)
-	netAmount := roundTo4(totalUnrealized - totalFees)
+	totalFees := fees.TradingFees.Add(fees.ClearingFees).Add(fees.DataFees).Add(fees.OtherFees)
+	netAmount := totalUnrealized.Sub(totalFees)
 
 	positionsJSON, _ := json.Marshal(positions)
 	marginJSON, _ := json.Marshal(margin)
 	pnlJSON, _ := json.Marshal(map[string]interface{}{
-		"details":            pnlDetails,
-		"total_unrealized":   roundTo4(totalUnrealized),
-		"total_realized":     0,
+		"details":          pnlDetails,
+		"total_unrealized": totalUnrealized,
+		"total_realized":   decimal.Zero(),
 	})
 	feesJSON, _ := json.Marshal(map[string]interface{}{
 		"trading_fees":  fees.TradingFees,
@@ -116,20 +137,21 @@ func GenerateSettlementStatement(
 
 // GenerateMarketSummary creates a MarketSummary from a slice of trades and a settlement price.
 // trades must be in chronological order (earliest first).
+// settlementPrice is money (Decimal); openInterest is a contract count (float64).
 // This is a pure function.
 func GenerateMarketSummary(
 	id string,
 	instrumentID string,
 	date string,
 	trades []TradeInput,
-	settlementPrice float64,
+	settlementPrice decimal.Decimal,
 	openInterest float64,
 ) MarketSummary {
 	ms := MarketSummary{
 		ID:              id,
 		InstrumentID:    instrumentID,
 		ReportDate:      date,
-		SettlementPrice: roundTo4(settlementPrice),
+		SettlementPrice: settlementPrice,
 		OpenInterest:    roundTo4(openInterest),
 	}
 
@@ -137,25 +159,25 @@ func GenerateMarketSummary(
 		return ms
 	}
 
-	ms.OpenPrice = roundTo4(trades[0].Price)
-	ms.ClosePrice = roundTo4(trades[len(trades)-1].Price)
+	ms.OpenPrice = trades[0].Price
+	ms.ClosePrice = trades[len(trades)-1].Price
 
 	high := trades[0].Price
 	low := trades[0].Price
 	var totalVolume float64
 
 	for _, t := range trades {
-		if t.Price > high {
+		if t.Price.GreaterThan(high) {
 			high = t.Price
 		}
-		if t.Price < low {
+		if t.Price.LessThan(low) {
 			low = t.Price
 		}
 		totalVolume += t.Quantity
 	}
 
-	ms.HighPrice = roundTo4(high)
-	ms.LowPrice = roundTo4(low)
+	ms.HighPrice = high
+	ms.LowPrice = low
 	ms.Volume = roundTo4(totalVolume)
 
 	return ms
@@ -165,6 +187,9 @@ func GenerateMarketSummary(
 // given threshold percentage of open interest in any instrument.
 // Returns a slice of LargeTraderPosition entries, one per qualifying
 // (participant, instrument) pair.
+//
+// Positions and open interest are contract counts and the percent-of-OI is a
+// ratio — none of these are money, so this report is computed in float64.
 // This is a pure function.
 func GenerateLargeTraderReport(
 	date string,
@@ -227,7 +252,10 @@ func GenerateLargeTraderReport(
 	return result
 }
 
-// roundTo4 rounds a float to 4 decimal places.
+// roundTo4 rounds a float to 4 decimal places. It is used only for non-money
+// quantity and ratio values (volume, open interest, net/gross positions,
+// percent of open interest); money values use the Decimal type, which is
+// already exact to 4 dp.
 func roundTo4(v float64) float64 {
 	return math.Round(v*10000) / 10000
 }
