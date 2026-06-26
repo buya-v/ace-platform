@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // ISO 20022 message type identifiers used on the MCSD wire (documented here so
@@ -106,15 +108,15 @@ type Balance struct {
 
 // DvPInstruction instructs a delivery-versus-payment settlement.
 type DvPInstruction struct {
-	TenantID         string  `json:"tenant_id"`
-	FromAccountID    string  `json:"from_account_id"`
-	ToAccountID      string  `json:"to_account_id"`
-	InstrumentID     string  `json:"instrument_id"`
-	Quantity         int64   `json:"quantity"`
-	SettlementAmount float64 `json:"settlement_amount"`
-	Currency         string  `json:"currency,omitempty"`
-	SettlementDate   string  `json:"settlement_date,omitempty"` // YYYY-MM-DD; T+2 etc.
-	Reference        string  `json:"reference,omitempty"`
+	TenantID         string          `json:"tenant_id"`
+	FromAccountID    string          `json:"from_account_id"`
+	ToAccountID      string          `json:"to_account_id"`
+	InstrumentID     string          `json:"instrument_id"`
+	Quantity         int64           `json:"quantity"`
+	SettlementAmount decimal.Decimal `json:"settlement_amount"`
+	Currency         string          `json:"currency,omitempty"`
+	SettlementDate   string          `json:"settlement_date,omitempty"` // YYYY-MM-DD; T+2 etc.
+	Reference        string          `json:"reference,omitempty"`
 }
 
 // FoPInstruction instructs a free-of-payment securities movement.
@@ -139,19 +141,19 @@ type TransferResponse struct {
 
 // TransferStatus is the full status record of a transfer.
 type TransferStatus struct {
-	TransferID       string        `json:"transfer_id"`
-	TenantID         string        `json:"tenant_id"`
-	Type             TransferType  `json:"type"`
-	FromAccountID    string        `json:"from_account_id"`
-	ToAccountID      string        `json:"to_account_id"`
-	InstrumentID     string        `json:"instrument_id"`
-	Quantity         int64         `json:"quantity"`
-	SettlementAmount float64       `json:"settlement_amount,omitempty"`
-	State            TransferState `json:"state"`
-	Reason           string        `json:"reason,omitempty"`
-	SettlementDate   string        `json:"settlement_date,omitempty"`
-	InstructedAt     time.Time     `json:"instructed_at"`
-	SettledAt        time.Time     `json:"settled_at,omitempty"`
+	TransferID       string          `json:"transfer_id"`
+	TenantID         string          `json:"tenant_id"`
+	Type             TransferType    `json:"type"`
+	FromAccountID    string          `json:"from_account_id"`
+	ToAccountID      string          `json:"to_account_id"`
+	InstrumentID     string          `json:"instrument_id"`
+	Quantity         int64           `json:"quantity"`
+	SettlementAmount decimal.Decimal `json:"settlement_amount,omitempty"`
+	State            TransferState   `json:"state"`
+	Reason           string          `json:"reason,omitempty"`
+	SettlementDate   string          `json:"settlement_date,omitempty"`
+	InstructedAt     time.Time       `json:"instructed_at"`
+	SettledAt        time.Time       `json:"settled_at,omitempty"`
 }
 
 // CorporateAction is a corporate-action notification sent to MCSD.
@@ -167,13 +169,13 @@ type CorporateAction struct {
 
 // Entitlement is a per-holder entitlement computed for a corporate action.
 type Entitlement struct {
-	ActionID         string  `json:"action_id"`
-	TenantID         string  `json:"tenant_id"`
-	AccountID        string  `json:"account_id"`
-	OwnerID          string  `json:"owner_id"`
-	HeldQty          int64   `json:"held_qty"`
-	CashEntitlement  float64 `json:"cash_entitlement"`
-	ShareEntitlement int64   `json:"share_entitlement"`
+	ActionID         string          `json:"action_id"`
+	TenantID         string          `json:"tenant_id"`
+	AccountID        string          `json:"account_id"`
+	OwnerID          string          `json:"owner_id"`
+	HeldQty          int64           `json:"held_qty"`
+	CashEntitlement  decimal.Decimal `json:"cash_entitlement"`
+	ShareEntitlement int64           `json:"share_entitlement"`
 }
 
 // ── Adapter interface ─────────────────────────────────────────────────────────
@@ -293,7 +295,7 @@ func (s *StubAdapter) InstructDvP(_ context.Context, req DvPInstruction) (*Trans
 	if req.TenantID == "" {
 		return nil, ErrMissingTenant
 	}
-	if req.SettlementAmount <= 0 {
+	if !req.SettlementAmount.IsPos() {
 		return nil, ErrInvalidAmount
 	}
 	return s.instruct(req.TenantID, req.FromAccountID, req.ToAccountID, req.InstrumentID,
@@ -306,12 +308,12 @@ func (s *StubAdapter) InstructFoP(_ context.Context, req FoPInstruction) (*Trans
 		return nil, ErrMissingTenant
 	}
 	return s.instruct(req.TenantID, req.FromAccountID, req.ToAccountID, req.InstrumentID,
-		req.Quantity, 0, TransferFoP, req.SettlementDate, MsgIntraPositionMovement)
+		req.Quantity, decimal.Zero(), TransferFoP, req.SettlementDate, MsgIntraPositionMovement)
 }
 
 // instruct creates a transfer, validates accounts/tenant/holdings, and either
 // settles immediately (AutoSettle) or leaves it PENDING.
-func (s *StubAdapter) instruct(tenantID, from, to, instrument string, qty int64, amount float64,
+func (s *StubAdapter) instruct(tenantID, from, to, instrument string, qty int64, amount decimal.Decimal,
 	tt TransferType, settlementDate, msgID string) (*TransferResponse, error) {
 	if from == "" || to == "" || instrument == "" {
 		return nil, ErrMissingFields
@@ -496,7 +498,18 @@ func (s *StubAdapter) NotifyCorporateAction(_ context.Context, action CorporateA
 		}
 		switch action.Type {
 		case "DIVIDEND":
-			ent.CashEntitlement = round2(float64(bal.Quantity) * action.RatioOrAmount)
+			// Cash entitlement = per-share cash amount × held quantity, computed
+			// in fixed-point decimal (no float rounding). RatioOrAmount carries
+			// the per-share cash amount for a DIVIDEND.
+			rate, err := decimal.NewFromFloat(action.RatioOrAmount)
+			if err != nil {
+				return err
+			}
+			cash, err := rate.TryMulInt64(bal.Quantity)
+			if err != nil {
+				return err
+			}
+			ent.CashEntitlement = cash
 		case "STOCK_SPLIT", "RIGHTS_ISSUE", "STOCK_DIVIDEND", "REVERSE_SPLIT":
 			ent.ShareEntitlement = int64(float64(bal.Quantity) * action.RatioOrAmount)
 		}
@@ -547,12 +560,4 @@ func (s *StubAdapter) adjustLocked(accountID, instrumentID string, qtyDelta, pen
 	}
 	b.Quantity += qtyDelta
 	b.Pending += pendingDelta
-}
-
-// round2 rounds to 2 decimal places, half away from zero.
-func round2(f float64) float64 {
-	if f >= 0 {
-		return float64(int64(f*100+0.5)) / 100
-	}
-	return float64(int64(f*100-0.5)) / 100
 }

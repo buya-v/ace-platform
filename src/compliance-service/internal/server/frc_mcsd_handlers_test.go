@@ -12,6 +12,7 @@ import (
 	"github.com/garudax-platform/compliance-service/internal/onboarding"
 	"github.com/garudax-platform/compliance-service/internal/screening"
 	"github.com/garudax-platform/compliance-service/reporting"
+	"github.com/garudax-platform/decimal"
 )
 
 // newWiredServer returns an httptest.Server with FRC reporting and MCSD
@@ -127,7 +128,7 @@ func TestCSDFullFlow(t *testing.T) {
 	// we drive a DvP that fails for insufficient holdings, proving the wiring.
 	resp := postJSON(t, ts.URL+"/csd/transfers/dvp", integration.DvPInstruction{
 		TenantID: "mse-equities", FromAccountID: from, ToAccountID: to,
-		InstrumentID: "MSE:APU", Quantity: 100, SettlementAmount: 1000,
+		InstrumentID: "MSE:APU", Quantity: 100, SettlementAmount: decimal.DecimalFromInt(1000),
 	})
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnprocessableEntity {

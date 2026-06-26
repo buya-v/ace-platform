@@ -24,11 +24,14 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/garudax-platform/decimal"
 )
 
 // Regulator is the regulatory body these reports are addressed to.
@@ -95,12 +98,12 @@ var (
 
 // InstrumentVolume is a per-instrument row of the daily trading summary.
 type InstrumentVolume struct {
-	InstrumentID string  `json:"instrument_id"`
-	Symbol       string  `json:"symbol,omitempty"`
-	Trades       int64   `json:"trades"`
-	Volume       int64   `json:"volume"`       // total quantity
-	Value        float64 `json:"value"`        // total notional
-	PriceChange  float64 `json:"price_change"` // session close vs prior close, signed
+	InstrumentID string          `json:"instrument_id"`
+	Symbol       string          `json:"symbol,omitempty"`
+	Trades       int64           `json:"trades"`
+	Volume       int64           `json:"volume"`       // total quantity
+	Value        decimal.Decimal `json:"value"`        // total notional
+	PriceChange  float64         `json:"price_change"` // session close vs prior close, signed
 }
 
 // DailyTradingSummary is the body of a Daily Trading Summary report.
@@ -108,7 +111,7 @@ type DailyTradingSummary struct {
 	SessionDate string             `json:"session_date"` // YYYY-MM-DD
 	TotalTrades int64              `json:"total_trades"`
 	TotalVolume int64              `json:"total_volume"`
-	TotalValue  float64            `json:"total_value"`
+	TotalValue  decimal.Decimal    `json:"total_value"`
 	Instruments []InstrumentVolume `json:"instruments"`
 	TopMovers   []InstrumentVolume `json:"top_movers"`
 }
@@ -126,14 +129,14 @@ type LargeTraderPosition struct {
 
 // SettlementFail is one failed obligation in a Settlement Fails report.
 type SettlementFail struct {
-	ObligationID   string  `json:"obligation_id"`
-	ParticipantID  string  `json:"participant_id"`
-	InstrumentID   string  `json:"instrument_id"`
-	Quantity       int64   `json:"quantity"`
-	FailValue      float64 `json:"fail_value"`
-	PenaltyAmount  float64 `json:"penalty_amount"`
-	BuyInStatus    string  `json:"buy_in_status"` // NONE | INITIATED | EXECUTED
-	SettlementDate string  `json:"settlement_date"`
+	ObligationID   string          `json:"obligation_id"`
+	ParticipantID  string          `json:"participant_id"`
+	InstrumentID   string          `json:"instrument_id"`
+	Quantity       int64           `json:"quantity"`
+	FailValue      decimal.Decimal `json:"fail_value"`
+	PenaltyAmount  decimal.Decimal `json:"penalty_amount"`
+	BuyInStatus    string          `json:"buy_in_status"` // NONE | INITIATED | EXECUTED
+	SettlementDate string          `json:"settlement_date"`
 }
 
 // SettlementFailsReport is the body of a Settlement Fails report.
@@ -141,7 +144,7 @@ type SettlementFailsReport struct {
 	SessionDate  string           `json:"session_date"`
 	Fails        []SettlementFail `json:"fails"`
 	TotalFails   int              `json:"total_fails"`
-	TotalPenalty float64          `json:"total_penalty"`
+	TotalPenalty decimal.Decimal  `json:"total_penalty"`
 }
 
 // SuspiciousTradingAlert is the body of a real-time Suspicious Trading Alert.
@@ -247,7 +250,7 @@ func (r *Report) renderCSV() ([]byte, error) {
 			iv.Symbol,
 			strconv.FormatInt(iv.Trades, 10),
 			strconv.FormatInt(iv.Volume, 10),
-			strconv.FormatFloat(iv.Value, 'f', 2, 64),
+			strconv.FormatFloat(iv.Value.Float64(), 'f', 2, 64),
 			strconv.FormatFloat(iv.PriceChange, 'f', 4, 64),
 		})
 	}
@@ -386,7 +389,7 @@ func (r *Reporter) GenerateDailyTradingSummary(sessionDate string, instruments [
 	for _, iv := range instruments {
 		summary.TotalTrades += iv.Trades
 		summary.TotalVolume += iv.Volume
-		summary.TotalValue += iv.Value
+		summary.TotalValue = summary.TotalValue.Add(iv.Value)
 	}
 	summary.TopMovers = topMovers(instruments, 5)
 
@@ -405,7 +408,10 @@ func (r *Reporter) GenerateLargeTraderReport(pos LargeTraderPosition) (*Report, 
 		return nil, fmt.Errorf("reporting: participant_id and instrument_id are required")
 	}
 	if pos.OutstandingShares > 0 {
-		pos.PercentOutstanding = round2(float64(pos.PositionSize) / float64(pos.OutstandingShares) * 100)
+		// PercentOutstanding is a ratio (percentage), not money — float is fine.
+		// Round to 2 dp, half away from zero, matching the prior behaviour.
+		pct := float64(pos.PositionSize) / float64(pos.OutstandingShares) * 100
+		pos.PercentOutstanding = math.Round(pct*100) / 100
 	}
 	if pos.AsOf == "" {
 		pos.AsOf = r.now().Format("2006-01-02")
@@ -425,9 +431,8 @@ func (r *Reporter) GenerateSettlementFailsReport(sessionDate string, fails []Set
 		body.Fails = []SettlementFail{}
 	}
 	for _, f := range fails {
-		body.TotalPenalty += f.PenaltyAmount
+		body.TotalPenalty = body.TotalPenalty.Add(f.PenaltyAmount)
 	}
-	body.TotalPenalty = round2(body.TotalPenalty)
 	return r.newReport(ReportSettlementFails, FormatJSON, body)
 }
 
@@ -501,12 +506,4 @@ func abs(f float64) float64 {
 		return -f
 	}
 	return f
-}
-
-// round2 rounds to 2 decimal places, half away from zero.
-func round2(f float64) float64 {
-	if f >= 0 {
-		return float64(int64(f*100+0.5)) / 100
-	}
-	return float64(int64(f*100-0.5)) / 100
 }
