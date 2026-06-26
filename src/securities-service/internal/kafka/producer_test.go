@@ -153,7 +153,7 @@ func TestPublishTradeExecuted(t *testing.T) {
 		BuyOrderID:     "buy-1",
 		SellOrderID:    "sell-1",
 		InstrumentID:   "INST-1",
-		Price:          55.50,
+		Price:          decLit(55.50),
 		Quantity:       100,
 		TradeDate:      "2026-01-01",
 		SettlementDate: "2026-01-03",
@@ -203,7 +203,7 @@ func TestPublishTradeExecuted(t *testing.T) {
 	if payload.ID != "trade-abc" {
 		t.Errorf("payload ID: want trade-abc, got %s", payload.ID)
 	}
-	if payload.Price != 55.50 {
+	if payload.Price != decLit(55.50) {
 		t.Errorf("payload Price: want 55.50, got %v", payload.Price)
 	}
 	if payload.Quantity != 100 {
@@ -222,7 +222,7 @@ func TestPublishOrderCreated(t *testing.T) {
 		Side:         types.OrderSideBuy,
 		OrderType:    types.OrderTypeLimit,
 		Quantity:     50,
-		Price:        100.00,
+		Price:        decLit(100.00),
 		Status:       types.OrderStatusPending,
 	}
 

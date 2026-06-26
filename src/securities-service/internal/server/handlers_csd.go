@@ -198,14 +198,14 @@ func (s *Server) handleListCustodyBalances(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleCreateCSDTransfer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID               string                  `json:"id"`
-		FromAccountID    string                  `json:"from_account_id"`
-		ToAccountID      string                  `json:"to_account_id"`
-		InstrumentID     string                  `json:"instrument_id"`
-		Quantity         int                     `json:"quantity"`
-		TransferType     types.CSDTransferType   `json:"transfer_type"`
-		SettlementAmount float64                 `json:"settlement_amount"`
-		TenantID         string                  `json:"tenant_id"`
+		ID               string                `json:"id"`
+		FromAccountID    string                `json:"from_account_id"`
+		ToAccountID      string                `json:"to_account_id"`
+		InstrumentID     string                `json:"instrument_id"`
+		Quantity         int                   `json:"quantity"`
+		TransferType     types.CSDTransferType `json:"transfer_type"`
+		SettlementAmount types.Decimal         `json:"settlement_amount"`
+		TenantID         string                `json:"tenant_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.writeError(w, http.StatusBadRequest, "INVALID_JSON", "invalid JSON body", nil)
@@ -222,7 +222,7 @@ func (s *Server) handleCreateCSDTransfer(w http.ResponseWriter, r *http.Request)
 	if req.TransferType == "" {
 		req.TransferType = types.CSDTransferFOP
 	}
-	if req.TransferType == types.CSDTransferDVP && req.SettlementAmount <= 0 {
+	if req.TransferType == types.CSDTransferDVP && !req.SettlementAmount.IsPos() {
 		s.writeError(w, http.StatusBadRequest, "INVALID_DVP", "DVP transfers require a positive settlement_amount", nil)
 		return
 	}

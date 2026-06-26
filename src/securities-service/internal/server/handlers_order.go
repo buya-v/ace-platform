@@ -34,15 +34,16 @@ var validOrderTypes = map[types.OrderType]bool{
 // handleSubmitOrder handles POST /api/v1/securities/orders.
 //
 // Validation:
-//  a) instrument_id is required and instrument must exist
-//  b) instrument trading_status must be ACTIVE
-//  c) side must be BUY, SELL, or SHORT_SELL
-//  d) order_type must be LIMIT, MARKET, STOP, or STOP_LIMIT
-//  e) quantity > 0
-//  f) quantity must be a whole-lot multiple of instrument.LotSize
-//  g) For LIMIT/STOP_LIMIT: price > 0 and price must be a tick-size multiple
-//  h) For STOP/STOP_LIMIT: stop_price > 0
-//  i) SHORT_SELL: currently not enabled
+//
+//	a) instrument_id is required and instrument must exist
+//	b) instrument trading_status must be ACTIVE
+//	c) side must be BUY, SELL, or SHORT_SELL
+//	d) order_type must be LIMIT, MARKET, STOP, or STOP_LIMIT
+//	e) quantity > 0
+//	f) quantity must be a whole-lot multiple of instrument.LotSize
+//	g) For LIMIT/STOP_LIMIT: price > 0 and price must be a tick-size multiple
+//	h) For STOP/STOP_LIMIT: stop_price > 0
+//	i) SHORT_SELL: currently not enabled
 //
 // Defaults applied:
 //   - ID generated via newUUID()
@@ -160,7 +161,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 
 	// (g) For LIMIT and STOP_LIMIT: price must be > 0 and a valid tick-size multiple.
 	if order.OrderType == types.OrderTypeLimit || order.OrderType == types.OrderTypeStopLimit {
-		if order.Price <= 0 {
+		if !order.Price.IsPos() {
 			s.writeError(w, http.StatusUnprocessableEntity, "INVALID_FIELD",
 				"price must be greater than 0 for LIMIT and STOP_LIMIT orders", nil)
 			return
@@ -171,7 +172,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		if s.tickTableStore != nil {
 			tickTable, ttErr := s.tickTableStore.Get(order.InstrumentID)
 			if ttErr == nil && tickTable != nil {
-				if err := engine.ValidateTickSize(order.Price, tickTable, inst.TickSize); err != nil {
+				if err := engine.ValidateTickSize(order.Price.Float64(), tickTable, inst.TickSize); err != nil {
 					s.writeError(w, http.StatusUnprocessableEntity, "INVALID_TICK_SIZE", err.Error(), nil)
 					return
 				}
@@ -181,7 +182,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !tickValidated && inst.TickSize > 0 {
-			remainder := math.Remainder(order.Price, inst.TickSize)
+			remainder := math.Remainder(order.Price.Float64(), inst.TickSize)
 			if math.Abs(remainder) > 1e-9 {
 				s.writeError(w, http.StatusUnprocessableEntity, "INVALID_TICK_SIZE",
 					fmt.Sprintf("price must be a multiple of tick_size (%g)", inst.TickSize), nil)
@@ -192,7 +193,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 
 	// (h) For STOP and STOP_LIMIT: stop_price must be > 0.
 	if order.OrderType == types.OrderTypeStop || order.OrderType == types.OrderTypeStopLimit {
-		if order.StopPrice <= 0 {
+		if !order.StopPrice.IsPos() {
 			s.writeError(w, http.StatusUnprocessableEntity, "INVALID_FIELD",
 				"stop_price must be greater than 0 for STOP and STOP_LIMIT orders", nil)
 			return
@@ -246,11 +247,11 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Check maximum order value (price * quantity).
-			if ps.MaxOrderValue > 0 && order.Price > 0 {
-				orderValue := order.Price * float64(order.Quantity)
-				if orderValue > ps.MaxOrderValue {
+			if ps.MaxOrderValue > 0 && order.Price.IsPos() {
+				orderValue := order.Price.MulInt64(int64(order.Quantity))
+				if orderValue.Float64() > ps.MaxOrderValue {
 					s.writeError(w, http.StatusUnprocessableEntity, "ORDER_VALUE_EXCEEDED",
-						fmt.Sprintf("order value %.2f exceeds maximum allowed %.2f", orderValue, ps.MaxOrderValue), nil)
+						fmt.Sprintf("order value %.2f exceeds maximum allowed %.2f", orderValue.Float64(), ps.MaxOrderValue), nil)
 					return
 				}
 			}
@@ -272,7 +273,7 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	order.ID = id
 	order.Status = types.OrderStatusPending
 	order.FilledQuantity = 0
-	order.AvgFillPrice = 0
+	order.AvgFillPrice = types.Decimal{}
 	now := time.Now().UTC().Format(time.RFC3339)
 	order.CreatedAt = now
 	order.UpdatedAt = now
@@ -471,10 +472,10 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 		if tifFilter != "" && o.TimeInForce != tifFilter {
 			continue
 		}
-		if priceMin > 0 && o.Price < priceMin {
+		if priceMin > 0 && o.Price.Float64() < priceMin {
 			continue
 		}
-		if priceMax > 0 && o.Price > priceMax {
+		if priceMax > 0 && o.Price.Float64() > priceMax {
 			continue
 		}
 		if quantityMin > 0 && o.Quantity < quantityMin {
@@ -519,11 +520,11 @@ func (s *Server) handleListOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data":             all,
-		"total":            total,
-		"limit":            limit,
-		"offset":           offset,
-		"filters_applied":  filtersApplied,
+		"data":            all,
+		"total":           total,
+		"limit":           limit,
+		"offset":          offset,
+		"filters_applied": filtersApplied,
 	})
 }
 
@@ -627,8 +628,8 @@ type massCancelRequest struct {
 
 // massCancelResponse is the response body for the mass-cancel endpoint.
 type massCancelResponse struct {
-	CancelledCount int                    `json:"cancelled_count"`
-	Orders         []types.SecurityOrder  `json:"orders"`
+	CancelledCount int                   `json:"cancelled_count"`
+	Orders         []types.SecurityOrder `json:"orders"`
 }
 
 // handleMassCancel handles POST /api/v1/securities/orders/mass-cancel.

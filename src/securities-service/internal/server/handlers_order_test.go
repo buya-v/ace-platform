@@ -111,7 +111,7 @@ func newServerWithFilledOrder(t *testing.T) (string, *httptest.Server) {
 		Status:         types.OrderStatusFilled,
 		TimeInForce:    types.TimeInForceGTC,
 		FilledQuantity: 5,
-		AvgFillPrice:   10.00,
+		AvgFillPrice:   decLit(10.00),
 		CreatedAt:      "2024-01-01T00:00:00Z",
 		UpdatedAt:      "2024-01-01T00:00:00Z",
 	}
@@ -136,7 +136,7 @@ func TestSubmitOrder_Success(t *testing.T) {
 		"participant_id": "P-001",
 		"side":           "BUY",
 		"order_type":     "LIMIT",
-		"quantity":       10, // 10 % 5 == 0 ✓
+		"quantity":       10,    // 10 % 5 == 0 ✓
 		"price":          10.00, // 10.00 % 0.05 == 0 ✓
 	}
 	resp := doJSON(t, ts, http.MethodPost, "/api/v1/securities/orders", payload)
@@ -723,10 +723,10 @@ func newServerWithParamSet(t *testing.T, ps *types.TradingParameterSet) (*httpte
 		nil, nil, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil,
-		nil,                // nodeStore
-		nil,                // locateStore
-		nil,                // rfqStore
-		nil,                // giveUpStore
+		nil, // nodeStore
+		nil, // locateStore
+		nil, // rfqStore
+		nil, // giveUpStore
 		nil, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil,

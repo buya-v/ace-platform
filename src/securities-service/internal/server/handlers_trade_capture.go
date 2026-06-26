@@ -10,14 +10,14 @@ import (
 
 // TradeCaptureReport is the response body for GET /api/v1/securities/trade-capture-reports.
 type TradeCaptureReport struct {
-	FirmID         string                 `json:"firm_id"`
-	Date           string                 `json:"date"`
-	Trades         []types.SecurityTrade  `json:"trades"`
-	TotalBuyQty    int                    `json:"total_buy_qty"`
-	TotalSellQty   int                    `json:"total_sell_qty"`
-	TotalBuyValue  float64                `json:"total_buy_value"`
-	TotalSellValue float64                `json:"total_sell_value"`
-	NetPosition    int                    `json:"net_position"`
+	FirmID         string                `json:"firm_id"`
+	Date           string                `json:"date"`
+	Trades         []types.SecurityTrade `json:"trades"`
+	TotalBuyQty    int                   `json:"total_buy_qty"`
+	TotalSellQty   int                   `json:"total_sell_qty"`
+	TotalBuyValue  types.Decimal         `json:"total_buy_value"`
+	TotalSellValue types.Decimal         `json:"total_sell_value"`
+	NetPosition    int                   `json:"net_position"`
 }
 
 // handleTradeCaptureReports handles
@@ -69,7 +69,7 @@ func (s *Server) handleTradeCaptureReports(w http.ResponseWriter, r *http.Reques
 
 	matchedTrades := make([]types.SecurityTrade, 0)
 	var totalBuyQty, totalSellQty int
-	var totalBuyValue, totalSellValue float64
+	var totalBuyValue, totalSellValue types.Decimal
 
 	for _, t := range allTrades {
 		// Filter by trade date.
@@ -107,14 +107,14 @@ func (s *Server) handleTradeCaptureReports(w http.ResponseWriter, r *http.Reques
 		}
 
 		matchedTrades = append(matchedTrades, t)
-		value := float64(t.Quantity) * t.Price
+		value := t.Price.MulInt64(int64(t.Quantity))
 		if isBuyer {
 			totalBuyQty += t.Quantity
-			totalBuyValue += value
+			totalBuyValue = totalBuyValue.Add(value)
 		}
 		if isSeller {
 			totalSellQty += t.Quantity
-			totalSellValue += value
+			totalSellValue = totalSellValue.Add(value)
 		}
 	}
 

@@ -56,12 +56,12 @@ func makeOrderPair(t *testing.T, os *store.InMemoryOrderStore, idSuffix, inst, b
 	buy := &types.SecurityOrder{
 		ID: "BUY-" + idSuffix, InstrumentID: inst, ParticipantID: buyer,
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: qty, Price: price, Status: types.OrderStatusFilled, CreatedAt: now,
+		Quantity: qty, Price: decLit(price), Status: types.OrderStatusFilled, CreatedAt: now,
 	}
 	sell := &types.SecurityOrder{
 		ID: "SELL-" + idSuffix, InstrumentID: inst, ParticipantID: seller,
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: qty, Price: price, Status: types.OrderStatusFilled, CreatedAt: now,
+		Quantity: qty, Price: decLit(price), Status: types.OrderStatusFilled, CreatedAt: now,
 	}
 	if err := os.Submit(buy); err != nil {
 		t.Fatalf("submit buy %s: %v", idSuffix, err)
@@ -121,7 +121,7 @@ func runProfileCycle(t *testing.T, p settlementProfile) {
 
 	trades := []types.SecurityTrade{{
 		ID: "EQ-" + p.name, BuyOrderID: buyID, SellOrderID: sellID,
-		InstrumentID: "MSE-APU", Price: 12.5, Quantity: 100,
+		InstrumentID: "MSE-APU", Price: decLit(12.5), Quantity: 100,
 		TradeDate: tradeDate.Format("2006-01-02"), SettlementDate: settlDate,
 		Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339),
 	}}
@@ -143,8 +143,8 @@ func runProfileCycle(t *testing.T, p settlementProfile) {
 	if pending[0].Status != types.SettlePending {
 		t.Errorf("%s: expected SETTLE_PENDING before cycle, got %s", p.name, pending[0].Status)
 	}
-	if pending[0].NetAmount != 1250.0 {
-		t.Errorf("%s: NetAmount = %.2f, want 1250.00", p.name, pending[0].NetAmount)
+	if pending[0].NetAmount != decLit(1250.0) {
+		t.Errorf("%s: NetAmount = %.2f, want 1250.00", p.name, pending[0].NetAmount.Float64())
 	}
 
 	result, err := eng.ProcessSettlementCycle(settlDate)
@@ -185,8 +185,8 @@ func TestEquitiesSettlement_MixedProfiles_CyclesAreIsolated(t *testing.T) {
 	buyB, sellB := makeOrderPair(t, orderStore, "MIX-T2", "MSE-APU", "BUYER-C", "SELLER-D", 50, 20.0)
 
 	trades := []types.SecurityTrade{
-		{ID: "T1-TRADE", BuyOrderID: buyA, SellOrderID: sellA, InstrumentID: "MSE-BOND", Price: 1000.0, Quantity: 10, TradeDate: tradeDate.Format("2006-01-02"), SettlementDate: t1Date, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
-		{ID: "T2-TRADE", BuyOrderID: buyB, SellOrderID: sellB, InstrumentID: "MSE-APU", Price: 20.0, Quantity: 50, TradeDate: tradeDate.Format("2006-01-02"), SettlementDate: t2Date, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
+		{ID: "T1-TRADE", BuyOrderID: buyA, SellOrderID: sellA, InstrumentID: "MSE-BOND", Price: decLit(1000.0), Quantity: 10, TradeDate: tradeDate.Format("2006-01-02"), SettlementDate: t1Date, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
+		{ID: "T2-TRADE", BuyOrderID: buyB, SellOrderID: sellB, InstrumentID: "MSE-APU", Price: decLit(20.0), Quantity: 50, TradeDate: tradeDate.Format("2006-01-02"), SettlementDate: t2Date, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
 	}
 	if err := eng2(orderStore, settlementStore).CreateObligationsFromTrades(trades); err != nil {
 		t.Fatalf("CreateObligationsFromTrades: %v", err)
@@ -244,8 +244,8 @@ func TestEquitiesSettlement_T2Netting_SameParties(t *testing.T) {
 
 	eng := settlement.NewSettlementEngine(orderStore, settlementStore)
 	trades := []types.SecurityTrade{
-		{ID: "NT-1", BuyOrderID: buy1, SellOrderID: sell1, InstrumentID: "MSE-APU", Price: 11.0, Quantity: 40, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
-		{ID: "NT-2", BuyOrderID: buy2, SellOrderID: sell2, InstrumentID: "MSE-APU", Price: 11.5, Quantity: 60, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
+		{ID: "NT-1", BuyOrderID: buy1, SellOrderID: sell1, InstrumentID: "MSE-APU", Price: decLit(11.0), Quantity: 40, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
+		{ID: "NT-2", BuyOrderID: buy2, SellOrderID: sell2, InstrumentID: "MSE-APU", Price: decLit(11.5), Quantity: 60, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: tradeDate.Format(time.RFC3339)},
 	}
 	if err := eng.CreateObligationsFromTrades(trades); err != nil {
 		t.Fatalf("CreateObligationsFromTrades: %v", err)
@@ -274,7 +274,7 @@ func TestEquitiesSettlement_WrongDateCycle_NoOp(t *testing.T) {
 	eng := settlement.NewSettlementEngine(orderStore, settlementStore)
 	trades := []types.SecurityTrade{{
 		ID: "WRONG-TRADE", BuyOrderID: buyID, SellOrderID: sellID, InstrumentID: "MSE-APU",
-		Price: 9.0, Quantity: 100, SettlementDate: settlDate, Status: types.TradeStatusPending,
+		Price: decLit(9.0), Quantity: 100, SettlementDate: settlDate, Status: types.TradeStatusPending,
 		CreatedAt: tradeDate.Format(time.RFC3339),
 	}}
 	if err := eng.CreateObligationsFromTrades(trades); err != nil {

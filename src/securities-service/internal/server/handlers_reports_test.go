@@ -47,10 +47,10 @@ func newFRCServer(t *testing.T, s frcStores) *httptest.Server {
 	me := engine.NewMatchingEngine(s.instrument, s.order, s.trade, s.position, nil, nil, nil)
 	srv := New(s.instrument, s.order, s.trade, s.position, nil,
 		s.caStore, s.entStore, store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, // nodeStore
-		nil, // locateStore
-		nil, // rfqStore
-		nil, // giveUpStore
+		nil,           // nodeStore
+		nil,           // locateStore
+		nil,           // rfqStore
+		nil,           // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
@@ -94,7 +94,7 @@ func seedTradeFRC(t *testing.T, s frcStores, id, instrID string, qty int, price 
 		BuyOrderID:     "buy-" + id,
 		SellOrderID:    "sell-" + id,
 		InstrumentID:   instrID,
-		Price:          price,
+		Price:          decLit(price),
 		Quantity:       qty,
 		TradeDate:      tradeDate,
 		SettlementDate: "2026-05-01",

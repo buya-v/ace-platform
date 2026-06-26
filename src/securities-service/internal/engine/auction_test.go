@@ -13,19 +13,19 @@ import (
 // ---- auction test helpers --------------------------------------------------
 
 const (
-	auctionInstID  = "EQUITY-AUCTION"
-	auctionTenant  = "mse-equities"
-	buyerPrefix    = "buyer"
-	sellerPrefix   = "seller"
+	auctionInstID = "EQUITY-AUCTION"
+	auctionTenant = "mse-equities"
+	buyerPrefix   = "buyer"
+	sellerPrefix  = "seller"
 )
 
 // auctionTestEnv bundles everything a single auction test needs.
 type auctionTestEnv struct {
-	ae     *engine.AuctionEngine
-	inst   *store.InMemoryInstrumentStore
-	ord    *store.InMemoryOrderStore
-	trd    *store.InMemoryTradeStore
-	pos    *store.InMemoryPositionStore
+	ae   *engine.AuctionEngine
+	inst *store.InMemoryInstrumentStore
+	ord  *store.InMemoryOrderStore
+	trd  *store.InMemoryTradeStore
+	pos  *store.InMemoryPositionStore
 }
 
 // setupAuctionTest creates a fresh AuctionEngine wired to in-memory stores and
@@ -70,7 +70,7 @@ func auctionOrder(id, participantID string, side types.OrderSide, qty int, price
 		Side:          side,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      qty,
-		Price:         price,
+		Price:         decLit(price),
 		TimeInForce:   types.TimeInForceGTC,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
@@ -94,7 +94,7 @@ func TestAuction_SinglePriceCross(t *testing.T) {
 
 	for i := 1; i <= 3; i++ {
 		collectOrder(t, env.ae, auctionOrder(
-			ts(i*2),    // unique ID using ts helper
+			ts(i*2), // unique ID using ts helper
 			buyerPrefix,
 			types.OrderSideBuy, 10, 100.0,
 		))
@@ -114,7 +114,7 @@ func TestAuction_SinglePriceCross(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil AuctionResult")
 	}
-	if result.ClearingPrice != 100.0 {
+	if result.ClearingPrice != decLit(100.0) {
 		t.Errorf("clearing price: want 100.0, got %v", result.ClearingPrice)
 	}
 	if result.MatchedVolume != 30 {
@@ -144,19 +144,19 @@ func TestAuction_MaxVolume(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "b102", InstrumentID: auctionInstID, ParticipantID: "buyer-a",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 102.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(102.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(1), UpdatedAt: ts(1),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "b101", InstrumentID: auctionInstID, ParticipantID: "buyer-b",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 101.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(101.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(2), UpdatedAt: ts(2),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "b100", InstrumentID: auctionInstID, ParticipantID: "buyer-c",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(3), UpdatedAt: ts(3),
 	})
 
@@ -164,19 +164,19 @@ func TestAuction_MaxVolume(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "s99", InstrumentID: auctionInstID, ParticipantID: "seller-a",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 99.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(99.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(4), UpdatedAt: ts(4),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "s100", InstrumentID: auctionInstID, ParticipantID: "seller-b",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(5), UpdatedAt: ts(5),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "s101", InstrumentID: auctionInstID, ParticipantID: "seller-c",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 101.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(101.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(6), UpdatedAt: ts(6),
 	})
 
@@ -193,7 +193,7 @@ func TestAuction_MaxVolume(t *testing.T) {
 		t.Errorf("matched volume: want 100, got %d", result.MatchedVolume)
 	}
 	// Clearing price must be one that produced max volume.
-	if result.ClearingPrice != 101.0 {
+	if result.ClearingPrice != decLit(101.0) {
 		t.Errorf("clearing price: want 101.0 (tie-break highest), got %v", result.ClearingPrice)
 	}
 }
@@ -205,13 +205,13 @@ func TestAuction_NoMatch(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "buy-no", InstrumentID: auctionInstID, ParticipantID: "buyer",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 100, Price: 95.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 100, Price: decLit(95.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-no", InstrumentID: auctionInstID, ParticipantID: "seller",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 100, Price: 105.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 100, Price: decLit(105.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(1), UpdatedAt: ts(1),
 	})
 
@@ -228,7 +228,7 @@ func TestAuction_NoMatch(t *testing.T) {
 	if result.MatchedVolume != 0 {
 		t.Errorf("matched volume: want 0, got %d", result.MatchedVolume)
 	}
-	if result.ClearingPrice != 0 {
+	if result.ClearingPrice != decLit(0) {
 		t.Errorf("clearing price: want 0 (no match), got %v", result.ClearingPrice)
 	}
 	if result.TradeCount != 0 {
@@ -250,19 +250,19 @@ func TestAuction_PartialFill(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "buy-pf", InstrumentID: auctionInstID, ParticipantID: "buyer-pf",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 100, Price: 102.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 100, Price: decLit(102.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-pf-1", InstrumentID: auctionInstID, ParticipantID: "seller-pf-a",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 99.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(99.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(1), UpdatedAt: ts(1),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-pf-2", InstrumentID: auctionInstID, ParticipantID: "seller-pf-b",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 101.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(101.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(2), UpdatedAt: ts(2),
 	})
 
@@ -312,7 +312,7 @@ func TestAuction_EmptyBook(t *testing.T) {
 		if result.MatchedVolume != 0 {
 			t.Errorf("matched volume: want 0, got %d", result.MatchedVolume)
 		}
-		if result.ClearingPrice != 0 {
+		if result.ClearingPrice != decLit(0) {
 			t.Errorf("clearing price: want 0, got %v", result.ClearingPrice)
 		}
 		if result.TradeCount != 0 {
@@ -328,13 +328,13 @@ func TestAuction_TradesCreated(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "buy-tc", InstrumentID: auctionInstID, ParticipantID: "buyer-tc",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-tc", InstrumentID: auctionInstID, ParticipantID: "seller-tc",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 50, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(1), UpdatedAt: ts(1),
 	})
 
@@ -390,13 +390,13 @@ func TestAuction_PositionsUpdated(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "buy-pos", InstrumentID: auctionInstID, ParticipantID: "buyer-pos",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 40, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 40, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-pos", InstrumentID: auctionInstID, ParticipantID: "seller-pos",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 40, Price: 100.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 40, Price: decLit(100.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(1), UpdatedAt: ts(1),
 	})
 
@@ -434,7 +434,7 @@ func TestAuction_OnlyBuys(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "buy-only", InstrumentID: auctionInstID, ParticipantID: "buyer",
 		Side: types.OrderSideBuy, OrderType: types.OrderTypeLimit,
-		Quantity: 100, Price: 50.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 100, Price: decLit(50.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 
@@ -457,7 +457,7 @@ func TestAuction_OnlySells(t *testing.T) {
 	collectOrder(t, env.ae, &types.SecurityOrder{
 		ID: "sell-only", InstrumentID: auctionInstID, ParticipantID: "seller",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 100, Price: 50.0, TimeInForce: types.TimeInForceGTC,
+		Quantity: 100, Price: decLit(50.0), TimeInForce: types.TimeInForceGTC,
 		CreatedAt: ts(0), UpdatedAt: ts(0),
 	})
 

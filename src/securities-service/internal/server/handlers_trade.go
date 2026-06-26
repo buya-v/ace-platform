@@ -109,10 +109,10 @@ func (s *Server) handleListTrades(w http.ResponseWriter, r *http.Request) {
 		if dateToFilter != "" && t.TradeDate > dateToFilter {
 			continue
 		}
-		if priceMin > 0 && t.Price < priceMin {
+		if priceMin > 0 && t.Price.Float64() < priceMin {
 			continue
 		}
-		if priceMax > 0 && t.Price > priceMax {
+		if priceMax > 0 && t.Price.Float64() > priceMax {
 			continue
 		}
 		filtered = append(filtered, t)
@@ -270,7 +270,7 @@ func (s *Server) handleBustTrade(w http.ResponseWriter, r *http.Request, tradeID
 		TradeID:          tradeID,
 		Action:           "BUST",
 		Reason:           req.Reason,
-		OriginalPrice:    trade.Price,
+		OriginalPrice:    trade.Price.Float64(),
 		OriginalQuantity: trade.Quantity,
 		ActorID:          req.ActorID,
 		Timestamp:        time.Now().UTC().Format(time.RFC3339),
@@ -356,7 +356,7 @@ func (s *Server) handleCorrectTrade(w http.ResponseWriter, r *http.Request, trad
 		TradeID:           tradeID,
 		Action:            "CORRECT",
 		Reason:            req.Reason,
-		OriginalPrice:     trade.Price,
+		OriginalPrice:     trade.Price.Float64(),
 		OriginalQuantity:  trade.Quantity,
 		CorrectedPrice:    req.CorrectedPrice,
 		CorrectedQuantity: req.CorrectedQuantity,
@@ -422,7 +422,7 @@ func (s *Server) handleReinstateTrade(w http.ResponseWriter, r *http.Request, tr
 		TradeID:          tradeID,
 		Action:           "REINSTATE",
 		Reason:           req.Reason,
-		OriginalPrice:    trade.Price,
+		OriginalPrice:    trade.Price.Float64(),
 		OriginalQuantity: trade.Quantity,
 		ActorID:          req.ActorID,
 		Timestamp:        time.Now().UTC().Format(time.RFC3339),

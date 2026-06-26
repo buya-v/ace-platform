@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/garudax-platform/decimal"
 	"strconv"
 	"strings"
 
@@ -369,8 +370,8 @@ func (s *PgOrderStore) Submit(order *types.SecurityOrder) error {
 		string(order.Side),
 		string(order.OrderType),
 		string(order.TimeInForce),
-		order.Price,
-		order.StopPrice,
+		order.Price.Float64(),
+		order.StopPrice.Float64(),
 		order.Quantity,
 		order.FilledQuantity,
 		dbStatus,
@@ -394,6 +395,7 @@ func (s *PgOrderStore) Get(id string) (*types.SecurityOrder, error) {
 
 	var o types.SecurityOrder
 	var dbStatus string
+	var price, stopPrice float64
 	err := row.Scan(
 		&o.ID,
 		&o.InstrumentID,
@@ -401,8 +403,8 @@ func (s *PgOrderStore) Get(id string) (*types.SecurityOrder, error) {
 		&o.Side,
 		&o.OrderType,
 		&o.TimeInForce,
-		&o.Price,
-		&o.StopPrice,
+		&price,
+		&stopPrice,
 		&o.Quantity,
 		&o.FilledQuantity,
 		&dbStatus,
@@ -415,8 +417,10 @@ func (s *PgOrderStore) Get(id string) (*types.SecurityOrder, error) {
 		}
 		return nil, err
 	}
+	o.Price = decFromFloat(price)
+	o.StopPrice = decFromFloat(stopPrice)
 	o.Status = dbStatusToPending(dbStatus)
-	o.AvgFillPrice = 0 // not persisted in this schema
+	o.AvgFillPrice = types.Decimal{} // not persisted in this schema
 	return &o, nil
 }
 
@@ -464,6 +468,7 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 	for rows.Next() {
 		var o types.SecurityOrder
 		var dbStatus string
+		var price, stopPrice float64
 		if err := rows.Scan(
 			&o.ID,
 			&o.InstrumentID,
@@ -471,8 +476,8 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 			&o.Side,
 			&o.OrderType,
 			&o.TimeInForce,
-			&o.Price,
-			&o.StopPrice,
+			&price,
+			&stopPrice,
 			&o.Quantity,
 			&o.FilledQuantity,
 			&dbStatus,
@@ -481,8 +486,10 @@ func (s *PgOrderStore) List(filters OrderFilters) ([]types.SecurityOrder, error)
 		); err != nil {
 			return nil, err
 		}
+		o.Price = decFromFloat(price)
+		o.StopPrice = decFromFloat(stopPrice)
 		o.Status = dbStatusToPending(dbStatus)
-		o.AvgFillPrice = 0
+		o.AvgFillPrice = types.Decimal{}
 		result = append(result, o)
 	}
 	if err := rows.Err(); err != nil {
@@ -570,15 +577,18 @@ const tradeSelectCols = `
 // The DB schema stores traded_at; the app maps it to CreatedAt.
 // TradeDate is derived from traded_at (date portion).
 // Status defaults to TRADE_CONFIRMED for persisted trades (the trades table is append-only).
-func scanTrade(scanner interface{ Scan(dest ...interface{}) error }) (*types.SecurityTrade, error) {
+func scanTrade(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*types.SecurityTrade, error) {
 	var t types.SecurityTrade
 	var tradedAt string
+	var price float64
 	err := scanner.Scan(
 		&t.ID,
 		&t.InstrumentID,
 		&t.BuyOrderID,
 		&t.SellOrderID,
-		&t.Price,
+		&price,
 		&t.Quantity,
 		&t.SettlementDate,
 		&tradedAt,
@@ -586,6 +596,7 @@ func scanTrade(scanner interface{ Scan(dest ...interface{}) error }) (*types.Sec
 	if err != nil {
 		return nil, err
 	}
+	t.Price = decFromFloat(price)
 	t.CreatedAt = tradedAt
 	// Derive trade date from traded_at timestamp (first 10 chars = YYYY-MM-DD).
 	if len(tradedAt) >= 10 {
@@ -618,9 +629,9 @@ func (s *PgTradeStore) Create(trade *types.SecurityTrade) error {
 		trade.SellOrderID,
 		trade.BuyOrderID,  // buyer_participant_id — use buy_order_id as placeholder
 		trade.SellOrderID, // seller_participant_id — use sell_order_id as placeholder
-		trade.Price,
+		trade.Price.Float64(),
 		trade.Quantity,
-		trade.Price*float64(trade.Quantity), // trade_value
+		trade.Price.MulInt64(int64(trade.Quantity)).Float64(), // trade_value
 	)
 	return err
 }
@@ -740,20 +751,26 @@ const positionSelectCols = `
 
 // scanPosition scans a single position row into a Position struct.
 // Position.ID is synthesised as "participant_id:instrument_id".
-func scanPosition(scanner interface{ Scan(dest ...interface{}) error }) (*types.Position, error) {
+func scanPosition(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*types.Position, error) {
 	var p types.Position
+	var avgCost, marketValue, unrealizedPnl float64
 	err := scanner.Scan(
 		&p.ParticipantID,
 		&p.InstrumentID,
 		&p.Quantity,
-		&p.AvgCost,
-		&p.MarketValue,
-		&p.UnrealizedPnl,
+		&avgCost,
+		&marketValue,
+		&unrealizedPnl,
 		&p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
+	p.AvgCost = decFromFloat(avgCost)
+	p.MarketValue = decFromFloat(marketValue)
+	p.UnrealizedPnl = decFromFloat(unrealizedPnl)
 	p.ID = p.ParticipantID + ":" + p.InstrumentID
 	return &p, nil
 }
@@ -805,9 +822,9 @@ func (s *PgPositionStore) Update(position *types.Position) error {
 		WHERE participant_id = $5 AND instrument_id = $6
 	`,
 		position.Quantity,
-		position.AvgCost,
-		position.MarketValue,
-		position.UnrealizedPnl,
+		position.AvgCost.Float64(),
+		position.MarketValue.Float64(),
+		position.UnrealizedPnl.Float64(),
 		position.ParticipantID,
 		position.InstrumentID,
 	)
@@ -865,4 +882,12 @@ func nullableString(s string) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: s, Valid: true}
+}
+
+// decFromFloat converts a float64 scanned from a numeric DB column into the
+// shared fixed-point Decimal at the persistence boundary. Parse errors (NaN/Inf,
+// not reachable from a numeric column) collapse to zero.
+func decFromFloat(f float64) types.Decimal {
+	d, _ := decimal.NewFromFloat(f)
+	return d
 }

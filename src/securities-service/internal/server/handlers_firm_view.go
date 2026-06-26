@@ -75,9 +75,9 @@ func (s *Server) handleFirmView(w http.ResponseWriter, r *http.Request) {
 
 	// ── Trades ────────────────────────────────────────────────────────────────
 	type tradesSummary struct {
-		Total      int     `json:"total"`
-		BuyVolume  float64 `json:"buy_volume"`
-		SellVolume float64 `json:"sell_volume"`
+		Total      int           `json:"total"`
+		BuyVolume  types.Decimal `json:"buy_volume"`
+		SellVolume types.Decimal `json:"sell_volume"`
 	}
 	var trades tradesSummary
 	var allTrades []types.SecurityTrade
@@ -110,12 +110,12 @@ func (s *Server) handleFirmView(w http.ResponseWriter, r *http.Request) {
 				}
 				allTrades = append(allTrades, t)
 				trades.Total++
-				value := t.Price * float64(t.Quantity)
+				value := t.Price.MulInt64(int64(t.Quantity))
 				if isFirmBuy {
-					trades.BuyVolume += value
+					trades.BuyVolume = trades.BuyVolume.Add(value)
 				}
 				if isFirmSell {
-					trades.SellVolume += value
+					trades.SellVolume = trades.SellVolume.Add(value)
 				}
 			}
 		}

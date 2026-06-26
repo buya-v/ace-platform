@@ -23,7 +23,7 @@ func makeBuySellOrders(t *testing.T, orderStore *store.InMemoryOrderStore) (stri
 		Side:          types.OrderSideBuy,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      100,
-		Price:         50.0,
+		Price:         decLit(50.0),
 		Status:        types.OrderStatusFilled,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
@@ -34,7 +34,7 @@ func makeBuySellOrders(t *testing.T, orderStore *store.InMemoryOrderStore) (stri
 		Side:          types.OrderSideSell,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      100,
-		Price:         50.0,
+		Price:         decLit(50.0),
 		Status:        types.OrderStatusFilled,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
@@ -60,7 +60,7 @@ func TestCreateObligationsFromTrades(t *testing.T) {
 			BuyOrderID:     buyID,
 			SellOrderID:    sellID,
 			InstrumentID:   "INST-001",
-			Price:          50.0,
+			Price:          decLit(50.0),
 			Quantity:       100,
 			TradeDate:      now.Format("2006-01-02"),
 			SettlementDate: now.AddDate(0, 0, 2).Format("2006-01-02"),
@@ -96,11 +96,11 @@ func TestCreateObligationsFromTrades(t *testing.T) {
 	if ob.Quantity != 100 {
 		t.Errorf("expected Quantity 100, got %d", ob.Quantity)
 	}
-	if ob.Price != 50.0 {
-		t.Errorf("expected Price 50.0, got %f", ob.Price)
+	if ob.Price != decLit(50.0) {
+		t.Errorf("expected Price 50.0, got %f", ob.Price.Float64())
 	}
-	if ob.NetAmount != 5000.0 {
-		t.Errorf("expected NetAmount 5000.0, got %f", ob.NetAmount)
+	if ob.NetAmount != decLit(5000.0) {
+		t.Errorf("expected NetAmount 5000.0, got %f", ob.NetAmount.Float64())
 	}
 	if ob.Status != types.SettlePending {
 		t.Errorf("expected status SETTLE_PENDING, got %s", ob.Status)
@@ -141,7 +141,7 @@ func TestProcessSettlementCycle(t *testing.T) {
 			BuyOrderID:     buyID,
 			SellOrderID:    sellID,
 			InstrumentID:   "INST-001",
-			Price:          50.0,
+			Price:          decLit(50.0),
 			Quantity:       100,
 			TradeDate:      now.Format("2006-01-02"),
 			SettlementDate: settlDate,
@@ -192,10 +192,10 @@ func TestProcessSettlementCycle_MultipleTrades_SameParties(t *testing.T) {
 	orderStore, settlementStore := setupStores(t)
 
 	// Create two buy/sell order pairs for the same parties.
-	buy1 := &types.SecurityOrder{ID: "BUY-1", InstrumentID: "INST-001", ParticipantID: "BUYER-A", Side: types.OrderSideBuy, Quantity: 50, Price: 100.0, Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
-	sell1 := &types.SecurityOrder{ID: "SELL-1", InstrumentID: "INST-001", ParticipantID: "SELLER-B", Side: types.OrderSideSell, Quantity: 50, Price: 100.0, Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
-	buy2 := &types.SecurityOrder{ID: "BUY-2", InstrumentID: "INST-001", ParticipantID: "BUYER-A", Side: types.OrderSideBuy, Quantity: 30, Price: 105.0, Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
-	sell2 := &types.SecurityOrder{ID: "SELL-2", InstrumentID: "INST-001", ParticipantID: "SELLER-B", Side: types.OrderSideSell, Quantity: 30, Price: 105.0, Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
+	buy1 := &types.SecurityOrder{ID: "BUY-1", InstrumentID: "INST-001", ParticipantID: "BUYER-A", Side: types.OrderSideBuy, Quantity: 50, Price: decLit(100.0), Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
+	sell1 := &types.SecurityOrder{ID: "SELL-1", InstrumentID: "INST-001", ParticipantID: "SELLER-B", Side: types.OrderSideSell, Quantity: 50, Price: decLit(100.0), Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
+	buy2 := &types.SecurityOrder{ID: "BUY-2", InstrumentID: "INST-001", ParticipantID: "BUYER-A", Side: types.OrderSideBuy, Quantity: 30, Price: decLit(105.0), Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
+	sell2 := &types.SecurityOrder{ID: "SELL-2", InstrumentID: "INST-001", ParticipantID: "SELLER-B", Side: types.OrderSideSell, Quantity: 30, Price: decLit(105.0), Status: types.OrderStatusFilled, CreatedAt: time.Now().Format(time.RFC3339)}
 	for _, o := range []*types.SecurityOrder{buy1, sell1, buy2, sell2} {
 		if err := orderStore.Submit(o); err != nil {
 			t.Fatal(err)
@@ -206,8 +206,8 @@ func TestProcessSettlementCycle_MultipleTrades_SameParties(t *testing.T) {
 	settlDate := "2026-04-25"
 
 	trades := []types.SecurityTrade{
-		{ID: "T1", BuyOrderID: "BUY-1", SellOrderID: "SELL-1", InstrumentID: "INST-001", Price: 100.0, Quantity: 50, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
-		{ID: "T2", BuyOrderID: "BUY-2", SellOrderID: "SELL-2", InstrumentID: "INST-001", Price: 105.0, Quantity: 30, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
+		{ID: "T1", BuyOrderID: "BUY-1", SellOrderID: "SELL-1", InstrumentID: "INST-001", Price: decLit(100.0), Quantity: 50, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
+		{ID: "T2", BuyOrderID: "BUY-2", SellOrderID: "SELL-2", InstrumentID: "INST-001", Price: decLit(105.0), Quantity: 30, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
 	}
 	if err := eng.CreateObligationsFromTrades(trades); err != nil {
 		t.Fatalf("CreateObligationsFromTrades: %v", err)
@@ -253,7 +253,7 @@ func TestProcessSettlementCycle_AlreadyAffirmed(t *testing.T) {
 
 	settlDate := "2026-04-25"
 	trades := []types.SecurityTrade{
-		{ID: "T-AF", BuyOrderID: buyID, SellOrderID: sellID, InstrumentID: "INST-001", Price: 10.0, Quantity: 10, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
+		{ID: "T-AF", BuyOrderID: buyID, SellOrderID: sellID, InstrumentID: "INST-001", Price: decLit(10.0), Quantity: 10, SettlementDate: settlDate, Status: types.TradeStatusPending, CreatedAt: time.Now().Format(time.RFC3339)},
 	}
 	if err := eng.CreateObligationsFromTrades(trades); err != nil {
 		t.Fatal(err)
@@ -295,9 +295,9 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 	orderStore, settlementStore := setupStores(t)
 
 	const bondInstID = "BOND-001"
-	const couponRate = 0.05  // 5% annual
-	const parValue = 1000.0  // MNT 1,000 par
-	const tradeQty = 10      // 10 bonds
+	const couponRate = 0.05 // 5% annual
+	const parValue = 1000.0 // MNT 1,000 par
+	const tradeQty = 10     // 10 bonds
 	const tradePricePerBond = 990.0
 
 	// Create buy/sell orders for the bond instrument.
@@ -308,7 +308,7 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 		Side:          types.OrderSideBuy,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      tradeQty,
-		Price:         tradePricePerBond,
+		Price:         decLit(tradePricePerBond),
 		Status:        types.OrderStatusFilled,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
@@ -319,7 +319,7 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 		Side:          types.OrderSideSell,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      tradeQty,
-		Price:         tradePricePerBond,
+		Price:         decLit(tradePricePerBond),
 		Status:        types.OrderStatusFilled,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
@@ -335,7 +335,7 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 	bond := &types.Bond{
 		ID:                 bondInstID,
 		CouponRate:         couponRate,
-		ParValue:           parValue,
+		ParValue:           decLit(parValue),
 		DayCountConvention: types.DayCountACT365,
 	}
 	if err := bondStore.Create(bond); err != nil {
@@ -353,7 +353,7 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 			BuyOrderID:     buyOrder.ID,
 			SellOrderID:    sellOrder.ID,
 			InstrumentID:   bondInstID,
-			Price:          tradePricePerBond,
+			Price:          decLit(tradePricePerBond),
 			Quantity:       tradeQty,
 			TradeDate:      "2026-04-26",
 			SettlementDate: settlDate,
@@ -396,18 +396,18 @@ func TestSettlement_BondAccruedInterest(t *testing.T) {
 	totalAccrued := accruedPerBond * float64(tradeQty)
 	expectedNetAmount := baseAmount + totalAccrued
 
-	if ob.AccruedInterest == 0 {
+	if ob.AccruedInterest == decLit(0) {
 		t.Error("expected non-zero AccruedInterest for bond settlement")
 	}
 	const epsilon = 0.001
-	diff := ob.AccruedInterest - totalAccrued
+	diff := ob.AccruedInterest.Float64() - totalAccrued
 	if diff < -epsilon || diff > epsilon {
-		t.Errorf("AccruedInterest: want %.4f, got %.4f", totalAccrued, ob.AccruedInterest)
+		t.Errorf("AccruedInterest: want %.4f, got %.4f", totalAccrued, ob.AccruedInterest.Float64())
 	}
 
-	netDiff := ob.NetAmount - expectedNetAmount
+	netDiff := ob.NetAmount.Float64() - expectedNetAmount
 	if netDiff < -epsilon || netDiff > epsilon {
 		t.Errorf("NetAmount: want %.4f (base %.2f + accrued %.4f), got %.4f",
-			expectedNetAmount, baseAmount, totalAccrued, ob.NetAmount)
+			expectedNetAmount, baseAmount, totalAccrued, ob.NetAmount.Float64())
 	}
 }

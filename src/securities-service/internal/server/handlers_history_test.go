@@ -96,15 +96,15 @@ func TestListHistoricalOrders(t *testing.T) {
 	for i, id := range []string{"ord-h1", "ord-h2", "ord-h3"} {
 		_ = i
 		o := types.SecurityOrder{
-			ID:           id,
-			InstrumentID: "INST-1",
+			ID:            id,
+			InstrumentID:  "INST-1",
 			ParticipantID: "P1",
-			Side:         types.OrderSideBuy,
-			OrderType:    types.OrderTypeLimit,
-			Quantity:     100,
-			Price:        10.0,
-			Status:       types.OrderStatusFilled,
-			ArchivedAt:   now,
+			Side:          types.OrderSideBuy,
+			OrderType:     types.OrderTypeLimit,
+			Quantity:      100,
+			Price:         decLit(10.0),
+			Status:        types.OrderStatusFilled,
+			ArchivedAt:    now,
 		}
 		if err := histStore.ArchiveOrder(o); err != nil {
 			t.Fatalf("pre-populate ArchiveOrder: %v", err)
@@ -166,7 +166,7 @@ func TestArchiveTrigger(t *testing.T) {
 		Side:          types.OrderSideBuy,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      100,
-		Price:         10.0,
+		Price:         decLit(10.0),
 		Status:        types.OrderStatusFilled,
 	}
 	activeOrder := &types.SecurityOrder{
@@ -176,7 +176,7 @@ func TestArchiveTrigger(t *testing.T) {
 		Side:          types.OrderSideSell,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      50,
-		Price:         10.0,
+		Price:         decLit(10.0),
 		Status:        types.OrderStatusPending,
 	}
 	if err := orderStore.Submit(terminalOrder); err != nil {
@@ -191,7 +191,7 @@ func TestArchiveTrigger(t *testing.T) {
 		InstrumentID: "INST-1",
 		BuyOrderID:   "arc-ord-filled",
 		SellOrderID:  "sell-1",
-		Price:        10.0,
+		Price:        decLit(10.0),
 		Quantity:     100,
 		Status:       types.TradeStatusSettled,
 	}
@@ -200,7 +200,7 @@ func TestArchiveTrigger(t *testing.T) {
 		InstrumentID: "INST-1",
 		BuyOrderID:   "buy-2",
 		SellOrderID:  "sell-2",
-		Price:        10.0,
+		Price:        decLit(10.0),
 		Quantity:     50,
 		Status:       types.TradeStatusPending,
 	}
@@ -271,7 +271,7 @@ func TestListHistoricalTrades(t *testing.T) {
 			InstrumentID: "INST-2",
 			BuyOrderID:   "buy-1",
 			SellOrderID:  "sell-1",
-			Price:        20.0,
+			Price:        decLit(20.0),
 			Quantity:     50,
 			Status:       types.TradeStatusSettled,
 			ArchivedAt:   now,

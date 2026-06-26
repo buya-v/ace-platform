@@ -21,7 +21,7 @@ type serviceDeskSubmitOrderRequest struct {
 	Side          types.OrderSide   `json:"side"`
 	OrderType     types.OrderType   `json:"order_type"`
 	Quantity      int               `json:"quantity"`
-	Price         float64           `json:"price"`
+	Price         types.Decimal     `json:"price"`
 	TimeInForce   types.TimeInForce `json:"time_in_force"`
 }
 

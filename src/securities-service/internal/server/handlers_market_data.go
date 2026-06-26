@@ -45,20 +45,23 @@ func (s *Server) handleMarketDataBook(w http.ResponseWriter, r *http.Request) {
 		if remaining <= 0 {
 			continue
 		}
+		// PriceLevel.Price is a market-data display float (out of money-math scope);
+		// take the float64 view of the Decimal order price at this boundary.
+		priceKey := o.Price.Float64()
 		switch o.Side {
 		case types.OrderSideBuy:
-			pl := buyLevels[o.Price]
+			pl := buyLevels[priceKey]
 			if pl == nil {
-				pl = &types.PriceLevel{Price: o.Price}
-				buyLevels[o.Price] = pl
+				pl = &types.PriceLevel{Price: priceKey}
+				buyLevels[priceKey] = pl
 			}
 			pl.Quantity += remaining
 			pl.OrderCount++
 		case types.OrderSideSell, types.OrderSideShortSell:
-			pl := sellLevels[o.Price]
+			pl := sellLevels[priceKey]
 			if pl == nil {
-				pl = &types.PriceLevel{Price: o.Price}
-				sellLevels[o.Price] = pl
+				pl = &types.PriceLevel{Price: priceKey}
+				sellLevels[priceKey] = pl
 			}
 			pl.Quantity += remaining
 			pl.OrderCount++
@@ -123,18 +126,19 @@ func (s *Server) handleMarketDataTicker(w http.ResponseWriter, r *http.Request) 
 		// Daily stats (trade date prefix match).
 		if strings.HasPrefix(t.TradeDate, today) {
 			dailyVolume += t.Quantity
-			if dayHigh == 0 || t.Price > dayHigh {
-				dayHigh = t.Price
+			tp := t.Price.Float64()
+			if dayHigh == 0 || tp > dayHigh {
+				dayHigh = tp
 			}
-			if dayLow == 0 || t.Price < dayLow {
-				dayLow = t.Price
+			if dayLow == 0 || tp < dayLow {
+				dayLow = tp
 			}
 		}
 	}
 
 	var lastPrice float64
 	if lastTrade != nil {
-		lastPrice = lastTrade.Price
+		lastPrice = lastTrade.Price.Float64()
 	}
 
 	// Best bid / best ask from PENDING orders.
@@ -152,14 +156,15 @@ func (s *Server) handleMarketDataTicker(w http.ResponseWriter, r *http.Request) 
 		if o.Quantity-o.FilledQuantity <= 0 {
 			continue
 		}
+		op := o.Price.Float64()
 		switch o.Side {
 		case types.OrderSideBuy:
-			if bestBid == 0 || o.Price > bestBid {
-				bestBid = o.Price
+			if bestBid == 0 || op > bestBid {
+				bestBid = op
 			}
 		case types.OrderSideSell, types.OrderSideShortSell:
-			if bestAsk == 0 || o.Price < bestAsk {
-				bestAsk = o.Price
+			if bestAsk == 0 || op < bestAsk {
+				bestAsk = op
 			}
 		}
 	}

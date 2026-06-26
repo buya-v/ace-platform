@@ -17,7 +17,7 @@ func shortSellOrder(locateID string) *types.SecurityOrder {
 		Side:         types.OrderSideShortSell,
 		OrderType:    types.OrderTypeLimit,
 		Quantity:     5,
-		Price:        10,
+		Price:        decLit(10),
 		LocateID:     locateID,
 	}
 }

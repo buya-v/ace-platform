@@ -27,10 +27,10 @@ func newTestServerWithTradeStore(
 	positionStore := store.NewInMemoryPositionStore()
 	me := engine.NewMatchingEngine(instrStore, orderStore, tradeStore, positionStore, nil, nil, nil)
 	srv := New(instrStore, orderStore, tradeStore, positionStore, nil, store.NewInMemoryCorporateActionStore(), store.NewInMemoryEntitlementStore(), store.NewInMemoryMarketStore(), store.NewInMemorySegmentStore(), store.NewInMemoryCircuitBreakerStore(), store.NewInMemoryFirmStore(), store.NewInMemoryParticipantStore(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, // nodeStore
-		nil, // locateStore
-		nil, // rfqStore
-		nil, // giveUpStore
+		nil,           // nodeStore
+		nil,           // locateStore
+		nil,           // rfqStore
+		nil,           // giveUpStore
 		nil, nil, nil, // investigationStore, replayStore, bondStore
 		nil, nil, nil, nil, // strategyStore, custodyAccountStore, custodyBalanceStore, csdTransferStore
 		nil, nil, nil, // watchListStore, ipRestrictionStore, passwordPolicyStore
@@ -199,7 +199,7 @@ func TestTicker(t *testing.T) {
 	if err := tradeStore.Create(&types.SecurityTrade{
 		ID:           "tick-trade-1",
 		InstrumentID: instrID,
-		Price:        15.50,
+		Price:        decLit(15.50),
 		Quantity:     100,
 		TradeDate:    today,
 		Status:       types.TradeStatusConfirmed,
@@ -210,7 +210,7 @@ func TestTicker(t *testing.T) {
 	if err := tradeStore.Create(&types.SecurityTrade{
 		ID:           "tick-trade-2",
 		InstrumentID: instrID,
-		Price:        16.00,
+		Price:        decLit(16.00),
 		Quantity:     200,
 		TradeDate:    today,
 		Status:       types.TradeStatusConfirmed,
@@ -275,7 +275,7 @@ func TestRecentTrades(t *testing.T) {
 		if err := tradeStore.Create(&types.SecurityTrade{
 			ID:           fmt.Sprintf("rt-trade-%d", i+1),
 			InstrumentID: instrID,
-			Price:        price,
+			Price:        decLit(price),
 			Quantity:     100,
 			TradeDate:    today,
 			Status:       types.TradeStatusConfirmed,

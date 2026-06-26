@@ -56,7 +56,7 @@ func sessionOrder(id, participantID string, side types.OrderSide, qty int, price
 		Side:          side,
 		OrderType:     types.OrderTypeLimit,
 		Quantity:      qty,
-		Price:         price,
+		Price:         decLit(price),
 		Status:        types.OrderStatusPending,
 		TimeInForce:   types.TimeInForceGTC,
 		CreatedAt:     ts(0),
@@ -275,7 +275,7 @@ func TestSession_ContinuousMatches(t *testing.T) {
 	resting := &types.SecurityOrder{
 		ID: "resting-sell", InstrumentID: sessionInstID, ParticipantID: "seller",
 		Side: types.OrderSideSell, OrderType: types.OrderTypeLimit,
-		Quantity: 50, Price: 100.0, Status: types.OrderStatusPending,
+		Quantity: 50, Price: decLit(100.0), Status: types.OrderStatusPending,
 		TimeInForce: types.TimeInForceGTC, CreatedAt: ts(0), UpdatedAt: ts(0),
 	}
 	if err := ord.Submit(resting); err != nil {
@@ -300,7 +300,7 @@ func TestSession_ContinuousMatches(t *testing.T) {
 	if len(trades) == 0 {
 		t.Error("expected at least 1 trade during CONTINUOUS, got 0")
 	}
-	if trades[0].Price != 100.0 {
+	if trades[0].Price != decLit(100.0) {
 		t.Errorf("trade price: want 100.0, got %v", trades[0].Price)
 	}
 }
@@ -390,7 +390,7 @@ func TestSession_TransitionRunsOpeningAuction(t *testing.T) {
 	if result.MatchedVolume != 20 {
 		t.Errorf("opening auction matched volume: want 20, got %d", result.MatchedVolume)
 	}
-	if result.ClearingPrice != 100.0 {
+	if result.ClearingPrice != decLit(100.0) {
 		t.Errorf("opening auction clearing price: want 100.0, got %v", result.ClearingPrice)
 	}
 }
