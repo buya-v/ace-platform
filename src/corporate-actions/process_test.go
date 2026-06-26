@@ -10,7 +10,7 @@ import (
 // ----------------------------------------------------------------------------
 
 func TestProcessDividend_HappyPath(t *testing.T) {
-	res, err := ProcessDividend(dividendAction(), DividendTerms{AmountPerShare: 2}, []Position{pos("p1", 100), pos("p2", 50)})
+	res, err := ProcessDividend(dividendAction(), DividendTerms{AmountPerShare: dec("2")}, []Position{pos("p1", 100), pos("p2", 50)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestProcessDividend_HappyPath(t *testing.T) {
 }
 
 func TestProcessDividend_RollsBackOnInvalidTerms(t *testing.T) {
-	res, err := ProcessDividend(dividendAction(), DividendTerms{AmountPerShare: -1}, []Position{pos("p1", 100)})
+	res, err := ProcessDividend(dividendAction(), DividendTerms{AmountPerShare: dec("-1")}, []Position{pos("p1", 100)})
 	if !errors.Is(err, ErrNegativeDividend) {
 		t.Fatalf("err=%v want ErrNegativeDividend", err)
 	}
@@ -51,7 +51,7 @@ func TestProcessDividend_RollsBackOnInvalidTerms(t *testing.T) {
 }
 
 func TestProcessDividend_RejectsWrongType(t *testing.T) {
-	_, err := ProcessDividend(splitAction(), DividendTerms{AmountPerShare: 1}, nil)
+	_, err := ProcessDividend(splitAction(), DividendTerms{AmountPerShare: dec("1")}, nil)
 	if !errors.Is(err, ErrWrongActionType) {
 		t.Fatalf("err=%v want ErrWrongActionType", err)
 	}
@@ -60,7 +60,7 @@ func TestProcessDividend_RejectsWrongType(t *testing.T) {
 func TestProcessDividend_RejectsNonAnnouncedState(t *testing.T) {
 	ca := dividendAction()
 	ca.Status = StatusCompleted
-	_, err := ProcessDividend(ca, DividendTerms{AmountPerShare: 1}, nil)
+	_, err := ProcessDividend(ca, DividendTerms{AmountPerShare: dec("1")}, nil)
 	if !errors.Is(err, ErrInvalidTransition) {
 		t.Fatalf("err=%v want ErrInvalidTransition", err)
 	}
@@ -69,7 +69,7 @@ func TestProcessDividend_RejectsNonAnnouncedState(t *testing.T) {
 func TestProcessDividend_RejectsMissingTenant(t *testing.T) {
 	ca := dividendAction()
 	ca.TenantID = ""
-	_, err := ProcessDividend(ca, DividendTerms{AmountPerShare: 1}, nil)
+	_, err := ProcessDividend(ca, DividendTerms{AmountPerShare: dec("1")}, nil)
 	if !errors.Is(err, ErrMissingTenant) {
 		t.Fatalf("err=%v want ErrMissingTenant", err)
 	}
@@ -125,7 +125,7 @@ func TestProcessSplit_RejectsWrongType(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestProcessRights_HappyPath(t *testing.T) {
-	terms := RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 8}
+	terms := RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("8")}
 	res, err := ProcessRights(rightsAction(), terms, []Position{pos("p1", 100)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -142,14 +142,14 @@ func TestProcessRights_HappyPath(t *testing.T) {
 }
 
 func TestProcessRights_RejectsWrongType(t *testing.T) {
-	_, err := ProcessRights(dividendAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 1}, nil)
+	_, err := ProcessRights(dividendAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("1")}, nil)
 	if !errors.Is(err, ErrWrongActionType) {
 		t.Fatalf("err=%v want ErrWrongActionType", err)
 	}
 }
 
 func TestProcessRights_RollsBackOnInvalidTerms(t *testing.T) {
-	_, err := ProcessRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: -1}, []Position{pos("p1", 100)})
+	_, err := ProcessRights(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("-1")}, []Position{pos("p1", 100)})
 	if !errors.Is(err, ErrNegativePrice) {
 		t.Fatalf("err=%v want ErrNegativePrice", err)
 	}
@@ -187,7 +187,7 @@ func TestCancel_RejectsTerminalAction(t *testing.T) {
 
 func TestProcess_Dispatch(t *testing.T) {
 	t.Run("dividend", func(t *testing.T) {
-		res, err := Process(dividendAction(), DividendTerms{AmountPerShare: 1}, []Position{pos("p1", 10)})
+		res, err := Process(dividendAction(), DividendTerms{AmountPerShare: dec("1")}, []Position{pos("p1", 10)})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -205,7 +205,7 @@ func TestProcess_Dispatch(t *testing.T) {
 		}
 	})
 	t.Run("rights", func(t *testing.T) {
-		res, err := Process(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: 2}, []Position{pos("p1", 100)})
+		res, err := Process(rightsAction(), RightsTerms{NewShares: 1, OldShares: 5, SubscriptionPrice: dec("2")}, []Position{pos("p1", 100)})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -222,7 +222,7 @@ func TestProcess_DispatchTermsMismatch(t *testing.T) {
 		terms any
 	}{
 		{"dividend with split terms", dividendAction(), SplitTerms{NewShares: 2, OldShares: 1}},
-		{"split with dividend terms", splitAction(), DividendTerms{AmountPerShare: 1}},
+		{"split with dividend terms", splitAction(), DividendTerms{AmountPerShare: dec("1")}},
 		{"rights with split terms", rightsAction(), SplitTerms{NewShares: 1, OldShares: 1}},
 	}
 	for _, c := range cases {
@@ -237,7 +237,7 @@ func TestProcess_DispatchTermsMismatch(t *testing.T) {
 func TestProcess_UnsupportedActionType(t *testing.T) {
 	ca := dividendAction()
 	ca.ActionType = Merger
-	if _, err := Process(ca, DividendTerms{AmountPerShare: 1}, nil); !errors.Is(err, ErrWrongActionType) {
+	if _, err := Process(ca, DividendTerms{AmountPerShare: dec("1")}, nil); !errors.Is(err, ErrWrongActionType) {
 		t.Fatalf("err=%v want ErrWrongActionType", err)
 	}
 }
