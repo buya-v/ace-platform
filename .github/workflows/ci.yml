@@ -136,6 +136,32 @@ jobs:
             echo "::notice title=Coverage::${{ matrix.module }} total coverage: ${TOTAL:-n/a}"
           fi
 
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    # Read-only HCL validation (fmt + init -backend=false + validate). No cloud
+    # credentials, no state mutation. Gates the CI Gate so malformed infra HCL
+    # fails the merge (per the T003/T054 cross-resource-bug learnings). The real
+    # `plan` runs in terraform.yml; here we only catch syntax/reference errors.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Terraform fmt check
+        working-directory: infrastructure/terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (no backend)
+        working-directory: infrastructure/terraform
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: infrastructure/terraform
+        run: terraform validate
+
   e2e-fullstack:
     name: E2E (full-stack, manual)
     # The e2e suite gracefully skips when the gateway is unreachable, so it is
@@ -159,20 +185,23 @@ jobs:
   ci-gate:
     name: CI Gate
     # Single required status check. Configure branch protection on `main` to
-    # require this job. It fails if any build or test matrix leg failed. Lint and
-    # e2e are intentionally excluded — this is a build + test gate.
+    # require this job. It fails if any build, test, or terraform-validate leg
+    # failed. Lint and e2e are intentionally excluded — this is a
+    # build + test + validate gate.
     if: always()
-    needs: [build, test]
+    needs: [build, test, terraform-validate]
     runs-on: ubuntu-latest
     steps:
-      - name: Verify build & test results
+      - name: Verify build, test & terraform-validate results
         run: |
           BUILD="${{ needs.build.result }}"
           TEST="${{ needs.test.result }}"
-          echo "build result: ${BUILD}"
-          echo "test result:  ${TEST}"
-          if [ "${BUILD}" != "success" ] || [ "${TEST}" != "success" ]; then
-            echo "::error::Build & Test gate failed — see the build/test matrix legs"
+          TFVALIDATE="${{ needs.terraform-validate.result }}"
+          echo "build result:              ${BUILD}"
+          echo "test result:               ${TEST}"
+          echo "terraform-validate result: ${TFVALIDATE}"
+          if [ "${BUILD}" != "success" ] || [ "${TEST}" != "success" ] || [ "${TFVALIDATE}" != "success" ]; then
+            echo "::error::CI gate failed — see the build/test matrix legs and terraform-validate"
             exit 1
           fi
-          echo "All Go modules built and tested successfully."
+          echo "All Go modules built and tested successfully; infra HCL validated."
