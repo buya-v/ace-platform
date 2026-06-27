@@ -383,7 +383,7 @@ services:
       LOG_LEVEL: "debug"
     ports:
       - "9878:9878"
-      - "8091:8091"
+      - "${FIX_ADMIN_HOST_PORT:-8091}:8091"
       - "9091:9091"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9091/healthz"]
