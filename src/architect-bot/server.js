@@ -2,11 +2,12 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const PORT = process.env.PORT || 3010;
-const GEMINI_API_KEYS = (process.env.GEMINI_API_KEY || "").split(",").filter(Boolean);
-const GEMINI_API_KEY = GEMINI_API_KEYS[0];
+
+// DeepSeek is OpenAI-compatible. Keys may be comma-separated for failover.
+const DEEPSEEK_API_KEYS = (process.env.DEEPSEEK_API_KEY || "").split(",").filter(Boolean);
+const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
 // ─── Load knowledge base on startup ───────────────────────────────────────────
 
@@ -27,6 +28,9 @@ console.log(
   `Loaded ${knowledgeFiles.length} knowledge files:`,
   knowledgeFiles.join(", ")
 );
+console.log(
+  `DeepSeek backend: ${DEEPSEEK_API_KEYS.length} key(s) configured at ${DEEPSEEK_BASE_URL}`
+);
 
 // ─── System prompt ─────────────────────────────────────────────────────────────
 
@@ -36,7 +40,7 @@ You are presenting GarudaX to the MSE board, FRC regulators, and technical evalu
 
 Your persona:
 - Confident and authoritative — you built this platform
-- Technically deep — you know the codebase (65 types, 48 stores, 94 handlers, 2540+ tests)
+- Technically deep — you know the codebase
 - Strategically compelling — you can articulate why GarudaX is the right choice for MSE
 - Honest about gaps — when asked about something GarudaX doesn't have, acknowledge it but pivot to strengths and roadmap
 - Bilingual awareness — the audience may ask in Mongolian, respond in the language they use
@@ -50,10 +54,6 @@ When answering:
 
 KNOWLEDGE BASE:
 ${knowledgeContent}`;
-
-// ─── Gemini client ─────────────────────────────────────────────────────────────
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // ─── Express app ───────────────────────────────────────────────────────────────
 
@@ -75,51 +75,78 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "message is required" });
   }
 
-  // Try multiple API keys and models in order of preference
-  const modelNames = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash-001"];
-  let lastError = null;
-
-  for (const apiKey of GEMINI_API_KEYS) {
-    const ai = new GoogleGenerativeAI(apiKey);
-    for (const modelName of modelNames) {
-    try {
-      const model = ai.getGenerativeModel({
-        model: modelName,
-        systemInstruction: SYSTEM_PROMPT,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 4096,
-        },
-      });
-
-      const geminiHistory = history.map((entry) => ({
-        role: entry.role === "assistant" ? "model" : "user",
-        parts: [{ text: entry.content }],
-      }));
-
-      const chat = model.startChat({ history: geminiHistory });
-      const result = await chat.sendMessage(message);
-      const response = result.response.text();
-
-      console.log(`Response from ${modelName} (${response.length} chars)`);
-      res.json({ response });
-      return;
-    } catch (err) {
-      console.error(`key=${apiKey.slice(-6)} ${modelName} error:`, err?.message || err);
-      lastError = err;
-    }
-  }
-  }
-
-  // All keys and models failed
-  console.error("All Gemini models failed:", lastError?.message);
-  {
-    res.json({
+  if (DEEPSEEK_API_KEYS.length === 0) {
+    console.error("No DEEPSEEK_API_KEY configured");
+    return res.json({
       response:
-        "I apologize, I'm having trouble connecting to my AI backend. All models are currently unavailable. Please try again in a moment.",
+        "I apologize, my AI backend is not configured yet. Please try again shortly.",
       error: true,
     });
   }
+
+  // Build OpenAI-style message list: system prompt + prior turns + new message.
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history.map((entry) => ({
+      role: entry.role === "assistant" ? "assistant" : "user",
+      content: entry.content,
+    })),
+    { role: "user", content: message },
+  ];
+
+  // Try keys and models in order of preference.
+  const modelNames = ["deepseek-chat", "deepseek-reasoner"];
+  let lastError = null;
+
+  for (const apiKey of DEEPSEEK_API_KEYS) {
+    for (const modelName of modelNames) {
+      try {
+        const resp = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages,
+            temperature: 0.7,
+            max_tokens: 4096,
+            stream: false,
+          }),
+        });
+
+        if (!resp.ok) {
+          const body = await resp.text();
+          throw new Error(`HTTP ${resp.status}: ${body.slice(0, 300)}`);
+        }
+
+        const data = await resp.json();
+        const response = data?.choices?.[0]?.message?.content;
+        if (!response) {
+          throw new Error("empty completion from DeepSeek");
+        }
+
+        console.log(`Response from ${modelName} (${response.length} chars)`);
+        res.json({ response });
+        return;
+      } catch (err) {
+        console.error(
+          `key=…${apiKey.slice(-4)} ${modelName} error:`,
+          err?.message || err
+        );
+        lastError = err;
+      }
+    }
+  }
+
+  // All keys and models failed
+  console.error("All DeepSeek models failed:", lastError?.message);
+  res.json({
+    response:
+      "I apologize, I'm having trouble connecting to my AI backend. All models are currently unavailable. Please try again in a moment.",
+    error: true,
+  });
 });
 
 // ─── Start ─────────────────────────────────────────────────────────────────────

@@ -515,7 +515,7 @@ services:
     ports:
       - "3010:3010"
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - PORT=3010
     restart: unless-stopped
     healthcheck:
