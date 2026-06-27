@@ -61,7 +61,7 @@ These have types, CRUD, and some business logic but lack MIT's depth:
 
 **MISSING (12):** Closed Order Books Window, Admin Console/Salvage Mode, Partitions (load distribution), Definition/template system, Rule Builder, Surveillance graphs, Graph Manager, Instrument Group Privileges, 4 MIT admin categories, Multi-market prerequisites, Configurable surplus modes, Price update workflow.
 
-## 7 GarudaX Differentiators (Capabilities MIT Does Not Have)
+## 8 GarudaX Differentiators (Capabilities MIT Does Not Have)
 
 1. **Multi-tenant architecture** — GarudaX hosts multiple independent exchanges on one platform. MIT is deployed once per venue. GarudaX onboards a new exchange without new infrastructure.
 
@@ -73,9 +73,11 @@ These have types, CRUD, and some business logic but lack MIT's depth:
 
 5. **Native binary protocol codec** — 92.5% field coverage alongside FIX, giving brokers connectivity options MIT charges separately for.
 
-6. **Comprehensive test suite** — 2,540+ Go tests, 313 frontend tests, 58 e2e tests, 13 Playwright tests. Exceeds typical exchange system test coverage at any stage.
+6. **Comprehensive test suite** — ~2,795 Go test functions (plus ~520 sub-tests), 800+ frontend tests, e2e API tests, and live cross-service Kafka verification. The four trading engines are race-tested (`go test -race` green). Exceeds typical exchange system test coverage at any stage.
 
-7. **Open infrastructure** — Docker Compose for dev, Kubernetes for production, standard PostgreSQL and Kafka. Zero vendor lock-in to proprietary hardware or middleware.
+7. **Open infrastructure** — Docker Compose for dev, Kubernetes for production, standard PostgreSQL and a real wire-protocol Kafka event bus. The full stack rebuilds from committed Dockerfiles and initializes a clean database on a fresh volume — hands-off reproducible. Zero vendor lock-in to proprietary hardware or middleware.
+
+8. **Provable financial correctness** — All money math runs on a single shared fixed-point Decimal type with overflow checking, banker's (half-even) rounding, and error-on-divide-by-zero. No `float64` money computation remains anywhere on the platform (audited and re-audited). MIT's correctness is a closed-source assertion; GarudaX's is verifiable in source.
 
 ## What MIT Has That GarudaX Doesn't (And Why Some Don't Matter)
 
