@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform \u2014 AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-27T02:30:00Z",
+  "last_updated": "2026-06-27T05:40:35Z",
   "phases": [
     {
       "id": 0,
@@ -1540,7 +1540,8 @@
         "src/margin-engine",
         "infrastructure/docker/kafka",
         "handoff"
-      ]
+      ],
+      "worktree_branch": "feature/R028-economic-e2e-completion"
     },
     {
       "id": "R029",
@@ -1558,7 +1559,8 @@
       "status": "pending",
       "deliverables": [
         "handoff"
-      ]
+      ],
+      "worktree_branch": "feature/R029-live-e2e-trade-settles"
     }
   ]
 }
