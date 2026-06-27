@@ -15,6 +15,7 @@ import (
 	"github.com/garudax-platform/margin-engine/internal/engine"
 	"github.com/garudax-platform/margin-engine/internal/eventbus"
 	"github.com/garudax-platform/margin-engine/internal/params"
+	"github.com/garudax-platform/margin-engine/internal/seed"
 	"github.com/garudax-platform/margin-engine/internal/server"
 	"github.com/garudax-platform/margin-engine/internal/store"
 	"github.com/garudax-platform/margin-engine/internal/types"
@@ -42,6 +43,18 @@ func main() {
 
 	cfg := server.ConfigFromEnv()
 	paramStore := params.NewStore()
+
+	// Seed SPAN risk parameters so margin can be computed for novated positions.
+	// Without this the store is empty on a fresh bring-up and margin calc fails
+	// with "no risk parameters for instrument ..." (set MARGIN_RISK_PARAMS_FILE
+	// to a JSON file to override the built-in demo default). (R028 D2)
+	riskSeed, seedSource, seedErr := seed.FromEnv()
+	if seedErr != nil {
+		log.Fatalf("Failed to load risk parameters: %v", seedErr)
+	}
+	seed.Apply(paramStore, riskSeed)
+	log.Printf("Seeded SPAN risk parameters for %d instrument(s) from %s", len(riskSeed), seedSource)
+
 	idGen := &seqIDGen{}
 	callDeadline := 1 * time.Hour
 

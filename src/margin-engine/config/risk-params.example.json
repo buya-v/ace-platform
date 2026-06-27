@@ -1,0 +1,11 @@
+[
+  {
+    "instrument_id": "WHT-HRW-2026M07-UB",
+    "price_scan_range": "300",
+    "vol_scan_range": "50",
+    "spot_price": "450",
+    "contract_size": 5000,
+    "delivery_charge": "0",
+    "is_delivery_month": false
+  }
+]

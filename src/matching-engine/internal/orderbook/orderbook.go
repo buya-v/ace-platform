@@ -77,6 +77,13 @@ func (ob *OrderBook) SubmitOrder(order *types.Order) MatchResult {
 	order.SequenceNumber = ob.nextSequence()
 	order.CreatedAt = now
 
+	// Ensure the order carries an ID. An empty OrderID would leave the matched
+	// trade's Buy/SellOrderID blank and make the resting order un-cancellable.
+	// Gateway-submitted orders may omit it, so the engine assigns one. (R028 D1)
+	if order.OrderID == "" {
+		order.OrderID = ob.idGen.NewID()
+	}
+
 	// Validate order
 	if reason := ob.validateOrder(order); reason != "" {
 		order.Status = types.OrderStatusRejected
