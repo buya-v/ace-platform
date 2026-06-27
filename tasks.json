@@ -1,7 +1,7 @@
 {
   "feature": "GarudaX Platform — AI Powered Commodity Exchange",
   "created_at": "2026-03-27T00:00:00Z",
-  "last_updated": "2026-06-26T13:59:13Z",
+  "last_updated": "2026-06-26T14:27:47Z",
   "phases": [
     {
       "id": 0,
@@ -1476,11 +1476,13 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "pending",
+      "status": "rejected",
       "worktree_branch": "feature/R025-fix-db-init",
       "deliverables": [
         "infrastructure/db/migrations"
-      ]
+      ],
+      "started_at": "2026-06-26T14:14:32Z",
+      "finished_at": "2026-06-26T14:21:12Z"
     },
     {
       "id": "R026",
@@ -1491,8 +1493,10 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "pending",
-      "worktree_branch": "feature/R026-fix-docker-build-context"
+      "status": "done",
+      "worktree_branch": "feature/R026-fix-docker-build-context",
+      "started_at": "2026-06-26T14:14:32Z",
+      "finished_at": "2026-06-26T14:27:47Z"
     },
     {
       "id": "R027",
