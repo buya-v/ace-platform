@@ -18,7 +18,7 @@ PROTO_PATH = os.path.join(
     REPO_ROOT, "src", "compliance-service", "proto", "compliance.proto"
 )
 MIGRATION_PATH = os.path.join(
-    REPO_ROOT, "infrastructure", "db", "migrations", "V7__kyc_aml_tables.sql"
+    REPO_ROOT, "infrastructure", "db", "migrations", "V007__kyc_aml_tables.sql"
 )
 
 

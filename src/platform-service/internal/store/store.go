@@ -24,7 +24,7 @@ type TenantStore interface {
 }
 
 // InMemoryTenantStore is a thread-safe in-memory implementation of TenantStore.
-// Seeded with the two known GarudaX tenants from V29__platform_schemas.sql.
+// Seeded with the two known GarudaX tenants from V029__platform_schemas.sql.
 type InMemoryTenantStore struct {
 	mu      sync.RWMutex
 	tenants map[string]*types.Tenant

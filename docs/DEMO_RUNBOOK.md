@@ -915,10 +915,10 @@ curl -s "https://garudax.asla.mn/api/v1/margin/calls/stats" \
 
 | Component | Status | Notes |
 |---|---|---|
-| DB Migrations | Partial | V8 conflict: duplicate `V8__market_data_timescaledb.sql` and `V8__warehouse_tables.sql` — renumber one |
+| DB Migrations | Working (R025) | Filenames zero-padded (`V001__`…`V033__`) so `initdb.d` lexicographic order == version order; duplicate `market_data.trades` in `V008__market_data_timescaledb.sql` neutralized — `V016__market_data_tables.sql` (traded_at shape) is authoritative. Verified clean on a fresh TimescaleDB volume. |
 | Kafka Topics | Channel-based | In-memory Go channels; no wire-protocol Kafka client yet. Real adapters needed for production |
 | K8s Manifests | Reworked (T054) | Namespace, ConfigMap, and Secret cross-references fixed |
-| Docker Compose | Working (T053) | All 12 services + infra; V8 migration conflict noted |
+| Docker Compose | Working (T053) | All 12 services + infra; V8 migration conflict resolved (R025) |
 | Helm Charts | Not created | — |
 
 ### 9.3 Security Checklist

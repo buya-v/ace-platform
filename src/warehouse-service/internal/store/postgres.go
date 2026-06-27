@@ -10,7 +10,7 @@ import (
 )
 
 // PostgresStore implements DataStore backed by PostgreSQL.
-// It uses the warehouse schema defined in V9__warehouse_tables.sql.
+// It uses the warehouse schema defined in V009__warehouse_tables.sql.
 type PostgresStore struct {
 	db *sql.DB
 }
