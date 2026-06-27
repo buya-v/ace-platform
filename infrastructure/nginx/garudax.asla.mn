@@ -1,6 +1,11 @@
 # GarudaX Platform — subdomain-separated architecture
 # Subdomains: garudax.asla.mn (API), trade.garudax.asla.mn, admin.garudax.asla.mn, demo.garudax.asla.mn
 
+# R031 — brute-force throttle for the demo portal login POST (per client IP).
+# 10 req/min sustained; burst of 5 absorbed immediately (covers password typos),
+# then throttled. Excess returns 429. Zone holds ~160k IPs in 10m.
+limit_req_zone $binary_remote_addr zone=demo_login:10m rate=10r/m;
+
 # CORS map — allow all GarudaX subdomains
 map $http_origin $cors_origin {
     default "";
@@ -183,6 +188,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     location = /api/architect/_gate/login {
+        limit_req zone=demo_login burst=5 nodelay;
+        limit_req_status 429;
         proxy_pass http://127.0.0.1:3010/api/_gate/login;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
