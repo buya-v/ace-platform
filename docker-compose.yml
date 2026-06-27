@@ -517,6 +517,10 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - PORT=3010
+      # R031 — demo portal auth gate (values from gitignored .env; fail-closed if unset)
+      - DEMO_PORTAL_PASSWORD=${DEMO_PORTAL_PASSWORD:-}
+      - DEMO_AUTH_SECRET=${DEMO_AUTH_SECRET:-}
+      - DEMO_AUTH_EXPIRES_AT=${DEMO_AUTH_EXPIRES_AT:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3010/api/health"]
