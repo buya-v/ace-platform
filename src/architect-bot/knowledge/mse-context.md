@@ -81,7 +81,7 @@ GarudaX integrates with MCSD through the CSD module (CustodyAccount, CustodyBala
 ### Multi-Tenant Capability
 - GarudaX can host MSE equities alongside other venues (e.g., a commodity exchange) on the same platform
 - Shared infrastructure reduces total cost of ownership
-- Each venue maintains complete isolation (separate tenant context, trading rules, participants)
+- Each venue has its own tenant context, trading rules, and participants, with per-tenant schema namespacing. Tenant context is validated and enforced at the gateway edge on every request; full backend-side cross-tenant authorization is on the roadmap as MSE onboards.
 
 ### Regulatory Compliance
 - FRC reporting module (FRCReport type with configurable report types)
