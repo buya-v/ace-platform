@@ -1,12 +1,12 @@
 // Package server provides the gRPC server for the matching engine.
 //
 // Architecture notes:
-// - Each instrument's order book is single-threaded (per T007 spec Section 5).
-// - The engine layer handles per-instrument locking.
-// - This server layer handles request validation, type conversion, and response mapping.
-// - For direct pod-to-pod communication (bypassing Istio sidecar), the server
-//   binds to 0.0.0.0 and clients connect directly to the pod IP.
-//   Kubernetes service annotation: traffic.sidecar.istio.io/excludeInboundPorts: "50051"
+//   - Each instrument's order book is single-threaded (per T007 spec Section 5).
+//   - The engine layer handles per-instrument locking.
+//   - This server layer handles request validation, type conversion, and response mapping.
+//   - For direct pod-to-pod communication (bypassing Istio sidecar), the server
+//     binds to 0.0.0.0 and clients connect directly to the pod IP.
+//     Kubernetes service annotation: traffic.sidecar.istio.io/excludeInboundPorts: "50051"
 package server
 
 import (
@@ -65,11 +65,23 @@ func (s *Server) SubmitOrder(req SubmitOrderRequest) (types.ExecutionReport, err
 		return types.ExecutionReport{}, fmt.Errorf("invalid stop_price: %w", err)
 	}
 
+	// The participant identity must be carried onto the order so the matched
+	// trade carries Buyer/SellerParticipantID (consumed by clearing novation,
+	// which rejects empty participant IDs). When the caller does not supply a
+	// distinct participant ID, fall back to the account ID — in the current
+	// ace-commodities flow the gateway forwards the authenticated participant as
+	// the account identity (see handleSubmitOrder). (R028 D1)
+	participantID := req.ParticipantID
+	if participantID == "" {
+		participantID = req.AccountID
+	}
+
 	order := &types.Order{
 		OrderID:       req.OrderID,
 		ClientOrderID: req.ClientOrderID,
 		InstrumentID:  req.InstrumentID,
 		AccountID:     req.AccountID,
+		ParticipantID: participantID,
 		Side:          req.Side,
 		OrderType:     req.OrderType,
 		TimeInForce:   req.TimeInForce,
@@ -269,14 +281,15 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 
 // submitOrderJSON is the JSON request body for POST /orders.
 type submitOrderJSON struct {
-	InstrumentID string `json:"instrument_id"`
-	AccountID    string `json:"account_id"`
-	Side         string `json:"side"`
-	Type         string `json:"type"`
-	Quantity     string `json:"quantity"`
-	Price        string `json:"price"`
-	OrderID      string `json:"order_id"`
-	TimeInForce  string `json:"time_in_force"`
+	InstrumentID  string `json:"instrument_id"`
+	AccountID     string `json:"account_id"`
+	ParticipantID string `json:"participant_id"`
+	Side          string `json:"side"`
+	Type          string `json:"type"`
+	Quantity      string `json:"quantity"`
+	Price         string `json:"price"`
+	OrderID       string `json:"order_id"`
+	TimeInForce   string `json:"time_in_force"`
 }
 
 func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
@@ -312,10 +325,19 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	// Parse time in force
 	tif := parseTIF(req.TimeInForce)
 
-	// Use account_id from body, or fall back to x-user-id / x-participant-id header
+	// Resolve the authenticated participant. The gateway forwards the JWT
+	// participant claim as the X-Participant-Id header (see gateway
+	// handler.SubmitOrder); this is the identity that must end up on the matched
+	// trade's Buyer/SellerParticipantID for clearing novation. (R028 D1)
+	participantID := req.ParticipantID
+	if participantID == "" {
+		participantID = r.Header.Get("X-Participant-Id")
+	}
+
+	// Use account_id from body, or fall back to participant / x-user-id header.
 	accountID := req.AccountID
 	if accountID == "" {
-		accountID = r.Header.Get("X-Participant-Id")
+		accountID = participantID
 	}
 	if accountID == "" {
 		accountID = r.Header.Get("X-User-Id")
@@ -323,16 +345,21 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	if accountID == "" {
 		accountID = "anonymous"
 	}
+	// When no distinct participant was supplied, the participant is the account.
+	if participantID == "" {
+		participantID = accountID
+	}
 
 	report, err := s.SubmitOrder(SubmitOrderRequest{
-		OrderID:     req.OrderID,
-		InstrumentID: req.InstrumentID,
-		AccountID:   accountID,
-		Side:        side,
-		OrderType:   orderType,
-		TimeInForce: tif,
-		Price:       req.Price,
-		Quantity:    qty,
+		OrderID:       req.OrderID,
+		InstrumentID:  req.InstrumentID,
+		AccountID:     accountID,
+		ParticipantID: participantID,
+		Side:          side,
+		OrderType:     orderType,
+		TimeInForce:   tif,
+		Price:         req.Price,
+		Quantity:      qty,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -593,6 +620,7 @@ type SubmitOrderRequest struct {
 	ClientOrderID string
 	InstrumentID  string
 	AccountID     string
+	ParticipantID string
 	Side          types.Side
 	OrderType     types.OrderType
 	TimeInForce   types.TimeInForce

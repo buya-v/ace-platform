@@ -50,6 +50,27 @@ create_topic "warehouse-receipts"  3   2592000000   # 30 days
 # ── System ───────────────────────────────────────────────────────────
 create_topic "notifications"       3   604800000    # 7 days
 
+# ── ace-commodities cross-service topics (R024) ──────────────────────
+# The trading engines publish/consume tenant-prefixed topics for the
+# matching -> clearing -> margin/settlement event flow. In Compose these
+# auto-create, but production MSK sets auto.create.topics.enable=false, so they
+# must be enumerated here.
+create_topic "ace-commodities.trades.executed"       6   2592000000   # 30 days, trade ledger
+create_topic "ace-commodities.clearing.novated"      3   2592000000   # 30 days
+create_topic "ace-commodities.margin.call-issued"    3   2592000000   # 30 days
+create_topic "ace-commodities.settlement.completed"  3   2592000000   # 30 days
+
+# ── ace-commodities dead-letter topics (R028 D3) ─────────────────────
+# Consumers route permanently-failed records to ace-commodities.dlq.<topic>
+# (see internal/kafka consumer.sendToDLQ). These must exist or exhausted-retry
+# events are silently dropped. Naming matches topicWithoutPrefix(): the tenant
+# prefix is stripped and re-prefixed with "<tenant>.dlq.". Longer retention so
+# failures survive for investigation.
+create_topic "ace-commodities.dlq.trades.executed"       3   7776000000   # 90 days
+create_topic "ace-commodities.dlq.clearing.novated"      3   7776000000   # 90 days
+create_topic "ace-commodities.dlq.margin.call-issued"    3   7776000000   # 90 days
+create_topic "ace-commodities.dlq.settlement.completed"  3   7776000000   # 90 days
+
 echo ""
 echo "=== GarudaX Platform: All Kafka topics created ==="
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --list
