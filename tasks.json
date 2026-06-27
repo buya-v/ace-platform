@@ -1476,13 +1476,13 @@
       "dependencies": [],
       "blockedBy": [],
       "estimate_minutes": 15,
-      "status": "rejected",
+      "status": "done",
       "worktree_branch": "feature/R025-fix-db-init",
       "deliverables": [
         "infrastructure/db/migrations"
       ],
       "started_at": "2026-06-26T14:14:32Z",
-      "finished_at": "2026-06-26T14:21:12Z"
+      "finished_at": "2026-06-26T14:50:00Z"
     },
     {
       "id": "R026",
