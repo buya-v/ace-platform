@@ -350,13 +350,18 @@ describe('reset flow: calls both reset endpoints', () => {
     try {
       await fetch(`${gatewayUrl}/api/v1/admin/demo/reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-GarudaX-Tenant': 'mse-equities' },
       });
     } catch { /* best-effort */ }
 
+    // The gateway tenant middleware rejects this route without X-GarudaX-Tenant,
+    // so the header is required for the reset to actually run (see useDemoRunner).
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://localhost:8080/api/v1/admin/demo/reset',
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-GarudaX-Tenant': 'mse-equities' }),
+      }),
     );
   });
 
@@ -394,7 +399,7 @@ describe('reset flow: calls both reset endpoints', () => {
     try {
       await fetch(`${gatewayUrl}/api/v1/admin/demo/reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-GarudaX-Tenant': 'mse-equities' },
       });
     } catch { /* best-effort */ }
 
@@ -424,7 +429,7 @@ describe('reset flow: calls both reset endpoints', () => {
     try {
       await fetch(`${gatewayUrl}/api/v1/admin/demo/reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-GarudaX-Tenant': 'mse-equities' },
       });
     } catch { /* best-effort — ignore and continue */ }
 

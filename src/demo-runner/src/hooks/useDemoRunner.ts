@@ -29,7 +29,7 @@ export function useDemoRunner() {
     try {
       await fetch(`${state.gatewayUrl}/api/v1/admin/demo/reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-GarudaX-Tenant': 'mse-equities' },
       });
     } catch {
       // Ignore — backend reset is best-effort
