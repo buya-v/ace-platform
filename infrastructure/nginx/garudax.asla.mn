@@ -52,8 +52,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn-0002/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn-0002/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
@@ -96,8 +96,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/admin.garudax.asla.mn-0002/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.garudax.asla.mn-0002/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
@@ -159,8 +159,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/garudax.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/garudax.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/garudax.asla.mn-0002/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/garudax.asla.mn-0002/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
@@ -224,8 +224,8 @@ server {
     }
 
     listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/demo.garudax.asla.mn/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/demo.garudax.asla.mn/privkey.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/demo.garudax.asla.mn-0002/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/demo.garudax.asla.mn-0002/privkey.pem; # managed by Certbot
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
